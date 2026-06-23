@@ -7,19 +7,13 @@ import Wordmark from "./wordmark";
 
 /**
  * Hero section — built component by component to match the Figma "Hero base"
- * frame (103:4, 1512×982). Background is the design's solid sky fill (#62abff)
- * with a 1024px grain texture tiled over it at 10% opacity (node 103:4 bg).
+ * frame (103:4, 1512×982). The sky (solid fill + grain + volumetric clouds)
+ * is the global fixed <Background/> mounted in layout.tsx; the hero is
+ * transparent over it.
  */
 export default function Hero() {
   return (
-    <section className="relative min-h-dvh w-full overflow-hidden bg-[#62abff]">
-      {/* Grain overlay — 1024px noise tile at 10% opacity, sits just above the
-          solid fill and behind every other layer. */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0 z-0 bg-[url('/textures/grain.png')] bg-[length:1024px_1024px] bg-left-top opacity-10"
-      />
-
+    <section className="relative min-h-dvh w-full overflow-hidden">
       <Navbar />
 
       {/* Rocks (nodes 103:19 / 103:18): cliffs pinned to the hero's bottom

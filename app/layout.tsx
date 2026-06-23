@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono, Instrument_Serif } from "next/font/google";
 import localFont from "next/font/local";
 import "./globals.css";
+import Background from "./components/background";
+import LenisProvider from "./components/lenis-provider";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -50,7 +52,12 @@ export default function RootLayout({
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} ${productSans.variable} ${instrumentSerif.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col" suppressHydrationWarning>
+        <LenisProvider>
+          <Background />
+          {children}
+        </LenisProvider>
+      </body>
     </html>
   );
 }
