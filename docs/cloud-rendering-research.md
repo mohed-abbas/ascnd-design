@@ -1,6 +1,6 @@
 # Cloud Rendering & Parallax — Research & Architecture Decision
 
-**Status:** Decided (pending implementation)
+**Status:** Decided — **amended 2026-06-23 to volumetric Three.js / R3F clouds (see §9)**. Pending implementation.
 **Date:** 2026-06-23
 **Owner:** ascnd-design
 **Scope:** Site-wide animated sky background (color + grain + parallax clouds), driven by Lenis + GSAP ScrollTrigger.
@@ -201,3 +201,37 @@ The make-or-break detail: clouds need **soft, semi-transparent edges** — exact
 - three tree-shaking: three.js discourse thread
 - Assets: Transparify "AI image transparent background", Resource Boy cloud textures, Vecteezy free cloud PNG
 - Version/download/size figures: npm registry API + Bundlephobia API
+
+---
+
+## 9. Decision amendment (2026-06-23) — volumetric R3F clouds chosen
+
+**Decision:** Override the §4 recommendation. We will implement **volumetric clouds with Three.js / React Three Fiber** (`@react-three/drei` `<Clouds>`/`<Cloud>`), optimized aggressively.
+
+**Why (rationale, for the record):**
+- The product owner wants the genuine **volumetric, dimensional cloud look** that flat layered sprites cannot achieve. The art-direction goal outweighs the bundle/perf cost that made layered images the default recommendation.
+- This is a deliberate, informed trade-off: we accept the ~230–280 KB gzip WebGL stack and the integration complexity (documented in §3.2 option 3) in exchange for the look, and commit to mitigating that cost via the optimization mandate below.
+
+**Optimization mandate (non-negotiable for this path):**
+1. **`frameloop="demand"`** — render only on scroll/parallax change (driven by Lenis) or an explicit invalidate; never a free-running rAF, no render when idle.
+2. **Batch via the `<Clouds>` instanced wrapper** (single draw call) — never standalone `<Cloud>`s.
+3. **Self-host the cloud sprite texture** (pass `texture`); never the drei default CDN.
+4. **Transparent canvas** (`alpha:true`) drawing **only clouds** — keep solid color + grain as cheap DOM layers behind it.
+5. `antialias:false`, **`dpr` clamped** (e.g. `[1, 1.5]`), minimal lights, no shadows.
+6. **Adaptive quality** (`PerformanceMonitor` / regress on scroll) + clamp.
+7. **Mobile / low-power / `prefers-reduced-motion` / no-WebGL → static baked cloud image fallback** (no canvas mounted).
+8. **`next/dynamic` with `ssr:false`**; lazy/idle mount.
+
+**Layering unchanged:** the WebGL canvas is a low-z DOM element inside the fixed root `Background`; DOM content (rocks, collage, text, nav) stacks above it as before. The §4 critical constraint still holds — **no `filter`/`backdrop-filter` ancestor over the fixed bg**.
+
+**Revised implementation plan (handed off 2026-06-23):**
+1. Install `three` + `@react-three/fiber` + `@react-three/drei` (+ `lenis` + `gsap`); verify React 19 peer compat.
+2. Root `LenisProvider` (`"use client"`) + GSAP ticker sync + cleanup.
+3. Refactor hero bg → global root-mounted `Background` (fixed, no blurred ancestor): `#62abff` → grain → cloud canvas.
+4. `CloudCanvas` — `next/dynamic` `ssr:false`, transparent `<Canvas frameloop="demand" dpr={[1,1.5]} gl={{antialias:false, alpha:true}}>`, batched `<Clouds>` + self-hosted texture, minimal lights.
+5. Scroll-parallax controller — map Lenis/ScrollTrigger progress → cloud depth groups, `invalidate()` on change (no continuous `useFrame` for parallax).
+6. Optimization pass — `PerformanceMonitor`/regress, dpr clamp, mobile + reduced-motion + no-WebGL fallback to a static baked cloud image, measure bundle + FPS.
+7. Match Figma cloud placement (node 103:5) for the hero; source/host a soft cloud sprite; tune `segments`/`volume`/`bounds`/color to the design.
+8. Verify (lint, build, browser, perf), commit, push.
+
+**Note:** §1–§8 are retained verbatim as the decision history — the analysis that led to "layered images as default" still stands; this section records the informed override and the conditions attached to it.
