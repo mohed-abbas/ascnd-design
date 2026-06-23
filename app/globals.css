@@ -10,6 +10,17 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  /* Product Sans (proprietary) — set --font-product-sans from next/font/local
+     in layout.tsx once the licensed .woff2 files are added to app/fonts/.
+     Falls back to a geometric sans stack until then. */
+  --font-product: var(
+    --font-product-sans,
+    var(--font-geist-sans),
+    ui-sans-serif,
+    system-ui,
+    sans-serif
+  );
+  --font-instrument: var(--font-instrument-serif), ui-serif, Georgia, serif;
 }
 
 @media (prefers-color-scheme: dark) {
