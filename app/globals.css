@@ -105,6 +105,20 @@ body {
   transform: translateY(-10px);
 }
 
+/* Designs Shots collage — the seven tiles park scaled-down + invisible for the
+   on-load "bloom from center" (design-shots-reveal.tsx). Keyed on .reveal-armed
+   so they hold before JS and stay visible for no-JS. The reveal wrapper carries
+   no other transform (the tile's translate-centering lives on its parent, the
+   mirror flip on its child), so a plain scale park is safe. */
+[data-shot] {
+  will-change: transform, opacity;
+}
+
+.reveal-armed [data-shot] {
+  opacity: 0;
+  transform: scale(0.86);
+}
+
 /* Honour reduced-motion: stay armed (so the class can still gate JS), but show
    everything in its resting state with no transform. The orchestrator also
    bails out, so nothing animates. */
@@ -112,7 +126,8 @@ body {
   .reveal-armed [data-reveal],
   .reveal-armed [data-reveal-fade],
   .reveal-armed [data-reveal-split],
-  .reveal-armed [data-rock] {
+  .reveal-armed [data-rock],
+  .reveal-armed [data-shot] {
     opacity: 1;
     transform: none;
   }

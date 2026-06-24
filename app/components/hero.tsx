@@ -1,4 +1,5 @@
 import DesignShots from "./design-shots";
+import DesignShotsReveal from "./design-shots-reveal";
 import HeroReveal from "./hero-reveal";
 import HeroText from "./hero-text";
 import Logos from "./logos";
@@ -45,7 +46,9 @@ export default function Hero() {
       </div>
 
       {/* Designs Shots collage (node 103:30): centered horizontally, near the
-          top — frame origin x=241,y=-44 within the 1512×982 hero. */}
+          top — frame origin x=241,y=-44 within the 1512×982 hero. DesignShotsReveal
+          drives the on-load bloom-from-center of the tiles; it renders nothing. */}
+      <DesignShotsReveal />
       <div className="absolute left-1/2 top-[-44px] h-[491px] w-[1029px] -translate-x-1/2">
         <DesignShots />
       </div>
