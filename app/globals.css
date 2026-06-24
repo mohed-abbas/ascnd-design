@@ -8,18 +8,15 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
+  /* Product Sans (proprietary) is the primary typeface, self-hosted via
+     next/font/local in layout.tsx (--font-product-sans). It's the default sans
+     for the whole site, so font-sans and the base body font both resolve to it.
+     --font-product is kept as an explicit alias for components that opt in. */
+  --font-product-stack: var(--font-product-sans), ui-sans-serif, system-ui,
+    sans-serif;
+  --font-sans: var(--font-product-stack);
+  --font-product: var(--font-product-stack);
   --font-mono: var(--font-geist-mono);
-  /* Product Sans (proprietary) — set --font-product-sans from next/font/local
-     in layout.tsx once the licensed .woff2 files are added to app/fonts/.
-     Falls back to a geometric sans stack until then. */
-  --font-product: var(
-    --font-product-sans,
-    var(--font-geist-sans),
-    ui-sans-serif,
-    system-ui,
-    sans-serif
-  );
   --font-instrument: var(--font-instrument-serif), ui-serif, Georgia, serif;
 }
 
@@ -33,5 +30,5 @@
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans);
 }
