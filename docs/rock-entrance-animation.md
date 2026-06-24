@@ -19,7 +19,11 @@ same on-load moment, not a separate effect.
 
 ---
 
-## Option A — Rise from the cloud sea ✅ (implemented first)
+> **Status:** all three options are implemented and live behind the **Rocks**
+> selector (`rock-entrance-toggle.tsx`), above the cloud toggle. Flip it to A/B/C
+> the cliffs' entrance live. Default is "rise" (Option A).
+
+## Option A — Rise from the cloud sea
 
 Each cliff starts parked **below the hero's bottom clip edge** and rises into
 place (`translateY(100%) → 0`), as if emerging from the cloud sea beneath.

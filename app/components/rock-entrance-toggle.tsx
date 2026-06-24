@@ -11,10 +11,11 @@ import {
  * docs/rock-entrance-animation.md) — the same review aid as the cloud Lit/Flat
  * toggle. Flipping replays the cliffs' entrance with the chosen option. Sits
  * just above the cloud toggle; remove or gate behind an env flag once a
- * direction is locked. Option B ("Slide") is added here once implemented.
+ * direction is locked.
  */
 const OPTIONS: { id: RockEntrance; label: string; hint: string }[] = [
   { id: "rise", label: "Rise", hint: "Option A · rise from the cloud sea" },
+  { id: "slide", label: "Slide", hint: "Option B · slide in from the edges" },
   { id: "drift", label: "Drift", hint: "Option C · fade + soft settle" },
 ];
 

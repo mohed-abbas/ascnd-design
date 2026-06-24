@@ -50,6 +50,22 @@ export default function RockReveal() {
     let tween: gsap.core.Tween | undefined;
 
     switch (mode) {
+      case "slide":
+        // Option B — cliffs slide in from the outer edges (left from the left,
+        // right from the right), like curtains framing the stage. Per-side start
+        // via a function value off each rock's data-rock-side. Pin x:0 for the
+        // same percent-vs-pixel reason as the rise branch.
+        tween = gsap.fromTo(
+          rocks,
+          {
+            xPercent: (_i: number, el: Element) =>
+              (el as HTMLElement).dataset.rockSide === "left" ? -100 : 100,
+            x: 0,
+          },
+          { xPercent: 0, duration: 0.9, ease: "expo.out", stagger: STAGGER },
+        );
+        break;
+
       case "drift":
         // Option C — the camera finds them already there: a soft fade with a
         // small downward settle. No clip, no big travel.
@@ -78,8 +94,6 @@ export default function RockReveal() {
           { yPercent: 0, duration: 1, ease: "expo.out", stagger: STAGGER },
         );
         break;
-
-      // TODO (option B): case "slide" → xPercent ±100 from the outer edges.
     }
 
     // Kill (don't revert) on mode change so the next option's fromTo sets its own
