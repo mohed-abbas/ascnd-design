@@ -51,27 +51,24 @@ type Layer = {
   parallax: number;
 };
 
-// Composition matched to the Figma "Clouds" node (155:145 / 103:5): clouds mass
-// in the upper-right and hug the right edge while the left half stays clear sky.
-// +x is right, +y is up (camera looks down -z from z=10).
+// Composition matched to the Figma hero (node 103:4) "clouds" node 156:149: a
+// SINGLE soft cloud cluster sitting in the TOP-RIGHT corner (node x 1031–1500,
+// y 0–479 of the 1512×982 frame → ~68–99% width, top ~49% height), behind the
+// image collage. The rest of the sky stays clear blue. +x is right, +y is up
+// (camera looks down -z from z=10; at z=0 the frame spans roughly x ±6.4, y ±4.1).
 //
-// Opacity/volume are tuned so the cloud CORES are nearly fully opaque — the grey
-// look was the blue sky bleeding through under-opaque sprites (drei's shader sets
-// alpha = textureAlpha * opacity, RGB stays lit-white), so denser, higher-opacity
-// cores let the white win in the body while drei's concentrate="inside" keeps the
-// outer sprites thin → feathered edges. See docs / plan for the blend math.
+// Keep this compact and top-right — earlier versions sprawled across the centre
+// and bottom (a wisp + a lower-right mass) that the Figma does not have. Shape
+// comes from sprite density/bounds/opacity (especially in the default "flat"
+// MeshBasicMaterial mode, which is unlit); edges feather as drei's
+// concentrate="inside" thins the outer sprites, letting the blue sky breathe.
 const LAYERS: Layer[] = [
-  // Dominant soft mass in the top-right corner — feathered, not a solid sheet:
-  // moderate opacity so the bright cores read white while edges stay translucent
-  // and let the blue sky breathe through (matches the Figma still).
-  { pos: [3.6, 2.7, -5], bounds: [7, 3, 2], volume: 7, segments: 30, opacity: 0.6, growth: 6, parallax: 2.2 },
-  // Vertical band hugging the right edge, upper-middle — the densest mass, so its
-  // overlapping sprites build up to pure-white cores.
-  { pos: [5.2, 0.6, -1.5], bounds: [4, 4.5, 2], volume: 5.5, segments: 26, opacity: 0.78, growth: 5, parallax: 3.4 },
-  // Lower-right cloud mass (bottom-right of the frame).
-  { pos: [4.4, -2.2, 0.5], bounds: [4.5, 2.5, 1.6], volume: 4.5, segments: 22, opacity: 0.66, growth: 4, parallax: 4.6 },
-  // Faint wisp near center — the subtle mid-frame cloud in the Figma.
-  { pos: [-0.6, 0.2, 1.5], bounds: [3, 1.5, 1.2], volume: 2.5, segments: 14, opacity: 0.28, growth: 3, parallax: 5.2 },
+  // Soft main body of the cluster, centred in the top-right.
+  { pos: [4.0, 2.0, 0], bounds: [2.4, 1.8, 1.2], volume: 2.6, segments: 20, opacity: 0.7, growth: 4, parallax: 3.0 },
+  // Denser, brighter core toward the upper-right (the cloud's bright heart).
+  { pos: [4.8, 2.7, 0.4], bounds: [1.6, 1.3, 1.0], volume: 2.0, segments: 14, opacity: 0.92, growth: 3, parallax: 2.6 },
+  // Thin feather trailing down and toward centre — softens the inner edge.
+  { pos: [2.6, 0.9, -0.5], bounds: [2.0, 1.3, 1.0], volume: 1.8, segments: 12, opacity: 0.4, growth: 4, parallax: 3.6 },
 ];
 
 /** Drives cloud-layer parallax from global page scroll. */

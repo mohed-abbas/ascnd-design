@@ -13,15 +13,15 @@ import { useSyncExternalStore } from "react";
  * - "flat" → Option 2: MeshBasicMaterial (unlit) → flat, guaranteed-white, cheap.
  *
  * This is a visualization aid for sharing both options with the team; the choice
- * persists in localStorage. Default is "lit" (the chosen direction).
+ * persists in localStorage. Default is "flat" (the chosen direction).
  */
 export type CloudMode = "lit" | "flat";
 
 const STORAGE_KEY = "ascnd:cloud-mode";
 
 function readStored(): CloudMode {
-  if (typeof window === "undefined") return "lit";
-  return window.localStorage.getItem(STORAGE_KEY) === "flat" ? "flat" : "lit";
+  if (typeof window === "undefined") return "flat";
+  return window.localStorage.getItem(STORAGE_KEY) === "lit" ? "lit" : "flat";
 }
 
 // Cached so getSnapshot returns a stable value (required by useSyncExternalStore).
@@ -45,7 +45,7 @@ function subscribe(cb: () => void) {
 const getSnapshot = () => current;
 // SSR/hydration snapshot is always the default so server and first client render
 // agree; useSyncExternalStore reconciles to the stored value right after.
-const getServerSnapshot = (): CloudMode => "lit";
+const getServerSnapshot = (): CloudMode => "flat";
 
 export function useCloudMode(): CloudMode {
   return useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
