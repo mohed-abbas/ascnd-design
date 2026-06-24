@@ -4,6 +4,7 @@ import localFont from "next/font/local";
 import "./globals.css";
 import Background from "./components/background";
 import LenisProvider from "./components/lenis-provider";
+import CloudModeToggle from "./components/cloud-mode-toggle";
 
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
@@ -51,6 +52,8 @@ export default function RootLayout({
         <LenisProvider>
           <Background />
           {children}
+          {/* Dev/review aid: switch cloud render mode (Lit vs Flat). */}
+          <CloudModeToggle />
         </LenisProvider>
       </body>
     </html>

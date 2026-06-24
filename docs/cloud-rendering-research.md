@@ -224,6 +224,8 @@ The make-or-break detail: clouds need **soft, semi-transparent edges** — exact
 
 **Layering unchanged:** the WebGL canvas is a low-z DOM element inside the fixed root `Background`; DOM content (rocks, collage, text, nav) stacks above it as before. The §4 critical constraint still holds — **no `filter`/`backdrop-filter` ancestor over the fixed bg**.
 
+**Cloud colour & lighting:** how the clouds get their bright, dimensional white (the grey-clouds investigation, the ACES tone-mapping fix, and the key-light vs flat-ambient decision) is documented separately in [`cloud-color-and-lighting.md`](./cloud-color-and-lighting.md).
+
 **Revised implementation plan (handed off 2026-06-23):**
 1. Install `three` + `@react-three/fiber` + `@react-three/drei` (+ `lenis` + `gsap`); verify React 19 peer compat.
 2. Root `LenisProvider` (`"use client"`) + GSAP ticker sync + cleanup.
