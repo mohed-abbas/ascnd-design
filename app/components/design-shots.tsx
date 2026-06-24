@@ -6,37 +6,61 @@ import Image from "next/image";
  * center: largest in the middle, shrinking and rising toward both edges.
  * Left-side tiles are horizontally mirrored, exactly as in the design.
  *
- * Offsets are px relative to the collage center (= hero center), matching
- * the Figma `left/top: calc(50% ± n)` positioning.
+ * Each tile is laid out as a fixed BASE-sized square at the collage center and
+ * placed at its slot by an inline `transform: translate(x,y) scale(size/BASE)`
+ * on the outer "rotor". Rendering at BASE and scaling *down* keeps every tile
+ * crisp at the big center slot it visits during the rotation (design-shots-
+ * reveal.tsx); the inline transform is also the no-JS / reduced-motion resting
+ * layout, so there's no flash. The inner `data-shot` element carries only the
+ * on-load bloom (scale + opacity), kept separate so the two transforms never
+ * fight.
  */
+
+// Render box for every tile = the largest (center) slot, so scaling is always
+// ≤1 and the source never has to be upscaled.
+export const SHOT_BASE = 261;
+
+// The seven slots in arc order (left → right along the fan). This is the loop
+// the rotation rides; size belongs to the slot, not the tile.
+export const SHOT_ARC_SLOTS: { x: number; y: number; size: number }[] = [
+  { x: -476.5, y: -207.5, size: 76 }, // 0 far-L
+  { x: -404, y: -74, size: 117 }, //     1 mid-L
+  { x: -253.5, y: 50.5, size: 158 }, //  2 inner-L
+  { x: 0, y: 115, size: 261 }, //        3 center
+  { x: 253.5, y: 50.5, size: 158 }, //   4 inner-R
+  { x: 404, y: -74, size: 117 }, //      5 mid-R
+  { x: 476.5, y: -207.5, size: 76 }, //  6 far-R
+];
 
 type Tile = {
   src: string;
-  /** square box size in px */
+  /** square box size in px (the slot it rests in) */
   size: number;
-  /** corner radius in px */
+  /** corner radius in px at its resting size */
   radius: number;
   /** horizontal offset from center (px, negative = left) */
   x: number;
   /** vertical offset from center (px, negative = up) */
   y: number;
-  /** mirror horizontally (left-side tiles) */
+  /** mirror horizontally (left-side tiles) — fixed per tile, never flips */
   mirror?: boolean;
   /** eager-load (largest above-the-fold tile, LCP candidate) */
   priority?: boolean;
   /** ring out from the center (0 = center) — drives the bloom stagger order */
   ring: number;
+  /** index into SHOT_ARC_SLOTS — the tile's resting slot / rotation phase */
+  arc: number;
   alt: string;
 };
 
 const TILES: Tile[] = [
-  { src: "/shots/shot2.png", size: 261, radius: 15, x: 0, y: 115, ring: 0, priority: true, alt: "" }, // center
-  { src: "/shots/shot3.png", size: 158, radius: 10, x: 253.5, y: 50.5, ring: 1, alt: "" }, // inner right
-  { src: "/shots/shot6.png", size: 158, radius: 20, x: -253.5, y: 50.5, ring: 1, mirror: true, alt: "" }, // inner left
-  { src: "/shots/shot4.png", size: 117, radius: 7, x: 404, y: -74, ring: 2, alt: "" }, // mid right
-  { src: "/shots/shot7.png", size: 117, radius: 7, x: -404, y: -74, ring: 2, mirror: true, alt: "" }, // mid left
-  { src: "/shots/shot5.png", size: 76, radius: 5, x: 476.5, y: -207.5, ring: 3, alt: "" }, // far right
-  { src: "/shots/shot8.png", size: 76, radius: 5, x: -476.5, y: -207.5, ring: 3, mirror: true, alt: "" }, // far left
+  { src: "/shots/shot2.png", size: 261, radius: 15, x: 0, y: 115, ring: 0, arc: 3, priority: true, alt: "" }, // center
+  { src: "/shots/shot3.png", size: 158, radius: 10, x: 253.5, y: 50.5, ring: 1, arc: 4, alt: "" }, // inner right
+  { src: "/shots/shot6.png", size: 158, radius: 20, x: -253.5, y: 50.5, ring: 1, arc: 2, mirror: true, alt: "" }, // inner left
+  { src: "/shots/shot4.png", size: 117, radius: 7, x: 404, y: -74, ring: 2, arc: 5, alt: "" }, // mid right
+  { src: "/shots/shot7.png", size: 117, radius: 7, x: -404, y: -74, ring: 2, arc: 1, mirror: true, alt: "" }, // mid left
+  { src: "/shots/shot5.png", size: 76, radius: 5, x: 476.5, y: -207.5, ring: 3, arc: 6, alt: "" }, // far right
+  { src: "/shots/shot8.png", size: 76, radius: 5, x: -476.5, y: -207.5, ring: 3, arc: 0, mirror: true, alt: "" }, // far left
 ];
 
 export default function DesignShots() {
@@ -45,28 +69,31 @@ export default function DesignShots() {
       {TILES.map((tile) => (
         <div
           key={tile.src}
-          className="absolute -translate-x-1/2 -translate-y-1/2"
+          data-shot-rotor
+          data-arc={tile.arc}
+          className="absolute left-1/2 top-1/2"
           style={{
-            left: `calc(50% + ${tile.x}px)`,
-            top: `calc(50% + ${tile.y}px)`,
-            width: tile.size,
-            height: tile.size,
+            width: SHOT_BASE,
+            height: SHOT_BASE,
+            marginLeft: -SHOT_BASE / 2,
+            marginTop: -SHOT_BASE / 2,
+            transform: `translate(${tile.x}px, ${tile.y}px) scale(${tile.size / SHOT_BASE})`,
           }}
         >
-          {/* Reveal wrapper — carries the on-load bloom (scale + opacity) so it
-              stays clear of the parent's translate-centering and the child's
-              mirror flip. design-shots-reveal.tsx animates [data-shot]. */}
+          {/* Bloom wrapper — on-load scale + opacity only (design-shots-reveal). */}
           <div data-shot data-shot-ring={tile.ring} className="size-full">
             <div className={`size-full ${tile.mirror ? "-scale-x-100" : ""}`}>
               <div
                 className="relative size-full overflow-hidden bg-white"
-                style={{ borderRadius: tile.radius }}
+                // Radius is authored at the tile's resting size; scaled up to the
+                // BASE box so it tracks the tile's scale (corners stay in ratio).
+                style={{ borderRadius: (tile.radius / tile.size) * SHOT_BASE }}
               >
                 <Image
                   src={tile.src}
                   alt={tile.alt}
                   fill
-                  sizes={`${tile.size}px`}
+                  sizes={`${SHOT_BASE}px`}
                   priority={tile.priority}
                   className="object-cover"
                 />

@@ -110,6 +110,7 @@ body {
    so they hold before JS and stay visible for no-JS. The reveal wrapper carries
    no other transform (the tile's translate-centering lives on its parent, the
    mirror flip on its child), so a plain scale park is safe. */
+[data-shot-rotor],
 [data-shot] {
   will-change: transform, opacity;
 }
