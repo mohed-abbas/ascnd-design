@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useId, useRef, useState } from "react";
+import gsap from "gsap";
 import { CloseIcon, InstagramSocial, MenuLines, XSocial } from "./icons";
 import Logo from "./logo";
 
@@ -18,13 +19,33 @@ const SOCIALS = [
   { label: "Instagram", href: "https://instagram.com", Icon: InstagramSocial },
 ];
 
+// Expand/collapse motion. There is ONE glass surface: the compact pill *is* the
+// menu, and on open it grows into the 406×365 panel — the element really
+// resizes (top/right/bottom/left + border-radius), it isn't a separate panel
+// revealed behind the pill. The pill's right edge + vertical center are the
+// anchor, so it grows leftward and symmetrically up/down.
+//   CLOSED = the 52×149 pill footprint inside the 406×365 nav box
+//            (right-inset 22, vertically centered → 108 top/bottom; r=61).
+//   OPEN   = the full nav box with its 34px corners.
+// clip-path is deliberately NOT used (the box must actually get bigger). The
+// backdrop-filter lives on this same element — its own resize is fine; a
+// clip-path/filter on an *ancestor* would turn it into a backdrop root and kill
+// the blur. Symmetric power2.inOut so open and close feel identical.
+const CLOSED = { top: 108, right: 22, bottom: 108, left: 332, borderRadius: 61 };
+const OPEN = { top: 0, right: 0, bottom: 0, left: 0, borderRadius: 34 };
+const DURATION = 0.65;
+const EASE = "power2.inOut";
+const REDUCE_MOTION = "(prefers-reduced-motion: reduce)";
+
 /**
  * Floating glass navbar from the Figma "Startup" design.
- * Condensed (52×149 pill) ⇄ Expanded (406×365 menu panel), click to toggle.
+ * One surface that morphs: condensed (52×149 pill) ⇄ expanded (406×365 menu).
  */
 export default function Navbar() {
   const [open, setOpen] = useState(false);
   const navRef = useRef<HTMLElement>(null);
+  const surfaceRef = useRef<HTMLDivElement>(null);
+  const tlRef = useRef<gsap.core.Timeline | null>(null);
   const panelId = useId();
 
   // Close on Escape and on click outside.
@@ -48,6 +69,53 @@ export default function Navbar() {
     };
   }, [open]);
 
+  // Build the morph timeline once (paused). The surface grows pill → panel,
+  // then the menu content (heading → links → socials) fades + rises in over the
+  // second half — by then the box already covers their positions, so they spawn
+  // onto the glass rather than floating in empty space. Reduced motion skips
+  // this; the [open] effect below snaps to end states instead.
+  useEffect(() => {
+    const surface = surfaceRef.current;
+    const nav = navRef.current;
+    if (!surface || !nav || window.matchMedia(REDUCE_MOTION).matches) return;
+
+    const items = nav.querySelectorAll<HTMLElement>("[data-menu-item]");
+    const ctx = gsap.context(() => {
+      tlRef.current = gsap
+        .timeline({ paused: true })
+        .fromTo(surface, CLOSED, { ...OPEN, duration: DURATION, ease: EASE })
+        .fromTo(
+          items,
+          { autoAlpha: 0, y: 10 },
+          { autoAlpha: 1, y: 0, duration: 0.4, ease: "power2.out", stagger: 0.06 },
+          0.3,
+        );
+    }, nav);
+
+    return () => {
+      ctx.revert(); // restores inline styles GSAP set
+      tlRef.current = null;
+    };
+  }, []);
+
+  // Drive the timeline from `open` — play out / reverse back (same speed both
+  // ways). Without a timeline (reduced motion / pre-mount) snap to end states.
+  useEffect(() => {
+    const tl = tlRef.current;
+    if (tl) {
+      if (open) tl.play();
+      else tl.reverse();
+      return;
+    }
+
+    const surface = surfaceRef.current;
+    const nav = navRef.current;
+    if (!surface || !nav) return;
+    const items = nav.querySelectorAll<HTMLElement>("[data-menu-item]");
+    gsap.set(surface, open ? OPEN : CLOSED);
+    gsap.set(items, { autoAlpha: open ? 1 : 0 });
+  }, [open]);
+
   return (
     <nav
       ref={navRef}
@@ -56,31 +124,36 @@ export default function Navbar() {
       data-reveal-order={2}
       className="font-product pointer-events-none fixed right-[33px] top-[62.4%] z-50 h-[365px] w-[406px] max-w-[calc(100vw-3rem)] -translate-y-1/2"
     >
-      {/* Expanded menu panel — fills the nav box; the pill sits over its right
-          edge, vertically centered, so the panel grows out from the pill
-          (Figma node 103:39: panel centered on the pill). Layer order mirrors
-          the design: (1) backdrop-blur fill, (2) content, (3) inset-glow. */}
+      {/* The one morphing glass surface. Its closed pill footprint is pinned
+          here as the default/no-JS state; GSAP overrides the geometry inline on
+          toggle. Same element carries the blur, border and inset glow, so all
+          of it grows together. */}
+      <div
+        ref={surfaceRef}
+        aria-hidden
+        className="pointer-events-none absolute bottom-[108px] left-[332px] right-[22px] top-[108px] rounded-[61px] border border-white/30 bg-white/10 shadow-[inset_0_0_28.3px_0_rgba(255,255,255,0.25)] backdrop-blur-[10px]"
+      />
+
+      {/* Menu content — fixed in the nav frame (so it never slides as the box
+          grows) and clickable only while open. Each block fades + rises in via
+          GSAP; `opacity-0` is the pre-JS / no-JS hidden state. */}
       <div
         id={panelId}
         aria-hidden={!open}
-        className={`absolute inset-0 origin-right rounded-[34px] border border-white/30 text-white transition-[opacity,transform] duration-300 ease-out ${
-          open
-            ? "pointer-events-auto scale-100 opacity-100"
-            : "pointer-events-none scale-95 opacity-0"
+        className={`absolute inset-0 text-white ${
+          open ? "pointer-events-auto" : "pointer-events-none"
         }`}
       >
-        <div
-          aria-hidden
-          className="pointer-events-none absolute inset-0 rounded-[34px] bg-white/10 backdrop-blur-[10px]"
-        />
-
-        <span className="absolute left-[28px] top-[30px] text-[31px] font-medium leading-none tracking-[-0.03em] underline decoration-from-font underline-offset-[6px]">
+        <span
+          data-menu-item
+          className="absolute left-[28px] top-[30px] text-[31px] font-medium leading-none tracking-[-0.03em] underline decoration-from-font underline-offset-[6px] opacity-0"
+        >
           menu
         </span>
 
         <ul className="absolute left-[26px] top-1/2 flex -translate-y-1/2 flex-col gap-[10px] text-[25px] font-light leading-[1.1] tracking-[-0.03em]">
           {LINKS.map((link) => (
-            <li key={link.label}>
+            <li key={link.label} data-menu-item className="opacity-0">
               <a
                 href={link.href}
                 tabIndex={open ? 0 : -1}
@@ -93,7 +166,10 @@ export default function Navbar() {
           ))}
         </ul>
 
-        <div className="absolute left-[26px] top-[310px] flex items-center gap-[7px]">
+        <div
+          data-menu-item
+          className="absolute left-[26px] top-[310px] flex items-center gap-[7px] opacity-0"
+        >
           {SOCIALS.map(({ label, href, Icon }) => (
             <a
               key={label}
@@ -108,23 +184,19 @@ export default function Navbar() {
             </a>
           ))}
         </div>
-
-        <div
-          aria-hidden
-          className="pointer-events-none absolute inset-0 rounded-[inherit] shadow-[inset_0_0_28.3px_0_rgba(255,255,255,0.25)]"
-        />
       </div>
 
-      {/* Condensed pill — persistent anchor that toggles the menu. Rests over
-          the panel's right edge, vertically centered, and stays put on toggle
-          (the panel scales out from it). */}
+      {/* Bare toggle — transparent (no glass of its own), pinned to the pill's
+          spot (right + vertically centered) and always on top. It rides on the
+          glass surface, which supplies the pill look when closed and stays put
+          as the surface grows around it. */}
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
         aria-controls={panelId}
         aria-label={open ? "Close menu" : "Open menu"}
-        className="pointer-events-auto absolute right-[22px] top-1/2 z-10 flex h-[149px] w-[52px] -translate-y-1/2 flex-col items-center justify-between rounded-[61px] border border-white/10 bg-white/10 pb-[22px] pt-[18px] text-white backdrop-blur-[5px]"
+        className="pointer-events-auto absolute right-[22px] top-1/2 z-10 flex h-[149px] w-[52px] -translate-y-1/2 flex-col items-center justify-between pb-[22px] pt-[18px] text-white"
       >
         <Logo className="size-[30px]" />
         {open ? (
