@@ -46,9 +46,22 @@ export default function RootLayout({
   return (
     <html
       lang="en"
+      suppressHydrationWarning
       className={`${geistMono.variable} ${productSans.variable} ${instrumentSerif.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col" suppressHydrationWarning>
+        {/* Arm the on-load reveal before first paint. This runs synchronously
+            during HTML parse (the same flash-prevention trick next-themes uses),
+            so the `.reveal-armed` hidden state in globals.css applies the instant
+            the hero renders — no flash of final-position text before hydration.
+            JS-gated by design: no-JS visitors never get the class, so all text
+            stays visible. The GSAP timeline (hero-reveal.tsx) then animates it in. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              "document.documentElement.classList.add('reveal-armed')",
+          }}
+        />
         <LenisProvider>
           <Background />
           {children}

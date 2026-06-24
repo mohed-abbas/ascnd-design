@@ -52,6 +52,8 @@ export default function Navbar() {
     <nav
       ref={navRef}
       aria-label="Primary"
+      data-reveal-soft
+      data-reveal-order={2}
       className="font-product pointer-events-none fixed right-[33px] top-[62.4%] z-50 h-[365px] w-[406px] max-w-[calc(100vw-3rem)] -translate-y-1/2"
     >
       {/* Expanded menu panel — fills the nav box; the pill sits over its right

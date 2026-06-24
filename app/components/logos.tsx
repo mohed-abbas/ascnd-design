@@ -27,7 +27,13 @@ const EDGE_FADE =
 export default function Logos() {
   return (
     <div className="font-product flex flex-col items-center gap-[20px] text-white">
-      <p className="whitespace-nowrap text-[16px] tracking-[-0.32px]">
+      {/* Reveal #6 — fade + lift, not a clip: the oversized Instrument-Serif
+          "founders" accent overflows the line-box, which a mask would shave. */}
+      <p
+        data-reveal-fade
+        data-reveal-order={6}
+        className="whitespace-nowrap text-[16px] tracking-[-0.32px]"
+      >
         trusted by{" "}
         <span className="font-instrument text-[25px] tracking-[-0.5px]">
           founders
@@ -35,19 +41,27 @@ export default function Logos() {
         shipping fast
       </p>
 
+      {/* Reveal #7 — fade the wrapper (not the row) so the row keeps its
+          opacity-50 brand look and its own mask-image edge fade. */}
       <div
-        aria-hidden
-        className="flex w-full max-w-[1351px] items-center justify-center gap-[43px] whitespace-nowrap text-[25px] font-bold leading-[1.2] text-white opacity-50"
-        style={{
-          maskImage: EDGE_FADE,
-          WebkitMaskImage: EDGE_FADE,
-        }}
+        data-reveal-fade
+        data-reveal-order={7}
+        className="flex w-full justify-center"
       >
-        {BRANDS.map((brand) => (
-          <span key={brand} className="shrink-0">
-            {brand}
-          </span>
-        ))}
+        <div
+          aria-hidden
+          className="flex w-full max-w-[1351px] items-center justify-center gap-[43px] whitespace-nowrap text-[25px] font-bold leading-[1.2] text-white opacity-50"
+          style={{
+            maskImage: EDGE_FADE,
+            WebkitMaskImage: EDGE_FADE,
+          }}
+        >
+          {BRANDS.map((brand) => (
+            <span key={brand} className="shrink-0">
+              {brand}
+            </span>
+          ))}
+        </div>
       </div>
     </div>
   );

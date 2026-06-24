@@ -1,4 +1,5 @@
 import DesignShots from "./design-shots";
+import HeroReveal from "./hero-reveal";
 import HeroText from "./hero-text";
 import Logos from "./logos";
 import Navbar from "./navbar";
@@ -13,7 +14,14 @@ import Wordmark from "./wordmark";
  */
 export default function Hero() {
   return (
-    <section className="relative min-h-dvh w-full overflow-hidden">
+    <section
+      data-hero
+      className="relative min-h-dvh w-full overflow-hidden"
+    >
+      {/* Drives the staggered on-load slide-up reveal of the text blocks below
+          (marked with data-reveal* / data-reveal-order). Renders nothing. */}
+      <HeroReveal />
+
       <Navbar />
 
       {/* Rocks (nodes 103:19 / 103:18): cliffs pinned to the hero's bottom
@@ -25,7 +33,12 @@ export default function Hero() {
           of the 982-tall hero, ~36px Product Sans Medium. Sits above the
           collage on plain sky. */}
       <div className="absolute left-1/2 top-[40px] z-10 -translate-x-1/2 text-[38px]">
-        <Wordmark />
+        {/* Masked slide-up reveal (cascade #1). */}
+        <span className="block overflow-hidden">
+          <span className="block" data-reveal data-reveal-order={1}>
+            <Wordmark />
+          </span>
+        </span>
       </div>
 
       {/* Designs Shots collage (node 103:30): centered horizontally, near the

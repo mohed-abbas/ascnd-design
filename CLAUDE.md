@@ -10,6 +10,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 - **Commits & PRs: no AI/Claude attribution.** Do not add `Co-Authored-By: Claude…`, "Generated with Claude Code", or any mention of AI tooling to commit messages or PR descriptions. Write them as a normal human author would.
 - **The dev server is the user's to run.** Do not launch or stop a dev server yourself, and don't kill `next` processes or `rm -rf .next` on your own. Ask the user to start/stop/restart it. To verify a change works, ask them to run it (or to share output), rather than spinning up your own instance.
+- **Plan mode is discussion mode until told otherwise.** When the user enters plan mode, treat it as a discussion: explore, explain, sketch (ASCII/diagrams), and clarify — but do **not** write or finalize a plan, and do **not** call `ExitPlanMode`, until the user explicitly says to (e.g. "make the plan"). Keep iterating on understanding until then.
 
 ## Commands
 

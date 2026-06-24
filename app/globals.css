@@ -32,3 +32,61 @@ body {
   color: var(--foreground);
   font-family: var(--font-sans);
 }
+
+/* ─── On-load reveal (hero text slide-up) ──────────────────────────────────
+   Initial hidden state for the staggered on-load reveal. It is keyed on the
+   `.reveal-armed` class, which a synchronous inline script in layout.tsx adds
+   to <html> before first paint — so the text is hidden the instant it renders
+   (no flash of final-position text before hydration), yet stays fully visible
+   for no-JS users (the class is never added). The GSAP timeline in
+   `hero-reveal.tsx` animates these back to their resting state.
+
+   Variants:
+   - [data-reveal]       masked slide-up — the element lives inside an
+                         `overflow:hidden` wrapper, so translateY(110%) parks it
+                         fully below the clip edge (invisible) until it rises.
+   - [data-reveal-fade]  fade + small slide — for the logos row (its own
+                         mask-image edge fade) and the CTA row (interactive, so
+                         a clip would shave focus rings / hover scale).
+   - [data-reveal-soft]  opacity only, no transform — for the navbar, whose
+                         `-translate-y-1/2` centering must not be overwritten.
+   - [data-reveal-split] the headline container; hidden only until SplitText has
+                         wrapped its lines, after which the timeline reveals each
+                         masked line. */
+[data-reveal],
+[data-reveal-fade] {
+  will-change: transform;
+}
+
+.reveal-armed [data-reveal] {
+  transform: translateY(110%);
+}
+
+.reveal-armed [data-reveal-fade] {
+  opacity: 0;
+  transform: translateY(16px);
+}
+
+.reveal-armed [data-reveal-soft] {
+  opacity: 0;
+}
+
+.reveal-armed [data-reveal-split] {
+  opacity: 0;
+}
+
+/* Honour reduced-motion: stay armed (so the class can still gate JS), but show
+   everything in its resting state with no transform. The orchestrator also
+   bails out, so nothing animates. */
+@media (prefers-reduced-motion: reduce) {
+  .reveal-armed [data-reveal],
+  .reveal-armed [data-reveal-fade],
+  .reveal-armed [data-reveal-split] {
+    opacity: 1;
+    transform: none;
+  }
+  /* Opacity-only: never touch transform (the navbar's own translate centers it). */
+  .reveal-armed [data-reveal-soft] {
+    opacity: 1;
+  }
+}
