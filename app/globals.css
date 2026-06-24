@@ -75,18 +75,25 @@ body {
   opacity: 0;
 }
 
-/* Rocks — the two cliffs park below the fold for the default "rise" entrance
-   (Option A, docs/rock-entrance-animation.md). translateY(100%) pushes each
-   full-height cliff one self-height down, off the hero's bottom edge (the
-   section is overflow-hidden, so it's clipped). rock-entrance.tsx then raises
-   them. Only the default direction is parked in CSS; the eventual selector's
-   other options set their own from-state in JS. */
+/* Rocks — the two cliffs park off-screen for their on-load entrance, keyed per
+   option (docs/rock-entrance-animation.md). The inline script in layout.tsx
+   stamps `.rock-<mode>` on <html> from the persisted choice, so the park state
+   matches whichever direction will play — no flash. rock-reveal.tsx then plays
+   it. The hero is overflow-hidden, so a cliff pushed a full self-height down is
+   clipped.
+   - rock-rise  (Option A): translateY(100%) → fully below, rises up.
+   - rock-drift (Option C): faded + a few px high → soft settle into place. */
 [data-rock] {
-  will-change: transform;
+  will-change: transform, opacity;
 }
 
-.reveal-armed [data-rock] {
+.reveal-armed.rock-rise [data-rock] {
   transform: translateY(100%);
+}
+
+.reveal-armed.rock-drift [data-rock] {
+  opacity: 0;
+  transform: translateY(-10px);
 }
 
 /* Honour reduced-motion: stay armed (so the class can still gate JS), but show
