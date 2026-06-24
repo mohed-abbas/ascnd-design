@@ -4,6 +4,7 @@ import HeroText from "./hero-text";
 import Logos from "./logos";
 import Navbar from "./navbar";
 import Rock from "./rock";
+import RockReveal from "./rock-reveal";
 import Wordmark from "./wordmark";
 
 /**
@@ -25,7 +26,9 @@ export default function Hero() {
       <Navbar />
 
       {/* Rocks (nodes 103:19 / 103:18): cliffs pinned to the hero's bottom
-          edges, framing the content. */}
+          edges, framing the content. RockEntrance drives their on-load rise
+          (Option A); it renders nothing. */}
+      <RockReveal />
       <Rock side="left" />
       <Rock side="right" />
 

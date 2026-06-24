@@ -24,6 +24,8 @@ export default function Rock({ side }: { side: Side }) {
   const { src, width } = ROCKS[side];
   return (
     <div
+      data-rock
+      data-rock-side={side}
       className={`pointer-events-none absolute bottom-0 z-0 h-full select-none ${
         side === "left" ? "left-0" : "right-0"
       }`}

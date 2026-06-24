@@ -75,13 +75,28 @@ body {
   opacity: 0;
 }
 
+/* Rocks — the two cliffs park below the fold for the default "rise" entrance
+   (Option A, docs/rock-entrance-animation.md). translateY(100%) pushes each
+   full-height cliff one self-height down, off the hero's bottom edge (the
+   section is overflow-hidden, so it's clipped). rock-entrance.tsx then raises
+   them. Only the default direction is parked in CSS; the eventual selector's
+   other options set their own from-state in JS. */
+[data-rock] {
+  will-change: transform;
+}
+
+.reveal-armed [data-rock] {
+  transform: translateY(100%);
+}
+
 /* Honour reduced-motion: stay armed (so the class can still gate JS), but show
    everything in its resting state with no transform. The orchestrator also
    bails out, so nothing animates. */
 @media (prefers-reduced-motion: reduce) {
   .reveal-armed [data-reveal],
   .reveal-armed [data-reveal-fade],
-  .reveal-armed [data-reveal-split] {
+  .reveal-armed [data-reveal-split],
+  .reveal-armed [data-rock] {
     opacity: 1;
     transform: none;
   }
