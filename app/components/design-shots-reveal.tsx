@@ -18,10 +18,11 @@ const RING_STAGGER = 0.09; // delay added per ring out from the center
 
 // ── Rotation (steady state) ──
 const SLOT_TIME = 5; // seconds for a tile to advance one slot
-const N = SHOT_ARC_SLOTS.length; // 7 slots in the loop
+const N = SHOT_ARC_SLOTS.length; // 8 slots: 7 visible (0..6) + 1 off-screen return (7)
+const FRONT = N - 2; // last visible slot index (far-R = 6); slot 7 is the return
 const REVOLUTION = SLOT_TIME * N; // full loop time (constant speed)
-const FADE_IN = 0.6; // ease the corner tiles from full → their steady value at start
-const EDGE_FADE = 0.25; // slots over which a tile fades in/out at the far corners
+const FADE_IN = 0.6; // ease in the steady opacity at the bloom→rotation handoff
+const EDGE_FADE = 0.35; // slots over which a tile fades out/in as it crosses off-screen
 
 // Closed Catmull-Rom through a numeric ring — smooth (no corners) everywhere,
 // including the seam, so motion never stutters. t is in [0, n).
@@ -50,14 +51,16 @@ function crClosed(arr: number[], t: number): number {
  * with the far-right tile wrapping back to the far-left.
  *
  * Size belongs to the slot, not the tile (so the whole thing reads as a turning
- * wheel): a closed Catmull-Rom over the seven arc slots gives a smooth path +
- * scale. A tile is only visible on the front arc (slots 0..6); it fades out as
- * it reaches the far-right corner and stays fully hidden across the entire
- * over-the-top return, so nothing is ever seen sliding back to far-left — it
- * simply reappears (fades in) at the far-left corner. Mirror/radius stay with
- * each tile (no flip). The hidden start state is CSS (`.reveal-armed
- * [data-shot]`); no-JS / reduced-motion leave the tiles in their resting arc.
- * Like rock-reveal.tsx it has no font dependency.
+ * wheel): a closed Catmull-Rom over the arc slots gives a smooth path + scale.
+ * It's a true conveyor — eight slots for seven visible positions, so one tile
+ * is always travelling the hidden off-screen return (far-R → over the top →
+ * far-L) while all seven visible slots stay filled. No gap, no ghost: a tile
+ * fades out just past far-R as it leaves the frame and fades back in just
+ * before far-L. The eighth tile (the in-transit one) reuses the center image,
+ * parked half a loop from its twin so they're never both prominent. Mirror/
+ * radius stay with each tile (no flip). The hidden start state is CSS
+ * (`.reveal-armed [data-shot]`); no-JS / reduced-motion leave the tiles in
+ * their resting arc. Like rock-reveal.tsx it has no font dependency.
  */
 export default function DesignShotsReveal() {
   useIsomorphicLayoutEffect(() => {
@@ -92,10 +95,26 @@ export default function DesignShotsReveal() {
       rotors.forEach((el) => {
         const arc = Number(el.dataset.arc ?? 0);
         const s = ((state.p + arc / N) % 1) * N; // phase in [0, N)
-        // Visible only on the front arc (slots 0..6), fading quickly at the far
-        // corners; fully hidden across the over-the-top return (s > 6) so no
-        // ghost slides back to far-left.
-        const steady = s <= 6 ? gsap.utils.clamp(0, 1, Math.min(s, 6 - s) / EDGE_FADE) : 0;
+        // Fully visible across the entire front arc (slots 0..6 = far-L..far-R),
+        // matching the static design where all seven tiles are solid. Only the
+        // off-screen return leg (s in (6, 8)) is hidden: fade out just past
+        // far-R as the tile leaves the frame, stay invisible across the top,
+        // fade back in just before far-L. The fades happen off-screen, so the
+        // wrap is seamless — a tile disappears at far-R and reappears at far-L
+        // with no ghost and no empty slot.
+        let steady: number;
+        if (s <= FRONT) {
+          steady = 1;
+        } else {
+          const t = s - FRONT; // 0..(N-FRONT) along the return leg
+          const span = N - FRONT; // total return length in slot units (2)
+          steady =
+            t < EDGE_FADE
+              ? 1 - t / EDGE_FADE // fade out leaving far-R
+              : t > span - EDGE_FADE
+                ? (t - (span - EDGE_FADE)) / EDGE_FADE // fade in approaching far-L
+                : 0; // off-screen, hidden
+        }
         gsap.set(el, {
           x: crClosed(xs, s),
           y: crClosed(ys, s),

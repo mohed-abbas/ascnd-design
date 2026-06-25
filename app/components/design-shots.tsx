@@ -20,8 +20,13 @@ import Image from "next/image";
 // ≤1 and the source never has to be upscaled.
 export const SHOT_BASE = 261;
 
-// The seven slots in arc order (left → right along the fan). This is the loop
-// the rotation rides; size belongs to the slot, not the tile.
+// The loop the rotation rides (size belongs to the slot, not the tile). Slots
+// 0..6 are the seven *visible* arc positions (far-L → far-R). Slot 7 is an
+// off-screen RETURN position above the frame: a true conveyor needs one more
+// slot than the visible count so that a tile can travel hidden from far-R back
+// to far-L while all seven visible slots stay filled (no gap). The path
+// far-R(6) → return(7) → far-L(0) arcs up and over, off-screen, so the wrap is
+// never seen — it just disappears past far-R and reappears at far-L.
 export const SHOT_ARC_SLOTS: { x: number; y: number; size: number }[] = [
   { x: -476.5, y: -207.5, size: 76 }, // 0 far-L
   { x: -404, y: -74, size: 117 }, //     1 mid-L
@@ -30,6 +35,7 @@ export const SHOT_ARC_SLOTS: { x: number; y: number; size: number }[] = [
   { x: 253.5, y: 50.5, size: 158 }, //   4 inner-R
   { x: 404, y: -74, size: 117 }, //      5 mid-R
   { x: 476.5, y: -207.5, size: 76 }, //  6 far-R
+  { x: 0, y: -480, size: 60 }, //        7 return (off-screen, above the frame)
 ];
 
 type Tile = {
@@ -61,6 +67,15 @@ const TILES: Tile[] = [
   { src: "/shots/shot7.png", size: 117, radius: 7, x: -404, y: -74, ring: 2, arc: 1, mirror: true, alt: "" }, // mid left
   { src: "/shots/shot5.png", size: 76, radius: 5, x: 476.5, y: -207.5, ring: 3, arc: 6, alt: "" }, // far right
   { src: "/shots/shot8.png", size: 76, radius: 5, x: -476.5, y: -207.5, ring: 3, arc: 0, mirror: true, alt: "" }, // far left
+  // 8th tile — the conveyor's in-transit slot, which is off-screen on the
+  // return path almost the whole time (only ever briefly grazing the far
+  // corners as it fades out past far-R / fades in before far-L). It reuses the
+  // center image and sits 4 slots (half the loop) from its twin, so whenever
+  // one copy is at the prominent center the other is parked on the hidden
+  // return — the two are never both prominent. Its resting transform is the
+  // off-screen return slot; the rotation places it each frame. radius/size keep
+  // the center tile's corner ratio.
+  { src: "/shots/shot2.png", size: 60, radius: 3.5, x: 0, y: -480, ring: 0, arc: 7, alt: "" }, // return (hidden)
 ];
 
 export default function DesignShots() {
