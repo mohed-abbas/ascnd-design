@@ -83,8 +83,16 @@ export default function HeroReveal() {
         });
       }
 
+      // When the welcome intro is handing off, the glass "ascnd" docks onto the
+      // wordmark slot and crossfades into it — <Intro> owns that fade, synced to
+      // the glass fade-out, so the wordmark must stay hidden here (no slide-up,
+      // never shown through the transmissive glass). Skip it entirely; the
+      // masked slide-up still runs for returning sessions.
+      const introHandoff = introWillPlay();
+
       // Masked blocks — slide up from below their overflow:hidden wrapper.
       root.querySelectorAll<HTMLElement>("[data-reveal]").forEach((el) => {
+        if (introHandoff && el.closest("[data-wordmark-slot]")) return;
         entries.push({
           order: Number(el.dataset.revealOrder ?? 0),
           add: (tl, at) =>

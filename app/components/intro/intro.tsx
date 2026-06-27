@@ -286,6 +286,23 @@ export default function Intro() {
       dockEnd,
     );
 
+    // Hand the glass off to the real DOM wordmark. It's stayed hidden through the
+    // whole welcome (HeroReveal skips it on intro handoff); park it in place,
+    // invisible, then crossfade it IN exactly as the glass canvas fades OUT — so
+    // it reads as glass → solid white text, with no prior text ever showing
+    // through the transmissive glass and no competing slide-up.
+    const wordmark = document.querySelector<HTMLElement>(
+      "[data-wordmark-slot] [data-reveal]",
+    );
+    if (wordmark) {
+      gsap.set(wordmark, { yPercent: 0, y: 0, opacity: 0 });
+      tl.to(
+        wordmark,
+        { opacity: 1, duration: 0.4, ease: "power2.out" },
+        dockEnd,
+      );
+    }
+
     // Dev hook: ?intropos=P (0..1) freezes the timeline at progress P for a
     // stable inspection frame (no timing races). No failsafe while frozen.
     const posParam = new URLSearchParams(window.location.search).get("intropos");
@@ -295,6 +312,7 @@ export default function Intro() {
         tl.kill();
         gsap.killTweensOf(animObj);
         gsap.killTweensOf(rockObjs);
+        if (wordmark) gsap.killTweensOf(wordmark);
         lenisRef.current?.start();
       };
     }
@@ -308,6 +326,7 @@ export default function Intro() {
       window.clearTimeout(failsafe);
       gsap.killTweensOf(animObj);
       gsap.killTweensOf(rockObjs);
+      if (wordmark) gsap.killTweensOf(wordmark);
       lenisRef.current?.start();
     };
   }, [play, plan, ready]);
