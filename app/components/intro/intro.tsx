@@ -16,7 +16,7 @@ import {
   markIntroSeen,
 } from "./intro-state";
 import { CAMERA_Z, ROCK_Z } from "./intro-scene";
-import type { GlassAnim, RockLayout } from "./intro-scene";
+import type { GlassAnim, RockEntry, RockLayout } from "./intro-scene";
 
 // The rock planes render at ROCK_Z (behind the glass), so they project slightly
 // toward screen centre vs the z=0 mapping below. Scale their world coords by this
@@ -37,6 +37,8 @@ const WIDTH_PER_SIZE = 2.55;
 const NAVBAR_FONT_PX = 38; // matches the DOM <Wordmark> (text-[38px]) dock target
 const WELCOME_LIFT = 52; // glyph sits 52px above the hero middle (Figma 200:203)
 const WELCOME_NUDGE_X = -4.91;
+const GLASS_RISE_PX = 170; // glass slides up this far into the welcome spot
+const ROCK_DRIFT_PX = 10; // rocks settle down this far on entrance (matches DOM)
 
 type Plan = {
   rocks: RockLayout[];
@@ -70,8 +72,14 @@ export default function Intro() {
   const play = shouldPlay && !dismissed;
 
   const [plan, setPlan] = useState<Plan | null>(null);
+  // The WebGL scene is lazy-loaded and its textures/font/HDR load under Suspense.
+  // Gate the timeline on the scene actually being painted (onReady) so the
+  // entrance plays from the top instead of mid-animation (the "pop" after the
+  // brief sky-only flash).
+  const [ready, setReady] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const anim = useRef<GlassAnim>({ x: 0, y: 0, scale: 1, rotX: 0, rotY: 0 });
+  const rockEntries = useRef<RockEntry[]>([]);
 
   // useLenis() can return a fresh ref across renders; mirror it into a ref so the
   // master-timeline effect can depend only on [play, plan] and never churn
@@ -152,21 +160,46 @@ export default function Intro() {
       })
       .filter((r): r is RockLayout => r !== null);
 
-    // Seed the glass at its reveal start: parked low, a touch small.
+    // Seed the glass at its reveal start: parked low (slides straight up into
+    // place, like the hero text — no scale pop).
     anim.current.x = welcome.x;
-    anim.current.y = welcome.y - 170 * wpp;
-    anim.current.scale = 0.96;
+    anim.current.y = welcome.y - GLASS_RISE_PX * wpp;
+    anim.current.scale = 1;
+
+    // Seed each rock hidden + lifted a touch, for the drift entrance (the WebGL
+    // mirror of the DOM rocks' drift: fade in + small downward settle).
+    rockEntries.current = rocks.map(() => ({
+      opacity: 0,
+      yOffset: ROCK_DRIFT_PX * wpp,
+    }));
 
     setPlan({ rocks, glassSize, welcome, navbar });
   }, [play]);
 
-  // Run the master timeline once the plan + scene are in. Depends only on
-  // [play, plan] — NOT lenis — so it's built exactly once (no kill/restart).
+  // Failsafe: if the scene never signals ready (slow GPU, load hiccup), start
+  // anyway so the intro can't hang on a blank sky.
+  useEffect(() => {
+    if (!play) return;
+    const t = window.setTimeout(() => setReady(true), 2500);
+    return () => window.clearTimeout(t);
+  }, [play]);
+
+  // Run the master timeline once the plan is built AND the scene has painted.
+  // Scroll locks as soon as we commit to playing (even during the load), but the
+  // timeline itself is only built on `ready` so the entrance plays from frame 0.
   useEffect(() => {
     if (!play || !plan) return;
 
+    lenisRef.current?.stop(); // lock now — keep it locked through the load
+    if (!ready) {
+      // Waiting on the scene; stay locked, release if we unmount before it paints.
+      return () => {
+        lenisRef.current?.start();
+      };
+    }
+
     const animObj = anim.current; // stable target for cleanup (ref-safe)
-    lenisRef.current?.stop();
+    const rockObjs = rockEntries.current;
 
     let revealed = false;
     const reveal = () => {
@@ -196,10 +229,23 @@ export default function Intro() {
     const dockStart = REVEAL + HOLD;
     const dockEnd = dockStart + DOCK;
 
-    // ① reveal — rise into place
+    // ① reveal — the glass slides straight up into place (same expo.out feel as
+    //    the hero text), and the rocks drift in alongside it (fade + settle, the
+    //    WebGL twin of the DOM rocks' drift, left leading right).
     tl.to(
       anim.current,
-      { y: plan.welcome.y, scale: 1, duration: REVEAL, ease: "expo.out" },
+      { y: plan.welcome.y, duration: REVEAL, ease: "expo.out" },
+      0,
+    );
+    tl.to(
+      rockObjs,
+      {
+        opacity: 1,
+        yOffset: 0,
+        duration: 1.1,
+        ease: "power2.out",
+        stagger: 0.1,
+      },
       0,
     );
 
@@ -239,6 +285,7 @@ export default function Intro() {
       return () => {
         tl.kill();
         gsap.killTweensOf(animObj);
+        gsap.killTweensOf(rockObjs);
         lenisRef.current?.start();
       };
     }
@@ -251,9 +298,10 @@ export default function Intro() {
       tl.kill();
       window.clearTimeout(failsafe);
       gsap.killTweensOf(animObj);
+      gsap.killTweensOf(rockObjs);
       lenisRef.current?.start();
     };
-  }, [play, plan]);
+  }, [play, plan, ready]);
 
   if (!play || !plan) return null;
 
@@ -263,7 +311,13 @@ export default function Intro() {
       aria-hidden
       className="pointer-events-none fixed inset-0 z-[60]"
     >
-      <IntroScene anim={anim} rocks={plan.rocks} glassSize={plan.glassSize} />
+      <IntroScene
+        anim={anim}
+        rocks={plan.rocks}
+        rockEntry={rockEntries}
+        glassSize={plan.glassSize}
+        onReady={() => setReady(true)}
+      />
     </div>
   );
 }

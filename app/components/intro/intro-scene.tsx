@@ -45,12 +45,23 @@ export type RockLayout = {
   h: number;
 };
 
+/** Per-rock entrance state, driven by <Intro>'s timeline (the WebGL "drift"). */
+export type RockEntry = {
+  opacity: number;
+  /** World-unit y offset added to the rock's resting position (settle). */
+  yOffset: number;
+};
+
 export type IntroSceneProps = {
   anim: React.RefObject<GlassAnim>;
   rocks: RockLayout[];
+  /** Per-rock entrance (opacity + settle), index-matched to `rocks`. */
+  rockEntry: React.RefObject<RockEntry[]>;
   /** Text3D `size` in WORLD units (≈ 4–5, matching the lab). */
   glassSize: number;
   font?: string;
+  /** Fired once the scene's textures/font/HDR have loaded and a frame painted. */
+  onReady?: () => void;
 };
 
 const FONT = "/fonts/product-sans-medium.typeface.json";
@@ -63,22 +74,77 @@ const FONT = "/fonts/product-sans-medium.typeface.json";
 export const CAMERA_Z = 40;
 export const ROCK_Z = -0.3;
 
-function Rocks({ rocks }: { rocks: RockLayout[] }) {
+function Rocks({
+  rocks,
+  rockEntry,
+}: {
+  rocks: RockLayout[];
+  rockEntry: React.RefObject<RockEntry[]>;
+}) {
   const maps = useTexture(rocks.map((r) => r.src));
+  const mats = useRef<(THREE.MeshBasicMaterial | null)[]>([]);
+  const meshes = useRef<(THREE.Mesh | null)[]>([]);
+
+  // Drive the entrance imperatively from the shared ref (same pattern as Glass).
+  // Start hidden (opacity 0 below) and let <Intro>'s drift tween fade + settle.
+  useFrame(() => {
+    const entries = rockEntry.current;
+    if (!entries) return;
+    rocks.forEach((r, i) => {
+      const e = entries[i];
+      if (!e) return;
+      const mat = mats.current[i];
+      if (mat) mat.opacity = e.opacity;
+      const mesh = meshes.current[i];
+      if (mesh) mesh.position.y = r.cy + e.yOffset;
+    });
+  });
+
   return (
     <group>
       {rocks.map((r, i) => (
-        <mesh key={i} position={[r.cx, r.cy, ROCK_Z]}>
+        <mesh
+          key={i}
+          ref={(m) => {
+            meshes.current[i] = m;
+          }}
+          position={[r.cx, r.cy, ROCK_Z]}
+        >
           <planeGeometry args={[r.w, r.h]} />
           <meshBasicMaterial
+            ref={(m) => {
+              mats.current[i] = m;
+            }}
             map={maps[i] as THREE.Texture}
             transparent
             toneMapped={false}
+            opacity={0}
           />
         </mesh>
       ))}
     </group>
   );
+}
+
+/**
+ * Signals the scene is ready to be revealed. Lives inside <Suspense>, so it
+ * only mounts once every sibling's async resource (rock textures, Text3D font,
+ * Environment HDR) has resolved; it then waits a couple of painted frames
+ * before firing onReady, so <Intro> can start the entrance from the top instead
+ * of mid-animation (which looked like a pop after the brief sky-only flash).
+ */
+function SceneReady({ onReady }: { onReady?: () => void }) {
+  const done = useRef(false);
+  const frames = useRef(0);
+  useFrame(() => {
+    if (done.current) return;
+    frames.current += 1;
+    if (frames.current >= 2) {
+      done.current = true;
+      onReady?.();
+    }
+  });
+  return null;
 }
 
 function Glass({
@@ -152,8 +218,10 @@ function Glass({
 export default function IntroScene({
   anim,
   rocks,
+  rockEntry,
   glassSize,
   font = FONT,
+  onReady,
 }: IntroSceneProps) {
   return (
     <Canvas
@@ -170,11 +238,12 @@ export default function IntroScene({
       }}
     >
       <Suspense fallback={null}>
-        <Rocks rocks={rocks} />
+        <Rocks rocks={rocks} rockEntry={rockEntry} />
         <Glass anim={anim} glassSize={glassSize} font={font} />
         <Environment preset="city" environmentIntensity={1.1} />
         <directionalLight position={[3, 5, 6]} intensity={1.2} />
         <ambientLight intensity={0.4} />
+        <SceneReady onReady={onReady} />
       </Suspense>
     </Canvas>
   );
