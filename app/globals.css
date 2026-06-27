@@ -87,6 +87,38 @@ body {
   transform: translateY(-10px);
 }
 
+/* Grass-rock hover reveal (grass-rocks.tsx + rock-hover.tsx). The lush cliff
+   overlay is hidden by a radial-gradient mask and uncovered only inside a soft
+   disc that tracks the pointer. We keep the gradient's shape fixed and move it
+   via mask-position (cheap — no per-frame re-raster); mask-size only changes on
+   the short open/close tween. At rest --reveal-size is 0, so the tile is 0×0 and
+   the overlay is fully masked out, leaving just the bare cliffs. The mask centre
+   is offset by half the size to centre the disc on the cursor. */
+[data-grass-overlay] {
+  --reveal-x: -9999px;
+  --reveal-y: -9999px;
+  --reveal-size: 0px;
+  --reveal-half: 0px; /* half of --reveal-size, so the tile centres on the cursor */
+  -webkit-mask-image: radial-gradient(circle closest-side, #000 0%, #000 38%, transparent 100%);
+  mask-image: radial-gradient(circle closest-side, #000 0%, #000 38%, transparent 100%);
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-size: var(--reveal-size) var(--reveal-size);
+  mask-size: var(--reveal-size) var(--reveal-size);
+  -webkit-mask-position: calc(var(--reveal-x) - var(--reveal-half))
+    calc(var(--reveal-y) - var(--reveal-half));
+  mask-position: calc(var(--reveal-x) - var(--reveal-half))
+    calc(var(--reveal-y) - var(--reveal-half));
+  transform: translateZ(0); /* own compositor layer so reveal repaints stay isolated */
+  will-change: mask-position, mask-size;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-grass-overlay] {
+    display: none;
+  }
+}
+
 /* Designs Shots collage — the seven tiles park scaled-down + invisible for the
    on-load "bloom from center" (design-shots-reveal.tsx). Keyed on .reveal-armed
    so they hold before JS and stay visible for no-JS. The reveal wrapper carries

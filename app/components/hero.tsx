@@ -1,11 +1,13 @@
 import DesignShots from "./design-shots";
 import DesignShotsReveal from "./design-shots-reveal";
+import GrassRocks from "./grass-rocks";
 import HeroReveal from "./hero-reveal";
 import HeroText from "./hero-text";
 import Logos from "./logos";
 import LogosMarquee from "./logos-marquee";
 import Navbar from "./navbar";
 import Rock from "./rock";
+import RockHover from "./rock-hover";
 import RockReveal from "./rock-reveal";
 import Wordmark from "./wordmark";
 
@@ -44,6 +46,13 @@ export default function Hero() {
       <RockReveal />
       <Rock side="left" />
       <Rock side="right" />
+
+      {/* Grass-rock hover reveal (nodes 56:58 / 69:175): the lush variant of the
+          cliffs, registered over the bare ones and uncovered in a soft disc that
+          follows the cursor. GrassRocks is the masked overlay; RockHover drives
+          the mask and renders nothing. */}
+      <GrassRocks />
+      <RockHover />
 
       {/* ascnd wordmark (node 77:174): top-center brand mark, glyph top ~55px
           of the 982-tall hero, ~36px Product Sans Medium. Sits above the
