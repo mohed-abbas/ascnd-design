@@ -7,7 +7,6 @@ import * as THREE from "three";
 import type { Group } from "three";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
-import { useCloudMode } from "./cloud-mode";
 
 /**
  * Volumetric cloud field (Three.js / R3F + drei <Clouds>).
@@ -141,26 +140,6 @@ function InvalidateOnReady() {
 }
 
 /**
- * Repaints the demand-mode canvas whenever `dep` changes (e.g. the cloud mode
- * toggles material/lights). drei rebuilds the material but won't request a frame
- * on its own under frameloop="demand", so we pump a short invalidate burst.
- */
-function RepaintOn({ dep }: { dep: unknown }) {
-  const invalidate = useThree((s) => s.invalidate);
-  useEffect(() => {
-    let raf = 0;
-    let frames = 0;
-    const pump = () => {
-      invalidate();
-      if (++frames < 6) raf = requestAnimationFrame(pump);
-    };
-    pump();
-    return () => cancelAnimationFrame(raf);
-  }, [dep, invalidate]);
-  return null;
-}
-
-/**
  * WebGL context-loss safety net. THREE handles lost/restored internally; here
  * we only (a) repaint after a restore (demand mode needs an explicit frame) and
  * (b) if a restore never arrives within a few seconds (unrecoverable driver
@@ -227,12 +206,10 @@ export default function CloudCanvas() {
   const [canvasKey, setCanvasKey] = useState(0);
   const remount = useCallback(() => setCanvasKey((k) => k + 1), []);
 
-  // Cloud look, toggled live via <CloudModeToggle/> (see ./cloud-mode + the
-  // colour/lighting doc). "lit" = Option 1 (MeshLambertMaterial + key light,
-  // dimensional); "flat" = Option 2 (MeshBasicMaterial, unlit, guaranteed white).
-  const mode = useCloudMode();
-  const cloudMaterial =
-    mode === "flat" ? THREE.MeshBasicMaterial : THREE.MeshLambertMaterial;
+  // Cloud look (see docs/cloud-color-and-lighting.md): flat — MeshBasicMaterial,
+  // unlit, guaranteed-white and cheap. This is the chosen direction, so it's
+  // hardcoded; the lit/flat selector lives on the lab branch.
+  const cloudMaterial = THREE.MeshBasicMaterial;
 
   return (
     <Canvas
@@ -253,26 +230,10 @@ export default function CloudCanvas() {
       camera={{ position: [0, 0, 10], fov: 45 }}
       style={{ position: "absolute", inset: 0 }}
     >
-      {/* Lights only matter in "lit" mode — MeshBasicMaterial ("flat") is unlit
-          and ignores them, so we skip them entirely there.
-
-          Key-dominant lighting (see docs/cloud-color-and-lighting.md). The cloud's
-          dimensional form comes from a LIGHT GRADIENT — bright sunlit tops fading
-          to softly-shadowed undersides — exactly like the Figma sky photo. A
-          strong overhead key sculpts that gradient; a moderate ambient fill keeps
-          the undersides light rather than muddy. (Flooding flat ambient, as we did
-          before, makes a uniform formless blob that reads grey even when white.)
-          Translucency/softness at the edges comes from the sprite alpha, letting
-          the blue sky breathe through. NoToneMapping (onCreated) keeps these
-          whites from being pulled grey by ACES. */}
-      {mode === "lit" && (
-        <>
-          <ambientLight intensity={1.05} />
-          <directionalLight position={[-3, 9, 6]} intensity={1.6} />
-          <pointLight position={[3.5, 6, 5]} intensity={50} decay={2} />
-        </>
-      )}
-
+      {/* No lights: the flat MeshBasicMaterial is unlit and ignores them. Cloud
+          whiteness comes from the sprite + NoToneMapping (onCreated); softness at
+          the edges comes from the sprite alpha, letting the blue sky breathe
+          through. (The lit key-light path lives on the lab branch.) */}
       <Clouds
         material={cloudMaterial}
         texture="/textures/cloud.png"
@@ -303,7 +264,6 @@ export default function CloudCanvas() {
 
       <ParallaxRig groupsRef={groupsRef} />
       <InvalidateOnReady />
-      <RepaintOn dep={mode} />
       <ContextWatchdog onUnrecoverable={remount} />
     </Canvas>
   );

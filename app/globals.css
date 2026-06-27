@@ -75,32 +75,14 @@ body {
   opacity: 0;
 }
 
-/* Rocks — the two cliffs park off-screen for their on-load entrance, keyed per
-   option (docs/rock-entrance-animation.md). The inline script in layout.tsx
-   stamps `.rock-<mode>` on <html> from the persisted choice, so the park state
-   matches whichever direction will play — no flash. rock-reveal.tsx then plays
-   it. The hero is overflow-hidden, so a cliff pushed a full self-height down is
-   clipped.
-   - rock-rise  (Option A): translateY(100%) → fully below, rises up.
-   - rock-slide (Option B): each cliff translated out past its own edge.
-   - rock-drift (Option C): faded + a few px high → soft settle into place. */
+/* Rocks — the two cliffs park for their on-load "drift" entrance: faded + a few
+   px high, then a soft settle into place (rock-reveal.tsx plays it). Held on
+   .reveal-armed so they hold before JS and stay visible for no-JS. */
 [data-rock] {
   will-change: transform, opacity;
 }
 
-.reveal-armed.rock-rise [data-rock] {
-  transform: translateY(100%);
-}
-
-.reveal-armed.rock-slide [data-rock-side="left"] {
-  transform: translateX(-100%);
-}
-
-.reveal-armed.rock-slide [data-rock-side="right"] {
-  transform: translateX(100%);
-}
-
-.reveal-armed.rock-drift [data-rock] {
+.reveal-armed [data-rock] {
   opacity: 0;
   transform: translateY(-10px);
 }

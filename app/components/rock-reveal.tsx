@@ -2,7 +2,6 @@
 
 import { useEffect, useLayoutEffect } from "react";
 import gsap from "gsap";
-import { useRockEntrance } from "./rock-entrance";
 
 // useLayoutEffect on the client (parks/plays before paint, no flash); falls back
 // to useEffect during SSR to avoid React's server warning. Mirrors hero-reveal.tsx.
@@ -14,23 +13,18 @@ const STAGGER = 0.1; // DOM order is left then right → a slight left→right l
 
 /**
  * On-load rock entrance orchestrator. Renders nothing; on mount it animates the
- * two cliffs (`[data-rock]`, marked in rock.tsx) into place using the entrance
- * direction held in the shared store (`rock-entrance.ts`). Re-plays whenever the
- * mode changes, so the selector (`rock-entrance-toggle.tsx`) previews each
- * option live.
+ * two cliffs (`[data-rock]`, marked in rock.tsx) into place with the "drift"
+ * entrance — a soft fade with a small downward settle, the chosen direction.
  *
- * The hidden start state is CSS, keyed per mode on a `.rock-<mode>` class that
- * the inline script in layout.tsx stamps on <html> from the persisted choice
- * (`.reveal-armed.rock-rise [data-rock]` etc. in globals.css) — so the cliffs
- * are parked in the right place the instant they paint, no flash. If the page
- * isn't armed (no-JS) or the user prefers reduced motion, we bail and CSS leaves
- * the cliffs in place. Independent of hero-reveal.tsx on purpose: the rocks have
- * no web-font dependency, so they rise immediately rather than waiting on fonts —
- * which also makes them lead the text cascade (frame first, then content).
+ * The hidden start state is CSS (`.reveal-armed [data-rock]` in globals.css),
+ * so the cliffs are parked in the right place the instant they paint, no flash.
+ * If the page isn't armed (no-JS) or the user prefers reduced motion, we bail
+ * and CSS leaves the cliffs in place. Independent of hero-reveal.tsx on purpose:
+ * the rocks have no web-font dependency, so they settle immediately rather than
+ * waiting on fonts — which also makes them lead the text cascade (frame first,
+ * then content).
  */
 export default function RockReveal() {
-  const mode = useRockEntrance();
-
   useIsomorphicLayoutEffect(() => {
     const root = document.querySelector<HTMLElement>("[data-hero]");
     if (!root) return;
@@ -47,62 +41,24 @@ export default function RockReveal() {
       return;
     }
 
-    let tween: gsap.core.Tween | undefined;
+    // Drift — the camera finds them already there: a soft fade with a small
+    // downward settle. No clip, no big travel.
+    const tween = gsap.fromTo(
+      rocks,
+      { opacity: 0, y: -10, yPercent: 0 },
+      {
+        opacity: 1,
+        y: 0,
+        duration: 1.1,
+        ease: "power2.out",
+        stagger: STAGGER,
+      },
+    );
 
-    switch (mode) {
-      case "slide":
-        // Option B — cliffs slide in from the outer edges (left from the left,
-        // right from the right), like curtains framing the stage. Per-side start
-        // via a function value off each rock's data-rock-side. Pin x:0 for the
-        // same percent-vs-pixel reason as the rise branch.
-        tween = gsap.fromTo(
-          rocks,
-          {
-            xPercent: (_i: number, el: Element) =>
-              (el as HTMLElement).dataset.rockSide === "left" ? -100 : 100,
-            x: 0,
-          },
-          { xPercent: 0, duration: 0.9, ease: "expo.out", stagger: STAGGER },
-        );
-        break;
-
-      case "drift":
-        // Option C — the camera finds them already there: a soft fade with a
-        // small downward settle. No clip, no big travel.
-        tween = gsap.fromTo(
-          rocks,
-          { opacity: 0, y: -10, yPercent: 0 },
-          {
-            opacity: 1,
-            y: 0,
-            duration: 1.1,
-            ease: "power2.out",
-            stagger: STAGGER,
-          },
-        );
-        break;
-
-      case "rise":
-      default:
-        // Option A — cliffs rise out of the cloud sea. Pin y:0 in `from` so GSAP
-        // owns the whole transform: the CSS park state translateY(100%) computes
-        // to a pixel matrix, and a yPercent-only tween would leave a frozen y
-        // baseline (the gotcha already fixed in hero-reveal.tsx).
-        tween = gsap.fromTo(
-          rocks,
-          { yPercent: 100, y: 0 },
-          { yPercent: 0, duration: 1, ease: "expo.out", stagger: STAGGER },
-        );
-        break;
-    }
-
-    // Kill (don't revert) on mode change so the next option's fromTo sets its own
-    // start state directly — a clean cross-fade between previews, with no detour
-    // back through the CSS park position.
     return () => {
-      tween?.kill();
+      tween.kill();
     };
-  }, [mode]);
+  }, []);
 
   return null;
 }

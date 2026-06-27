@@ -4,8 +4,6 @@ import localFont from "next/font/local";
 import "./globals.css";
 import Background from "./components/background";
 import LenisProvider from "./components/lenis-provider";
-import CloudModeToggle from "./components/cloud-mode-toggle";
-import RockEntranceToggle from "./components/rock-entrance-toggle";
 
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
@@ -56,25 +54,17 @@ export default function RootLayout({
             so the `.reveal-armed` hidden state in globals.css applies the instant
             the hero renders — no flash of final-position text before hydration.
             JS-gated by design: no-JS visitors never get the class, so all text
-            stays visible. The GSAP timeline (hero-reveal.tsx) then animates it in.
-            It also stamps the persisted rock-entrance option as `rock-<mode>`, so
-            globals.css parks the cliffs in the right start state for whichever
-            direction will play (rock-reveal.tsx) — again, no flash. */}
+            stays visible. The GSAP timeline (hero-reveal.tsx) then animates it in;
+            the cliffs use the same armed state for their drift entrance
+            (rock-reveal.tsx). */}
         <script
           dangerouslySetInnerHTML={{
-            __html:
-              "document.documentElement.classList.add('reveal-armed');" +
-              "try{var m=localStorage.getItem('ascnd:rock-entrance');" +
-              "document.documentElement.classList.add('rock-'+(m==='slide'||m==='drift'?m:'rise'));}catch(e){}",
+            __html: "document.documentElement.classList.add('reveal-armed');",
           }}
         />
         <LenisProvider>
           <Background />
           {children}
-          {/* Dev/review aids: switch cloud render mode (Lit vs Flat) and preview
-              the rock entrance directions (Rise vs Drift). */}
-          <CloudModeToggle />
-          <RockEntranceToggle />
         </LenisProvider>
       </body>
     </html>
