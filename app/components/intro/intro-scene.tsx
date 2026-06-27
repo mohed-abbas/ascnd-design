@@ -99,34 +99,38 @@ function Glass({
   return (
     <group ref={ref}>
       <Center>
+        {/* Flat glass TEXT, not a 3D object: a very thin slab + soft bevel for
+            the refractive edge. Side faces are killed mainly by the telephoto
+            camera (see <Canvas>), which views the glyphs almost head-on. The
+            glassiness comes from the transmission/bevel, not from depth. */}
         <Text3D
           font={font}
           size={glassSize}
-          height={glassSize * 0.15}
+          height={glassSize * 0.018}
           curveSegments={16}
           bevelEnabled
-          bevelThickness={glassSize * 0.02}
-          bevelSize={glassSize * 0.011}
+          bevelThickness={glassSize * 0.006}
+          bevelSize={glassSize * 0.008}
           bevelOffset={0}
-          bevelSegments={6}
+          bevelSegments={5}
           letterSpacing={-glassSize * 0.03}
         >
           ascnd
           <MeshTransmissionMaterial
             background={sky}
             transmission={1}
-            thickness={glassSize * 0.28}
+            thickness={glassSize * 0.16}
             roughness={0.16}
             ior={1.45}
-            chromaticAberration={0.65}
+            chromaticAberration={0.6}
             anisotropicBlur={0.28}
-            distortion={0.2}
-            distortionScale={0.4}
-            temporalDistortion={0.06}
+            distortion={0.14}
+            distortionScale={0.3}
+            temporalDistortion={0.05}
             samples={8}
             resolution={1024}
             backside
-            backsideThickness={glassSize * 0.1}
+            backsideThickness={glassSize * 0.02}
             clearcoat={1}
             clearcoatRoughness={0}
             color="#ffffff"
@@ -147,7 +151,12 @@ export default function IntroScene({
     <Canvas
       dpr={[1, 2]}
       gl={{ antialias: true, alpha: true }}
-      camera={{ position: [0, 0, 10], fov: 45 }}
+      // Telephoto: far back + narrow FOV → the glyphs are viewed almost head-on
+      // so the thin extrusion shows no side faces (flat glass text, not a 3D
+      // block). fov 11.82° at z=40 keeps the visible height at the z=0 plane at
+      // 8.284 units — the SAME mapping <Intro> assumes (wpp = 8.284/innerHeight),
+      // so positions/sizes are unchanged.
+      camera={{ position: [0, 0, 40], fov: 11.82 }}
       onCreated={({ gl }) => {
         gl.toneMapping = THREE.NoToneMapping;
       }}
