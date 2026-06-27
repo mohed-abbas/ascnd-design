@@ -55,12 +55,20 @@ export type IntroSceneProps = {
 
 const FONT = "/fonts/product-sans-medium.typeface.json";
 
+// Camera + rock depth, exported so <Intro> can compensate its DOM→world rock
+// placement: the planes sit slightly BEHIND the glass (so it refracts them), and
+// a point at ROCK_Z projects a touch toward screen centre vs the z=0 mapping
+// <Intro> measures with. <Intro> scales the rock coords by (CAMERA_Z - ROCK_Z) /
+// CAMERA_Z so they project to exactly the measured DOM rect — flush to the edges.
+export const CAMERA_Z = 40;
+export const ROCK_Z = -0.3;
+
 function Rocks({ rocks }: { rocks: RockLayout[] }) {
   const maps = useTexture(rocks.map((r) => r.src));
   return (
     <group>
       {rocks.map((r, i) => (
-        <mesh key={i} position={[r.cx, r.cy, -0.3]}>
+        <mesh key={i} position={[r.cx, r.cy, ROCK_Z]}>
           <planeGeometry args={[r.w, r.h]} />
           <meshBasicMaterial
             map={maps[i] as THREE.Texture}
@@ -156,7 +164,7 @@ export default function IntroScene({
       // block). fov 11.82° at z=40 keeps the visible height at the z=0 plane at
       // 8.284 units — the SAME mapping <Intro> assumes (wpp = 8.284/innerHeight),
       // so positions/sizes are unchanged.
-      camera={{ position: [0, 0, 40], fov: 11.82 }}
+      camera={{ position: [0, 0, CAMERA_Z], fov: 11.82 }}
       onCreated={({ gl }) => {
         gl.toneMapping = THREE.NoToneMapping;
       }}

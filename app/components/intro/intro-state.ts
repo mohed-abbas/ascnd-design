@@ -11,6 +11,24 @@ export const INTRO_REVEAL_EVENT = "ascnd:intro-reveal";
 
 const REDUCE_MOTION = "(prefers-reduced-motion: reduce)";
 
+/**
+ * Cheap WebGL-capability probe (same idea as cloud-layer.tsx). The intro's rocks
+ * are drawn in WebGL while the hero's DOM rocks stay parked; if WebGL can't run
+ * we must NOT play, or the welcome would show no rocks until the failsafe fires.
+ * Skipping lets hero-reveal / rock-reveal / design-shots-reveal fall through to
+ * their immediate path, so the DOM rocks appear normally.
+ */
+function hasWebGL(): boolean {
+  try {
+    const canvas = document.createElement("canvas");
+    return !!(
+      canvas.getContext("webgl") || canvas.getContext("experimental-webgl")
+    );
+  } catch {
+    return false;
+  }
+}
+
 function computeShouldPlay(): boolean {
   if (typeof window === "undefined") return false;
 
@@ -20,6 +38,8 @@ function computeShouldPlay(): boolean {
   if (q === "skip") return false;
 
   if (window.matchMedia(REDUCE_MOTION).matches) return false;
+  // No WebGL → the glass/rocks can't render; skip so the DOM rocks reveal normally.
+  if (!hasWebGL()) return false;
   try {
     if (sessionStorage.getItem(INTRO_SEEN_KEY)) return false;
   } catch {

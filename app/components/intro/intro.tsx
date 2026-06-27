@@ -15,7 +15,13 @@ import {
   introWillPlay,
   markIntroSeen,
 } from "./intro-state";
+import { CAMERA_Z, ROCK_Z } from "./intro-scene";
 import type { GlassAnim, RockLayout } from "./intro-scene";
+
+// The rock planes render at ROCK_Z (behind the glass), so they project slightly
+// toward screen centre vs the z=0 mapping below. Scale their world coords by this
+// to cancel it — they land flush to the viewport edges, matching the DOM rocks.
+const ROCK_DEPTH = (CAMERA_Z - ROCK_Z) / CAMERA_Z;
 
 const IntroScene = dynamic(() => import("./intro-scene"), { ssr: false });
 
@@ -124,14 +130,24 @@ export default function Intro() {
           `[data-rock-side="${side}"]`,
         );
         if (!el) return null;
+        // The DOM rock is parked with `transform: translateY(-10px)` (the
+        // .reveal-armed drift start), which would push the WebGL plane 10px
+        // high of the cliff's resting spot. Neutralise it for the measure so
+        // the plane sits exactly where the opacity-only DOM rock lands at the
+        // crossfade (rock-reveal.tsx) — no slide at the handoff.
+        const prevTransform = el.style.transform;
+        el.style.transform = "none";
         const r = el.getBoundingClientRect();
+        el.style.transform = prevTransform;
         const c = toWorld(r.left + r.width / 2, r.top + r.height / 2);
+        // Scale about screen centre (×ROCK_DEPTH) so the plane, drawn at ROCK_Z,
+        // projects to exactly this measured rect — flush to the edges, no gap.
         return {
           src: side === "left" ? "/rocks/left-rock.png" : "/rocks/right-rock.png",
-          cx: c.x,
-          cy: c.y,
-          w: r.width * wpp,
-          h: r.height * wpp,
+          cx: c.x * ROCK_DEPTH,
+          cy: c.y * ROCK_DEPTH,
+          w: r.width * wpp * ROCK_DEPTH,
+          h: r.height * wpp * ROCK_DEPTH,
         };
       })
       .filter((r): r is RockLayout => r !== null);
@@ -200,14 +216,19 @@ export default function Intro() {
       dockStart,
     );
 
-    // ③ cascade the hero in as the glass is nearly landed…
-    tl.call(reveal, undefined, dockEnd - 0.28);
+    // ③ cascade the hero in as the glass is nearly landed. This also fires the
+    //    DOM-rock crossfade (rock-reveal.tsx), an opacity-only ~0.35s fade — set
+    //    early enough that the DOM rocks are SOLID by dockEnd, before the canvas
+    //    (carrying the WebGL rocks) starts to fade, so the crossfade never dips
+    //    translucent. The DOM rocks land exactly under the WebGL rocks.
+    tl.call(reveal, undefined, dockEnd - 0.35);
 
-    // …then fade the glass out onto the real DOM wordmark once it has docked.
+    // …then fade the glass + WebGL rocks out onto the now-solid DOM rocks and the
+    // real DOM wordmark, once the glass has docked.
     tl.to(
       wrapperRef.current,
       { opacity: 0, duration: 0.4, ease: "power2.out" },
-      dockEnd - 0.08,
+      dockEnd,
     );
 
     // Dev hook: ?intropos=P (0..1) freezes the timeline at progress P for a
