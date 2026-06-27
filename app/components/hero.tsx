@@ -3,6 +3,7 @@ import DesignShotsReveal from "./design-shots-reveal";
 import HeroReveal from "./hero-reveal";
 import HeroText from "./hero-text";
 import Logos from "./logos";
+import LogosMarquee from "./logos-marquee";
 import Navbar from "./navbar";
 import Rock from "./rock";
 import RockReveal from "./rock-reveal";
@@ -25,6 +26,17 @@ export default function Hero() {
       <HeroReveal />
 
       <Navbar />
+
+      {/* Logos trusted-by row (node 103:6): centered, anchored near the hero
+          bottom — frame bottom y=938 of the 982-tall hero (44px gap). Rendered
+          BEFORE the rocks so the cliffs paint over it: the marquee wordmarks
+          scroll out from behind the rocks (this page layers by DOM order — the
+          rocks sit at z-0 and everything after them paints on top). */}
+      <div className="absolute bottom-[44px] left-1/2 w-[1351px] max-w-[calc(100vw-3rem)] -translate-x-1/2">
+        {/* Drives the infinite leftward marquee of the brand row; renders nothing. */}
+        <LogosMarquee />
+        <Logos />
+      </div>
 
       {/* Rocks (nodes 103:19 / 103:18): cliffs pinned to the hero's bottom
           edges, framing the content. RockEntrance drives their on-load rise
@@ -56,12 +68,6 @@ export default function Hero() {
       {/* Hero Text (node 103:22): centered, frame top y=515 of the 982-tall hero. */}
       <div className="absolute left-1/2 top-[52.4%] w-[775px] max-w-[calc(100vw-3rem)] -translate-x-1/2">
         <HeroText />
-      </div>
-
-      {/* Logos trusted-by row (node 103:6): centered, anchored near the hero
-          bottom — frame bottom y=938 of the 982-tall hero (44px gap). */}
-      <div className="absolute bottom-[44px] left-1/2 w-[1351px] max-w-[calc(100vw-3rem)] -translate-x-1/2">
-        <Logos />
       </div>
     </section>
   );

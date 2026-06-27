@@ -1,12 +1,19 @@
 /**
  * "Logos" trusted-by row — Figma node 103:6.
  * A caption ("trusted by founders shipping fast", with an Instrument Serif
- * "founders" accent) above a single row of brand wordmarks at 50% opacity.
+ * "founders" accent) above an infinite marquee of brand wordmarks at 50%
+ * opacity, scrolling slowly leftward.
  *
  * The design fades both ends of the row with an alpha mask (exported as a PNG
  * in Figma) — here it's reproduced with an equivalent CSS linear-gradient mask,
- * so there's no asset to ship. Aeonik Bold (proprietary) falls back to
+ * so there's no asset to ship; it doubles as the marquee's edge feather, hiding
+ * wordmarks as they enter/leave. Aeonik Bold (proprietary) falls back to
  * Product Sans Bold, matching how the other proprietary fonts are handled.
+ *
+ * Markup is a single brand "group" inside a `[data-logos-track]`; the marquee
+ * orchestrator (logos-marquee.tsx) clones the group to fill the viewport and
+ * drives the seamless scroll. With no JS / reduced motion the one group stays
+ * put, centred under the edge-fade mask.
  */
 
 const BRANDS = [
@@ -48,19 +55,33 @@ export default function Logos() {
         data-reveal-order={7}
         className="flex w-full justify-center"
       >
+        {/* Marquee viewport: clips the scrolling track and feathers both ends
+            with the edge-fade mask. justify-center keeps the single group
+            centred in the static (no-JS / reduced-motion) fallback; the
+            orchestrator switches to left-anchored before it animates. */}
         <div
           aria-hidden
-          className="flex w-full max-w-[1351px] items-center justify-center gap-[43px] whitespace-nowrap text-[25px] font-bold leading-[1.2] text-white opacity-50"
+          className="flex w-full max-w-[1351px] justify-center overflow-hidden opacity-50"
           style={{
             maskImage: EDGE_FADE,
             WebkitMaskImage: EDGE_FADE,
           }}
         >
-          {BRANDS.map((brand) => (
-            <span key={brand} className="shrink-0">
-              {brand}
-            </span>
-          ))}
+          <div
+            data-logos-track
+            className="flex w-max items-center gap-[43px] whitespace-nowrap text-[25px] font-bold leading-[1.2] text-white"
+          >
+            <div
+              data-logos-group
+              className="flex shrink-0 items-center gap-[43px]"
+            >
+              {BRANDS.map((brand) => (
+                <span key={brand} className="shrink-0">
+                  {brand}
+                </span>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
     </div>
