@@ -37,7 +37,6 @@ const WIDTH_PER_SIZE = 2.55;
 const NAVBAR_FONT_PX = 38; // matches the DOM <Wordmark> (text-[38px]) dock target
 const WELCOME_LIFT = 52; // glyph sits 52px above the hero middle (Figma 200:203)
 const WELCOME_NUDGE_X = -4.91;
-const GLASS_RISE_PX = 170; // glass slides up this far into the welcome spot
 const ROCK_DRIFT_PX = 10; // rocks settle down this far on entrance (matches DOM)
 
 type Plan = {
@@ -78,7 +77,14 @@ export default function Intro() {
   // brief sky-only flash).
   const [ready, setReady] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
-  const anim = useRef<GlassAnim>({ x: 0, y: 0, scale: 1, rotX: 0, rotY: 0 });
+  const anim = useRef<GlassAnim>({
+    x: 0,
+    y: 0,
+    scale: 1,
+    rotX: 0,
+    rotY: 0,
+    reveal: 0,
+  });
   const rockEntries = useRef<RockEntry[]>([]);
 
   // useLenis() can return a fresh ref across renders; mirror it into a ref so the
@@ -160,11 +166,13 @@ export default function Intro() {
       })
       .filter((r): r is RockLayout => r !== null);
 
-    // Seed the glass at its reveal start: parked low (slides straight up into
-    // place, like the hero text — no scale pop).
+    // Seed the glass at the welcome spot, full scale, reveal=0 (fully below its
+    // baseline clip → hidden). The reveal tween lifts it up through the clip so
+    // it's unmasked in place, like the hero text — no scale pop, no fly-up.
     anim.current.x = welcome.x;
-    anim.current.y = welcome.y - GLASS_RISE_PX * wpp;
+    anim.current.y = welcome.y;
     anim.current.scale = 1;
+    anim.current.reveal = 0;
 
     // Seed each rock hidden + lifted a touch, for the drift entrance (the WebGL
     // mirror of the DOM rocks' drift: fade in + small downward settle).
@@ -229,12 +237,13 @@ export default function Intro() {
     const dockStart = REVEAL + HOLD;
     const dockEnd = dockStart + DOCK;
 
-    // ① reveal — the glass slides straight up into place (same expo.out feel as
-    //    the hero text), and the rocks drift in alongside it (fade + settle, the
-    //    WebGL twin of the DOM rocks' drift, left leading right).
+    // ① reveal — the glass is unmasked in place, rising through its baseline
+    //    clip (same expo.out feel as the hero text), and the rocks drift in
+    //    alongside it (fade + settle, the WebGL twin of the DOM rocks' drift,
+    //    left leading right).
     tl.to(
       anim.current,
-      { y: plan.welcome.y, duration: REVEAL, ease: "expo.out" },
+      { reveal: 1, duration: REVEAL, ease: "expo.out" },
       0,
     );
     tl.to(
@@ -316,6 +325,7 @@ export default function Intro() {
         rocks={plan.rocks}
         rockEntry={rockEntries}
         glassSize={plan.glassSize}
+        restY={plan.welcome.y}
         onReady={() => setReady(true)}
       />
     </div>

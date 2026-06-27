@@ -8,9 +8,15 @@ import {
   Text3D,
   useTexture,
 } from "@react-three/drei";
-import { Suspense, useMemo, useRef } from "react";
+import { Suspense, useLayoutEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
-import type { Group } from "three";
+import type { Group, Mesh } from "three";
+
+// Warm the local assets ASAP so the scene's ready-gate isn't waiting on a
+// cold fetch (the rock cut-outs; the Environment HDR loads in its own Suspense
+// so it never blocks the reveal — see the canvas below).
+useTexture.preload("/rocks/left-rock.png");
+useTexture.preload("/rocks/right-rock.png");
 
 /**
  * The welcome-intro WebGL stage. Reuses the proven /lab/glass setup — PERSPECTIVE
@@ -35,6 +41,8 @@ export type GlassAnim = {
   scale: number;
   rotX: number;
   rotY: number;
+  /** 0 = fully below the baseline clip (hidden), 1 = revealed at rest. */
+  reveal: number;
 };
 
 export type RockLayout = {
@@ -59,8 +67,10 @@ export type IntroSceneProps = {
   rockEntry: React.RefObject<RockEntry[]>;
   /** Text3D `size` in WORLD units (≈ 4–5, matching the lab). */
   glassSize: number;
+  /** World y the glass rests at (the welcome spot) — anchors the reveal clip. */
+  restY: number;
   font?: string;
-  /** Fired once the scene's textures/font/HDR have loaded and a frame painted. */
+  /** Fired once the scene's local assets have loaded and a frame painted. */
   onReady?: () => void;
 };
 
@@ -73,6 +83,12 @@ const FONT = "/fonts/product-sans-medium.typeface.json";
 // CAMERA_Z so they project to exactly the measured DOM rect — flush to the edges.
 export const CAMERA_Z = 40;
 export const ROCK_Z = -0.3;
+
+// The glass reveal clip plane (world space): keeps only y ≥ baseline. Module
+// scope so it's a stable, freely-mutable instance — there's only ever one Glass
+// on screen. Its `constant` is set to the glyph baseline once the geometry is
+// measured (see <Glass>); the glass rises through it to unmask in place.
+const GLASS_CLIP = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
 
 function Rocks({
   rocks,
@@ -150,22 +166,48 @@ function SceneReady({ onReady }: { onReady?: () => void }) {
 function Glass({
   anim,
   glassSize,
+  restY,
   font = FONT,
 }: {
   anim: React.RefObject<GlassAnim>;
   glassSize: number;
+  /** World y the glass rests at after the reveal — anchors the clip baseline. */
+  restY: number;
   font?: string;
 }) {
   const ref = useRef<Group>(null);
+  const textRef = useRef<Mesh>(null);
   // Refraction fill where the scene is empty (open sky) — without it the
   // transmission samples the transparent FBO (black) and the glass goes dark.
   const sky = useMemo(() => new THREE.Color("#62abff"), []);
+
+  // Measure the built glyph and anchor the world-space clip baseline (GLASS_CLIP)
+  // at its resting bottom. The glass enters fully BELOW the plane (clipped,
+  // invisible) and rises through it, so it's revealed bottom-up in place — the
+  // WebGL twin of the hero text's overflow:hidden masked slide-up, rather than
+  // flying up from the bottom of the screen. The plane is fixed in world, so the
+  // later dock (which moves UP, away from it) is never clipped. Half the glyph
+  // height drives both the baseline offset and the reveal travel.
+  const halfH = useRef(0);
+
+  useLayoutEffect(() => {
+    const mesh = textRef.current;
+    if (!mesh) return;
+    mesh.geometry.computeBoundingBox();
+    const bb = mesh.geometry.boundingBox;
+    if (!bb) return;
+    halfH.current = (bb.max.y - bb.min.y) / 2;
+    GLASS_CLIP.constant = -(restY - halfH.current); // keep world y ≥ baseline
+  }, [restY, glassSize, font]);
 
   useFrame(() => {
     const g = ref.current;
     const a = anim.current;
     if (!g || !a) return;
-    g.position.set(a.x, a.y, 0);
+    // reveal 0→1 lifts the glass from one glyph-height below the baseline (fully
+    // clipped) up to its rest; at reveal=1 the offset is 0. Dock keeps reveal=1.
+    const revealOffset = (a.reveal - 1) * 2 * halfH.current;
+    g.position.set(a.x, a.y + revealOffset, 0);
     g.scale.setScalar(a.scale);
     g.rotation.set(a.rotX, a.rotY, 0);
   });
@@ -178,6 +220,7 @@ function Glass({
             camera (see <Canvas>), which views the glyphs almost head-on. The
             glassiness comes from the transmission/bevel, not from depth. */}
         <Text3D
+          ref={textRef}
           font={font}
           size={glassSize}
           height={glassSize * 0.018}
@@ -208,6 +251,7 @@ function Glass({
             clearcoat={1}
             clearcoatRoughness={0}
             color="#ffffff"
+            clippingPlanes={[GLASS_CLIP]}
           />
         </Text3D>
       </Center>
@@ -220,6 +264,7 @@ export default function IntroScene({
   rocks,
   rockEntry,
   glassSize,
+  restY,
   font = FONT,
   onReady,
 }: IntroSceneProps) {
@@ -235,15 +280,22 @@ export default function IntroScene({
       camera={{ position: [0, 0, CAMERA_Z], fov: 11.82 }}
       onCreated={({ gl }) => {
         gl.toneMapping = THREE.NoToneMapping;
+        gl.localClippingEnabled = true; // for the glass reveal clip plane
       }}
     >
+      {/* Rocks + glass gate the reveal: they only need LOCAL assets (preloaded
+          above), so SceneReady fires fast and the sky-only flash is short. */}
       <Suspense fallback={null}>
         <Rocks rocks={rocks} rockEntry={rockEntry} />
-        <Glass anim={anim} glassSize={glassSize} font={font} />
-        <Environment preset="city" environmentIntensity={1.1} />
+        <Glass anim={anim} glassSize={glassSize} restY={restY} font={font} />
         <directionalLight position={[3, 5, 6]} intensity={1.2} />
         <ambientLight intensity={0.4} />
         <SceneReady onReady={onReady} />
+      </Suspense>
+      {/* The Environment HDR is a remote fetch; its OWN boundary so it never
+          blocks the reveal — the glass picks up its reflections a beat later. */}
+      <Suspense fallback={null}>
+        <Environment preset="city" environmentIntensity={1.1} />
       </Suspense>
     </Canvas>
   );
