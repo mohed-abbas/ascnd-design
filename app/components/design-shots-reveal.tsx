@@ -3,6 +3,7 @@
 import { useEffect, useLayoutEffect } from "react";
 import gsap from "gsap";
 import { SHOT_ARC_SLOTS, SHOT_BASE } from "./design-shots";
+import { INTRO_REVEAL_EVENT, introWillPlay } from "./intro/intro-state";
 
 // useLayoutEffect on the client (parks/plays before paint, no flash); falls back
 // to useEffect during SSR to avoid React's server warning. Mirrors rock-reveal.tsx.
@@ -145,24 +146,40 @@ export default function DesignShotsReveal() {
 
     // Bloom from the center outward (scale + opacity on the inner wrapper), then
     // hand off to the rotation.
-    tweens.push(
-      gsap.fromTo(
-        shots,
-        { scale: 0.86, opacity: 0 },
-        {
-          scale: 1,
-          opacity: 1,
-          duration: BLOOM_DURATION,
-          ease: BLOOM_EASE,
-          stagger: (_i, el) =>
-            Number((el as HTMLElement).dataset.shotRing ?? 0) * RING_STAGGER,
-          onComplete: startRotation,
-        },
-      ),
-    );
+    const begin = () => {
+      if (cancelled) return;
+      tweens.push(
+        gsap.fromTo(
+          shots,
+          { scale: 0.86, opacity: 0 },
+          {
+            scale: 1,
+            opacity: 1,
+            duration: BLOOM_DURATION,
+            ease: BLOOM_EASE,
+            stagger: (_i, el) =>
+              Number((el as HTMLElement).dataset.shotRing ?? 0) * RING_STAGGER,
+            onComplete: startRotation,
+          },
+        ),
+      );
+    };
+
+    // While the welcome intro plays, the collage stays parked until the glass
+    // docks (INTRO_REVEAL_EVENT) so the welcome screen is just sky + rocks + glass.
+    let stopWaiting: (() => void) | undefined;
+    if (introWillPlay()) {
+      const onReveal = () => begin();
+      window.addEventListener(INTRO_REVEAL_EVENT, onReveal, { once: true });
+      stopWaiting = () =>
+        window.removeEventListener(INTRO_REVEAL_EVENT, onReveal);
+    } else {
+      begin();
+    }
 
     return () => {
       cancelled = true;
+      stopWaiting?.();
       tweens.forEach((t) => t.kill());
     };
   }, []);

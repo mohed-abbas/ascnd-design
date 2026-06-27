@@ -3,6 +3,7 @@
 import { useEffect, useLayoutEffect } from "react";
 import gsap from "gsap";
 import { SplitText } from "gsap/SplitText";
+import { INTRO_REVEAL_EVENT, introWillPlay } from "./intro/intro-state";
 
 gsap.registerPlugin(SplitText);
 
@@ -136,14 +137,32 @@ export default function HeroReveal() {
     // the real Product Sans, or the masked lines reflow (mis-clip) on font swap.
     // Everything stays hidden via `.reveal-armed` until then, so there's no
     // visual cost to waiting.
-    if (!document.fonts || document.fonts.status === "loaded") {
-      build();
+    const start = () => {
+      if (cancelled) return;
+      if (!document.fonts || document.fonts.status === "loaded") {
+        build();
+      } else {
+        document.fonts.ready.then(build);
+      }
+    };
+
+    // When the welcome intro is playing, the hero stays parked until the glass
+    // "ascnd" docks — <Intro> fires INTRO_REVEAL_EVENT ~⅔ through the dock, and
+    // the cascade then rises in as the glass hands off to the real wordmark.
+    // Otherwise (returning session / reduced-motion / no-intro) reveal at once.
+    let stopWaiting: (() => void) | undefined;
+    if (introWillPlay()) {
+      const onReveal = () => start();
+      window.addEventListener(INTRO_REVEAL_EVENT, onReveal, { once: true });
+      stopWaiting = () =>
+        window.removeEventListener(INTRO_REVEAL_EVENT, onReveal);
     } else {
-      document.fonts.ready.then(build);
+      start();
     }
 
     return () => {
       cancelled = true;
+      stopWaiting?.();
       ctx?.revert(); // restores inline styles set above
       split?.revert(); // unwraps SplitText line/mask markup
     };

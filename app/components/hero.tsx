@@ -3,6 +3,7 @@ import DesignShotsReveal from "./design-shots-reveal";
 import GrassRocks from "./grass-rocks";
 import HeroReveal from "./hero-reveal";
 import HeroText from "./hero-text";
+import Intro from "./intro/intro";
 import Logos from "./logos";
 import LogosMarquee from "./logos-marquee";
 import Navbar from "./navbar";
@@ -54,10 +55,19 @@ export default function Hero() {
       <GrassRocks />
       <RockHover />
 
+      {/* Welcome intro (Figma "OnBoarding" 200:147): a once-per-session WebGL
+          liquid-glass "ascnd" that rises, then docks onto the wordmark slot
+          below, handing off to the hero. Transparent overlay; renders nothing
+          for returning sessions / reduced-motion. */}
+      <Intro />
+
       {/* ascnd wordmark (node 77:174): top-center brand mark, glyph top ~55px
           of the 982-tall hero, ~36px Product Sans Medium. Sits above the
-          collage on plain sky. */}
-      <div className="absolute left-1/2 top-[40px] z-10 -translate-x-1/2 text-[38px]">
+          collage on plain sky. `data-wordmark-slot` is the intro's dock target. */}
+      <div
+        data-wordmark-slot
+        className="absolute left-1/2 top-[40px] z-10 -translate-x-1/2 text-[38px]"
+      >
         {/* Masked slide-up reveal (cascade #1). */}
         <span className="block overflow-hidden">
           <span className="block" data-reveal data-reveal-order={1}>
