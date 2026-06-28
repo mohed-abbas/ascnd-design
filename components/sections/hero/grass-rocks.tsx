@@ -40,7 +40,7 @@ export default function GrassRocks() {
               // Next's optimizer — it was re-encoding them at q=75 and capping
               // the width, which softened the reveal on HiDPI/tall viewports.
               unoptimized
-              className="h-full w-auto object-bottom"
+              className="rock-base-fade h-full w-auto object-bottom"
             />
           </div>
         );

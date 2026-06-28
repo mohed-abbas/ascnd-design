@@ -87,6 +87,30 @@ body {
   transform: translateY(-10px);
 }
 
+/* Soften the hard bottom crop of the hero cliff PNGs (rock.tsx + grass-rocks.tsx).
+   The assets are full-height cut-outs anchored to the hero's base, so their
+   bottom edge is a flat horizontal slice — a "weird cutout" against the sky.
+   A bottom-fading mask dissolves that edge so the rock melts into the
+   sky/clouds instead of ending on a hard line. Percentages are relative to the
+   image box (= hero height), so the fade scales with the viewport. The grass
+   overlay carries its own radial hover mask on its CONTAINER; this lives on the
+   inner images, so the two masks compose (disc ∩ base-fade) without conflict.
+   Tune the band via the two custom properties. */
+.rock-base-fade {
+  --rock-fade-bottom: 3%; /* fully transparent from the base up to here */
+  --rock-fade-top: 15%; /* fully opaque from here up */
+  -webkit-mask-image: linear-gradient(
+    to top,
+    transparent var(--rock-fade-bottom),
+    #000 var(--rock-fade-top)
+  );
+  mask-image: linear-gradient(
+    to top,
+    transparent var(--rock-fade-bottom),
+    #000 var(--rock-fade-top)
+  );
+}
+
 /* Grass-rock hover reveal (grass-rocks.tsx + rock-hover.tsx). The lush cliff
    overlay is hidden by a radial-gradient mask and uncovered only inside a soft
    disc that tracks the pointer. We keep the gradient's shape fixed and move it

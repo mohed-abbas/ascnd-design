@@ -37,7 +37,7 @@ export default function Rock({ side }: { side: Side }) {
         height={982}
         priority
         sizes={`${width}px`}
-        className="h-full w-auto object-bottom"
+        className="rock-base-fade h-full w-auto object-bottom"
       />
     </div>
   );
