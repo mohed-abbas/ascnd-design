@@ -11,11 +11,15 @@ import { ScrollTrigger } from "gsap/ScrollTrigger";
 /**
  * Volumetric cloud field (Three.js / R3F + drei <Clouds>).
  *
- * This is the /lab/clouds reference cloud ported into the global background: a
- * SINGLE drei <Cloud> on a lit <MeshLambertMaterial>, sculpted by the lab's
- * light rig (a bright overhead key + two warm red rims) and framed from a 3/4
- * above-front camera. Values were tuned live in /lab/clouds and are now baked
- * as constants below (no leva panel here — tune in the lab, copy numbers back).
+ * This is the /lab/clouds reference cloud ported into the global background:
+ * lit drei <Cloud>s on a <MeshLambertMaterial>, framed from a 3/4 above-front
+ * camera. Lighting is a white directional key + ambient (CLOUD_THEME) — chosen
+ * over the lab's positioned spotlights so every cloud is lit identically
+ * wherever it's placed (uniformly white, no position tint) and so theme modes
+ * (evening/night) drop in as light-colour swaps. The look was tuned in
+ * /lab/clouds and baked below (no leva here). Each hero cloud is anchored to a
+ * screen spot via NDC (top-right corner + the two rock bases) by
+ * <CloudPlacement>. More clouds/sections to come — this is the hero set.
  *
  * Render strategy (see docs/cloud-rendering-research.md §9) is unchanged from
  * the previous cloud and deliberately diverges from the lab:
@@ -48,64 +52,98 @@ import { ScrollTrigger } from "gsap/ScrollTrigger";
  * on restore and remounts the <Canvas> if a real driver reset never restores.
  */
 
-// Baked cloud values — these were dialled in live on /lab/clouds and frozen
-// here (the dev leva panel is gone). speed=0 is deliberate: the cloud is static
-// for demand-render (a non-zero speed would only churn on scroll-driven
-// invalidates, morphing the cloud as you scroll). To re-tune, play in
-// /lab/clouds and copy the numbers back.
+// Shared cloud look (tuned in /lab/clouds; the dev leva panel is gone). Size,
+// seed and placement are per-cloud in HERO_CLOUDS. speed=0 is deliberate: the
+// cloud is static for demand-render (a non-zero speed would only churn on
+// scroll-driven invalidates). To re-tune the look, play in /lab/clouds.
 const CLOUD = {
-  seed: 1,
   segments: 20,
-  volume: 6,
   opacity: 0.8,
   fade: 10,
   growth: 4,
   speed: 0,
   color: "white",
 } as const;
-const BOUNDS: [number, number, number] = [6, 1, 1];
 const RANGE = 100;
 
-// Baked camera. The cloud is a static billboard, so its sense of 3D form comes
-// almost entirely from the VIEW ANGLE catching the overhead key light's
-// bright-top→shadow-bottom gradient — a 3/4 above-front view reads dimensional.
+// Hero cloud placements. Position is given in screen-NDC (x,y each in [-1,1] —
+// centre is 0, +x right, +y up) so each cloud lands at a fixed spot on screen
+// regardless of viewport/aspect; <CloudPlacement> projects it onto the camera
+// ray. `dist` is how far along that ray to sit and only affects SIZE, not the
+// screen position. bounds/volume set the puffiness.
+type CloudSpec = {
+  key: string;
+  ndc: [number, number];
+  dist: number;
+  seed: number;
+  bounds: [number, number, number];
+  volume: number;
+};
+const HERO_CLOUDS: CloudSpec[] = [
+  { key: "top-right", ndc: [0.78, 0.72], dist: 22, seed: 4, bounds: [4, 1.2, 1], volume: 4 },
+  { key: "rock-left", ndc: [-0.62, -0.8], dist: 22, seed: 7, bounds: [3, 1, 1], volume: 3 },
+  { key: "rock-right", ndc: [0.62, -0.8], dist: 22, seed: 11, bounds: [3, 1, 1], volume: 3 },
+];
+
+// Baked camera — a 3/4 above-front view; the angle plus the sprite's own
+// painted shading is what makes the billboards read as dimensional.
 const CAMERA = { position: [0, 11, 18] as [number, number, number], fov: 50 };
+
+// Cloud lighting as a THEME MAP. Only directional + ambient lights — NO
+// positioned/spot lights — so a cloud is lit identically wherever it sits
+// (white everywhere; the old red position-tint is gone). That position-
+// independence is also what makes theming clean: a mode is just light
+// colours/intensities (+ the sky colour, which actually lives in <Background/>;
+// mirrored here for reference). Only `day` exists today — `evening` (warm gold
+// key) and `night` (dim cool moonlight) drop in here later with no canvas
+// changes. The key's `position` is a DIRECTION (light → origin), not a place,
+// so it has no distance falloff.
+const CLOUD_THEME = {
+  day: {
+    sky: "#62abff",
+    ambient: { color: "#ffffff", intensity: 1.5 },
+    key: {
+      color: "#ffffff",
+      intensity: 2.6,
+      position: [0, 20, 12] as [number, number, number],
+    },
+  },
+} as const;
+const THEME = CLOUD_THEME.day;
 
 // World units of downward y-shift across a full page scroll.
 const PARALLAX = 3;
 
 /**
- * Points the camera at the cloud. Holds the baked CAMERA constant and lookAt
- * the origin so the cloud stays centred. Demand mode, so invalidate() once to
- * paint the initial frame.
+ * Anchors each hero cloud to its target screen position. For each CloudSpec it
+ * unprojects the NDC through the camera to a ray, walks `dist` down that ray,
+ * and writes the world point to the cloud's group — so the cloud sits at that
+ * screen spot at any aspect. Recomputes on resize; demand mode, so invalidate()
+ * to paint. (Mutating group.position via a ref is the same pattern ParallaxRig
+ * uses — fine; only `camera` would trip the immutability rule, and we only read
+ * it.)
  */
-function CameraRig({
-  x,
-  y,
-  z,
-  fov,
+function CloudPlacement({
+  cloudRefs,
 }: {
-  x: number;
-  y: number;
-  z: number;
-  fov: number;
+  cloudRefs: React.RefObject<(Group | null)[]>;
 }) {
   const camera = useThree((s) => s.camera);
+  const width = useThree((s) => s.size.width);
+  const height = useThree((s) => s.size.height);
   const invalidate = useThree((s) => s.invalidate);
 
   useEffect(() => {
-    // Mutating the live THREE camera is the idiomatic R3F pattern; the
-    // immutability rule doesn't model it, so scope a disable to this effect.
-    /* eslint-disable react-hooks/immutability */
-    camera.position.set(x, y, z);
-    if ((camera as THREE.PerspectiveCamera).isPerspectiveCamera) {
-      (camera as THREE.PerspectiveCamera).fov = fov;
-    }
-    camera.lookAt(0, 0, 0);
-    camera.updateProjectionMatrix();
-    /* eslint-enable react-hooks/immutability */
+    const v = new THREE.Vector3();
+    HERO_CLOUDS.forEach((c, i) => {
+      const g = cloudRefs.current[i];
+      if (!g) return;
+      v.set(c.ndc[0], c.ndc[1], 0.5).unproject(camera);
+      v.sub(camera.position).normalize().multiplyScalar(c.dist).add(camera.position);
+      g.position.copy(v);
+    });
     invalidate();
-  }, [camera, invalidate, x, y, z, fov]);
+  }, [camera, width, height, invalidate, cloudRefs]);
 
   return null;
 }
@@ -240,7 +278,8 @@ function ContextWatchdog({
 }
 
 export default function CloudCanvas() {
-  const groupRef = useRef<Group | null>(null);
+  const fieldRef = useRef<Group | null>(null);
+  const cloudRefs = useRef<(Group | null)[]>([]);
   // Bumping this remounts the <Canvas> with a fresh GL context — last resort
   // when a lost context never restores. See <ContextWatchdog>.
   const [canvasKey, setCanvasKey] = useState(0);
@@ -253,14 +292,24 @@ export default function CloudCanvas() {
       dpr={[1, 2]}
       gl={{ antialias: true, alpha: true }}
       camera={{ position: CAMERA.position, fov: CAMERA.fov }}
+      // Aim the static camera at the origin once, before the first frame, so
+      // <CloudPlacement>'s unproject reads a settled view matrix.
+      onCreated={({ camera }) => {
+        camera.lookAt(0, 0, 0);
+        camera.updateProjectionMatrix();
+        camera.updateMatrixWorld();
+      }}
       style={{ position: "absolute", inset: 0 }}
     >
-      {/* Lab light rig: a bright overhead key sculpts the white form, two warm
-          red rims tint the sides. Lit MeshLambertMaterial, so these matter. */}
-      <ambientLight intensity={Math.PI / 1.5} />
-      <spotLight position={[0, 40, 0]} decay={0} distance={45} penumbra={1} intensity={100} />
-      <spotLight position={[-20, 0, 10]} color="red" angle={0.15} decay={0} penumbra={-1} intensity={30} />
-      <spotLight position={[20, -10, 10]} color="red" angle={0.2} decay={0} penumbra={-1} intensity={20} />
+      {/* Position-independent light rig (see CLOUD_THEME): a white directional
+          key + ambient fill light every cloud identically, wherever it sits, so
+          they're uniformly white with no position-based tint. Theme-swappable. */}
+      <ambientLight color={THEME.ambient.color} intensity={THEME.ambient.intensity} />
+      <directionalLight
+        color={THEME.key.color}
+        intensity={THEME.key.intensity}
+        position={THEME.key.position}
+      />
 
       <Clouds
         material={THREE.MeshLambertMaterial}
@@ -269,20 +318,24 @@ export default function CloudCanvas() {
         range={RANGE}
         frustumCulled={false}
       >
-        {/* Wrapped in a group so <ParallaxRig> can shift it on scroll without
-            fighting drei's per-instance transforms. */}
-        <group ref={groupRef}>
-          <Cloud {...CLOUD} bounds={BOUNDS} />
+        {/* Parallax shifts the whole field on scroll; each cloud sits at its own
+            screen-anchored position inside it (set by <CloudPlacement>). */}
+        <group ref={fieldRef}>
+          {HERO_CLOUDS.map((c, i) => (
+            <group
+              key={c.key}
+              ref={(el) => {
+                cloudRefs.current[i] = el;
+              }}
+            >
+              <Cloud {...CLOUD} seed={c.seed} bounds={c.bounds} volume={c.volume} />
+            </group>
+          ))}
         </group>
       </Clouds>
 
-      <CameraRig
-        x={CAMERA.position[0]}
-        y={CAMERA.position[1]}
-        z={CAMERA.position[2]}
-        fov={CAMERA.fov}
-      />
-        <ParallaxRig groupRef={groupRef} />
+      <CloudPlacement cloudRefs={cloudRefs} />
+      <ParallaxRig groupRef={fieldRef} />
       <InvalidateOnReady />
       <ContextWatchdog onUnrecoverable={remount} />
     </Canvas>
