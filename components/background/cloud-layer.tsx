@@ -125,21 +125,25 @@ export default function CloudLayer() {
 
   return (
     <>
-      {/* Distant sky clouds — behind the page content. */}
+      {/* Distant sky clouds — behind the page content. Damped below 1 so they
+          drift slower than the page (depth-y parallax, calmer scroll motion);
+          they're anchored to nothing, so they can lag freely. */}
       <div
         aria-hidden
         style={reveal}
         className="pointer-events-none fixed inset-0 -z-10"
       >
-        <CloudCanvas clouds={SKY_CLOUDS} />
+        <CloudCanvas clouds={SKY_CLOUDS} scrollFactor={0.6} />
       </div>
-      {/* Foreground clouds — in front of the rocks so they hug the cliff base. */}
+      {/* Foreground clouds — in front of the rocks so they hug the cliff base.
+          scrollFactor MUST stay 1: these are welded to the cliff feet (page
+          content scrolling 1:1); any damping slides them off the rocks. */}
       <div
         aria-hidden
         style={reveal}
         className="pointer-events-none fixed inset-0 z-[1]"
       >
-        <CloudCanvas clouds={ROCK_CLOUDS} />
+        <CloudCanvas clouds={ROCK_CLOUDS} scrollFactor={1} />
       </div>
     </>
   );

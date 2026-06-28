@@ -101,9 +101,22 @@ const THEME = CLOUD_THEME.day;
 
 // Reference depth (world units along the camera ray) for the scroll math. The
 // hero clouds all sit here, so the scroll→world conversion below is exact for
-// them (a cloud at this depth tracks page scroll 1:1, staying welded to the
-// rocks). Clouds at other depths get a subtle parallax, which is fine.
+// them. Clouds at other depths get a subtle parallax, which is fine.
 const REF_DIST = 22;
+
+// Scroll parallax damping: how far the cloud field travels per unit of page
+// scroll. 1 = locked 1:1 to the page (welded to the rocks); < 1 = the clouds
+// drift slower than the content for a calmer, more background-like motion. The
+// SAME factor scales the anchorVh offset in <CloudPlacement>, so each section's
+// clouds still arrive at their rest spot exactly when its scroll is reached —
+// only the speed of travel changes, not where they settle.
+//
+// This is PER-LAYER (a prop, not a constant): the FRONT rock-base clouds MUST
+// stay at 1.0 — they're glued to the cliff feet, which are page content scrolling
+// 1:1, so any value < 1 makes them slide off the rocks. Only the distant SKY
+// clouds are damped (slower-than-page parallax reads as depth, and is where
+// "calmer scroll motion" actually belongs). cloud-layer.tsx sets each.
+const DEFAULT_SCROLL_FACTOR = 1;
 
 /** NDC (z=0.5) → world point walked `dist` along the camera ray. */
 function placeOnRay(
@@ -144,9 +157,11 @@ function viewportWorldHeight(camera: THREE.Camera) {
 function CloudPlacement({
   clouds,
   cloudRefs,
+  scrollFactor,
 }: {
   clouds: CloudSpec[];
   cloudRefs: React.RefObject<(Group | null)[]>;
+  scrollFactor: number;
 }) {
   const camera = useThree((s) => s.camera);
   const width = useThree((s) => s.size.width);
@@ -160,10 +175,10 @@ function CloudPlacement({
       const g = cloudRefs.current[i];
       if (!g) return;
       placeOnRay(camera, c.ndc[0], c.ndc[1], c.dist, v);
-      g.position.set(v.x, v.y - c.anchorVh * vwh, v.z);
+      g.position.set(v.x, v.y - c.anchorVh * vwh * scrollFactor, v.z);
     });
     invalidate();
-  }, [clouds, camera, width, height, invalidate, cloudRefs]);
+  }, [clouds, camera, width, height, invalidate, cloudRefs, scrollFactor]);
 
   return null;
 }
@@ -172,14 +187,16 @@ function CloudPlacement({
  * Scroll anchoring (approach C): translate the whole cloud field UP in world
  * space as the page scrolls, so clouds move with the document instead of being
  * pinned to the viewport. The conversion (scroll px → world units) is calibrated
- * to REF_DIST, so a cloud at that depth tracks scroll exactly 1:1 — the hero's
- * rock-base clouds stay welded to the cliffs the whole way up, and each section's
- * clouds (anchorVh) rise into frame as you reach them.
+ * to REF_DIST, then damped by SCROLL_FACTOR so the clouds drift slower than the
+ * page (calmer, background-like) while still settling at their rest spot. Each
+ * section's clouds (anchorVh) rise into frame as you reach them.
  */
 function ScrollAnchorRig({
   groupRef,
+  scrollFactor,
 }: {
   groupRef: React.RefObject<Group | null>;
+  scrollFactor: number;
 }) {
   const camera = useThree((s) => s.camera);
   const width = useThree((s) => s.size.width);
@@ -193,7 +210,7 @@ function ScrollAnchorRig({
     const apply = (scroll: number) => {
       const g = groupRef.current;
       if (!g) return;
-      g.position.y = scroll * worldPerPx;
+      g.position.y = scroll * worldPerPx * scrollFactor;
       invalidate();
     };
 
@@ -210,7 +227,7 @@ function ScrollAnchorRig({
     return () => st.kill();
     // width/height: recompute worldPerPx when the viewport (and thus the world
     // height at REF_DIST) changes.
-  }, [groupRef, camera, width, height, invalidate]);
+  }, [groupRef, camera, width, height, invalidate, scrollFactor]);
 
   return null;
 }
@@ -342,7 +359,14 @@ function ContextWatchdog({
   return null;
 }
 
-export default function CloudCanvas({ clouds }: { clouds: CloudSpec[] }) {
+export default function CloudCanvas({
+  clouds,
+  scrollFactor = DEFAULT_SCROLL_FACTOR,
+}: {
+  clouds: CloudSpec[];
+  /** Per-layer scroll damping (1 = welded to page; < 1 = slower parallax). */
+  scrollFactor?: number;
+}) {
   const fieldRef = useRef<Group | null>(null);
   const cloudRefs = useRef<(Group | null)[]>([]);
   // Bumping this remounts the <Canvas> with a fresh GL context — last resort
@@ -406,8 +430,8 @@ export default function CloudCanvas({ clouds }: { clouds: CloudSpec[] }) {
         </group>
       </Clouds>
 
-      <CloudPlacement clouds={clouds} cloudRefs={cloudRefs} />
-      <ScrollAnchorRig groupRef={fieldRef} />
+      <CloudPlacement clouds={clouds} cloudRefs={cloudRefs} scrollFactor={scrollFactor} />
+      <ScrollAnchorRig groupRef={fieldRef} scrollFactor={scrollFactor} />
       <MorphRig />
       <InvalidateOnReady />
       <ContextWatchdog onUnrecoverable={remount} />
