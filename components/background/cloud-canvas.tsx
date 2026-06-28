@@ -24,11 +24,14 @@ import type { CloudSpec } from "./cloud-specs";
  *
  * Render strategy (see docs/cloud-rendering-research.md §9) is unchanged from
  * the previous cloud and deliberately diverges from the lab:
- * - frameloop="demand": no free-running rAF. The cloud is static (speed=0), so
- *   we only paint on change — scroll parallax, the first mount frames (drei
- *   builds geometry + loads the texture over several frames), tab re-show, and
- *   WebGL context restore. (The lab auto-rotates on a continuous loop; here the
- *   cloud instead drifts vertically with page scroll via <ParallaxRig>.)
+ * - frameloop="demand": no free-running rAF. We paint on change — scroll
+ *   parallax, the first mount frames (drei builds geometry + loads the texture
+ *   over several frames), tab re-show, WebGL context restore — plus a THROTTLED
+ *   ~30fps pump (<MorphRig>) that drives the clouds' slow living morph without a
+ *   second rAF (it rides GSAP's ticker, which the browser parks on hidden tabs).
+ *   (The lab auto-rotates on a continuous loop; here the field instead translates
+ *   vertically with page scroll via <ScrollAnchorRig>, so clouds move with the
+ *   document rather than staying pinned to the viewport.)
  * - Transparent canvas (alpha): the cloud composites over the DOM sky — the
  *   flat #62abff fill + grain stay in <Background/>. (The lab paints a drei
  *   <Sky>; we keep the confirmed flat sky, so no <Sky> here.)
@@ -54,15 +57,16 @@ import type { CloudSpec } from "./cloud-specs";
  */
 
 // Shared cloud look (tuned in /lab/clouds; the dev leva panel is gone). Size,
-// seed and placement are per-cloud in HERO_CLOUDS. speed=0 is deliberate: the
-// cloud is static for demand-render (a non-zero speed would only churn on
-// scroll-driven invalidates). To re-tune the look, play in /lab/clouds.
+// seed and placement are per-cloud in the specs. `speed` is small + non-zero so
+// the puffs slowly morph (lively, not churning); <MorphRig> pumps the demand
+// loop at ~30fps so that morph actually advances. To re-tune the look, play in
+// /lab/clouds.
 const CLOUD = {
   segments: 20,
   opacity: 0.8,
   fade: 10,
   growth: 4,
-  speed: 0,
+  speed: 0.25,
   color: "white",
 } as const;
 const RANGE = 100;
@@ -95,17 +99,47 @@ const CLOUD_THEME = {
 } as const;
 const THEME = CLOUD_THEME.day;
 
-// World units of downward y-shift across a full page scroll.
-const PARALLAX = 3;
+// Reference depth (world units along the camera ray) for the scroll math. The
+// hero clouds all sit here, so the scroll→world conversion below is exact for
+// them (a cloud at this depth tracks page scroll 1:1, staying welded to the
+// rocks). Clouds at other depths get a subtle parallax, which is fine.
+const REF_DIST = 22;
+
+/** NDC (z=0.5) → world point walked `dist` along the camera ray. */
+function placeOnRay(
+  camera: THREE.Camera,
+  ndcX: number,
+  ndcY: number,
+  dist: number,
+  out: THREE.Vector3,
+) {
+  out.set(ndcX, ndcY, 0.5).unproject(camera);
+  out.sub(camera.position).normalize().multiplyScalar(dist).add(camera.position);
+  return out;
+}
+
+const _vTop = new THREE.Vector3();
+const _vBot = new THREE.Vector3();
+/**
+ * World-Y span of the full viewport at REF_DIST — the conversion factor between
+ * scroll pixels and cloud world translation. One viewport of scroll moves the
+ * field by exactly this much, so a cloud at REF_DIST tracks the page 1:1.
+ */
+function viewportWorldHeight(camera: THREE.Camera) {
+  placeOnRay(camera, 0, 1, REF_DIST, _vTop);
+  placeOnRay(camera, 0, -1, REF_DIST, _vBot);
+  return _vTop.y - _vBot.y;
+}
 
 /**
- * Anchors each hero cloud to its target screen position. For each CloudSpec it
+ * Anchors each cloud to its target screen position. For each CloudSpec it
  * unprojects the NDC through the camera to a ray, walks `dist` down that ray,
  * and writes the world point to the cloud's group — so the cloud sits at that
- * screen spot at any aspect. Recomputes on resize; demand mode, so invalidate()
- * to paint. (Mutating group.position via a ref is the same pattern ParallaxRig
- * uses — fine; only `camera` would trip the immutability rule, and we only read
- * it.)
+ * screen spot at any aspect. `anchorVh` then pushes it down the world by that
+ * many viewports, so section-N clouds start off-screen-below and <ScrollAnchorRig>
+ * lifts them into view at the right scroll. Recomputes on resize; demand mode,
+ * so invalidate() to paint. (Mutating group.position via a ref is fine — only
+ * `camera` would trip the immutability rule, and we only read it.)
  */
 function CloudPlacement({
   clouds,
@@ -120,13 +154,13 @@ function CloudPlacement({
   const invalidate = useThree((s) => s.invalidate);
 
   useEffect(() => {
+    const vwh = viewportWorldHeight(camera);
     const v = new THREE.Vector3();
     clouds.forEach((c, i) => {
       const g = cloudRefs.current[i];
       if (!g) return;
-      v.set(c.ndc[0], c.ndc[1], 0.5).unproject(camera);
-      v.sub(camera.position).normalize().multiplyScalar(c.dist).add(camera.position);
-      g.position.copy(v);
+      placeOnRay(camera, c.ndc[0], c.ndc[1], c.dist, v);
+      g.position.set(v.x, v.y - c.anchorVh * vwh, v.z);
     });
     invalidate();
   }, [clouds, camera, width, height, invalidate, cloudRefs]);
@@ -134,33 +168,78 @@ function CloudPlacement({
   return null;
 }
 
-/** Drives the cloud's vertical parallax from global page scroll. */
-function ParallaxRig({
+/**
+ * Scroll anchoring (approach C): translate the whole cloud field UP in world
+ * space as the page scrolls, so clouds move with the document instead of being
+ * pinned to the viewport. The conversion (scroll px → world units) is calibrated
+ * to REF_DIST, so a cloud at that depth tracks scroll exactly 1:1 — the hero's
+ * rock-base clouds stay welded to the cliffs the whole way up, and each section's
+ * clouds (anchorVh) rise into frame as you reach them.
+ */
+function ScrollAnchorRig({
   groupRef,
 }: {
   groupRef: React.RefObject<Group | null>;
 }) {
+  const camera = useThree((s) => s.camera);
+  const width = useThree((s) => s.size.width);
+  const height = useThree((s) => s.size.height);
   const invalidate = useThree((s) => s.invalidate);
 
   useEffect(() => {
     gsap.registerPlugin(ScrollTrigger);
-    const base = groupRef.current?.position.y ?? 0;
+    const worldPerPx = viewportWorldHeight(camera) / window.innerHeight;
+
+    const apply = (scroll: number) => {
+      const g = groupRef.current;
+      if (!g) return;
+      g.position.y = scroll * worldPerPx;
+      invalidate();
+    };
 
     const st = ScrollTrigger.create({
       start: 0,
       end: "max",
       scrub: true,
-      onUpdate: (self) => {
-        const g = groupRef.current;
-        if (g) {
-          g.position.y = base - self.progress * PARALLAX;
-          invalidate();
-        }
-      },
+      onUpdate: (self) => apply(self.scroll()),
     });
 
+    // Seed the position for a load that restores mid-page (scrub fires lazily).
+    apply(window.scrollY || 0);
+
     return () => st.kill();
-  }, [groupRef, invalidate]);
+    // width/height: recompute worldPerPx when the viewport (and thus the world
+    // height at REF_DIST) changes.
+  }, [groupRef, camera, width, height, invalidate]);
+
+  return null;
+}
+
+/**
+ * Living-morph pump. The clouds carry a small `speed`, but drei advances that
+ * morph inside a useFrame that only runs when a frame is requested — and we
+ * render on demand. So we request frames on a THROTTLED cadence (~30fps; a slow
+ * billow needs no more) off GSAP's ticker — the same one Lenis drives, so there
+ * is still no second rAF loop. The browser parks rAF on hidden tabs, so this
+ * idles automatically when the page isn't visible. Desktop-gated upstream, and
+ * reduced-motion never mounts the canvas, so the steady repaint is affordable.
+ */
+function MorphRig() {
+  const invalidate = useThree((s) => s.invalidate);
+
+  useEffect(() => {
+    const STEP = 1 / 30; // seconds between repaints
+    let last = 0;
+    // gsap.ticker passes elapsed time in seconds; throttle to STEP.
+    const tick = (time: number) => {
+      if (time - last >= STEP) {
+        last = time;
+        invalidate();
+      }
+    };
+    gsap.ticker.add(tick);
+    return () => gsap.ticker.remove(tick);
+  }, [invalidate]);
 
   return null;
 }
@@ -285,7 +364,13 @@ export default function CloudCanvas({ clouds }: { clouds: CloudSpec[] }) {
         camera.updateProjectionMatrix();
         camera.updateMatrixWorld();
       }}
-      style={{ position: "absolute", inset: 0 }}
+      // pointer-events:none is REQUIRED here: R3F sets the <canvas> to
+      // pointer-events:auto (it manages its own 3D pointer events), which
+      // overrides the wrapper's `pointer-events-none`. Without this, the
+      // full-viewport front canvas (z-[1]) swallows every pointermove and the
+      // hero's grass-rock hover (rock-hover.tsx, listening on [data-hero])
+      // never fires. The clouds are purely decorative, so no interaction is lost.
+      style={{ position: "absolute", inset: 0, pointerEvents: "none" }}
     >
       {/* Position-independent light rig (see CLOUD_THEME): a white directional
           key + ambient fill light every cloud identically, wherever it sits, so
@@ -304,8 +389,9 @@ export default function CloudCanvas({ clouds }: { clouds: CloudSpec[] }) {
         range={RANGE}
         frustumCulled={false}
       >
-        {/* Parallax shifts the whole field on scroll; each cloud sits at its own
-            screen-anchored position inside it (set by <CloudPlacement>). */}
+        {/* <ScrollAnchorRig> translates the whole field on scroll so clouds move
+            with the page; each cloud sits at its own screen-anchored position
+            inside it (set by <CloudPlacement>). */}
         <group ref={fieldRef}>
           {clouds.map((c, i) => (
             <group
@@ -321,7 +407,8 @@ export default function CloudCanvas({ clouds }: { clouds: CloudSpec[] }) {
       </Clouds>
 
       <CloudPlacement clouds={clouds} cloudRefs={cloudRefs} />
-      <ParallaxRig groupRef={fieldRef} />
+      <ScrollAnchorRig groupRef={fieldRef} />
+      <MorphRig />
       <InvalidateOnReady />
       <ContextWatchdog onUnrecoverable={remount} />
     </Canvas>

@@ -6,7 +6,16 @@
 // +y up) so each cloud lands at a fixed spot on screen regardless of viewport;
 // <CloudPlacement> projects it onto the camera ray. `dist` is how far along
 // that ray to sit and only affects SIZE, not the screen position. bounds/volume
-// set the puffiness.
+// set the puffiness (bounds.x widens the bank; volume packs in more puffs).
+//
+// `anchorVh` makes clouds scroll WITH the page instead of staying pinned to the
+// viewport (approach C). It's the section the cloud belongs to, in viewport
+// heights down the document: 0 = hero (at rest at scroll 0), 1 = the next
+// full-viewport section down, etc. <ScrollAnchorRig> translates the field by
+// scroll so a cloud sits at its `ndc` spot exactly when scroll reaches
+// anchorVh viewports — then it travels up and out as you keep scrolling, and
+// the next section's clouds rise into view. So the same canvas carries every
+// section's clouds (2 WebGL contexts total, regardless of section count).
 //
 // The clouds are split into two DOM layers (see cloud-layer.tsx): SKY_CLOUDS
 // render behind the page content; ROCK_CLOUDS render in FRONT of the cliffs so
@@ -19,13 +28,21 @@ export type CloudSpec = {
   seed: number;
   bounds: [number, number, number];
   volume: number;
+  /** Section anchor in viewport heights down the page (0 = hero). */
+  anchorVh: number;
 };
 
 export const SKY_CLOUDS: CloudSpec[] = [
-  { key: "top-right", ndc: [0.78, 0.72], dist: 22, seed: 4, bounds: [4, 1.2, 1], volume: 4 },
+  { key: "top-right", ndc: [0.78, 0.72], dist: 22, seed: 4, bounds: [4, 1.2, 1], volume: 4, anchorVh: 0 },
 ];
 
+// Rock-base banks — a WIDE, SHALLOW strip that just skirts the foot of each
+// cliff to hide its hard bottom cut, without billowing up into the scene. The
+// look is a thin horizontal band, not a tall puff: bounds.x stays wide for
+// full-foot coverage while bounds.y is a sliver, so the puffs distribute along
+// the strip (dense across, short up). Sat just past -1 so it rides the very
+// bottom edge. Keeping it low + thin preserves the site's open, fluid feel.
 export const ROCK_CLOUDS: CloudSpec[] = [
-  { key: "rock-left", ndc: [-0.62, -0.8], dist: 22, seed: 7, bounds: [3, 1, 1], volume: 3 },
-  { key: "rock-right", ndc: [0.62, -0.8], dist: 22, seed: 11, bounds: [3, 1, 1], volume: 3 },
+  { key: "rock-left", ndc: [-0.72, -1.02], dist: 22, seed: 7, bounds: [6.5, 0.45, 1], volume: 8, anchorVh: 0 },
+  { key: "rock-right", ndc: [0.72, -1.02], dist: 22, seed: 3, bounds: [6.5, 0.45, 1], volume: 8, anchorVh: 0 },
 ];

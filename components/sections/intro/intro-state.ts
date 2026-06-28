@@ -15,6 +15,15 @@
 
 export const INTRO_REVEAL_EVENT = "ascnd:intro-reveal";
 
+/**
+ * Fired when the intro timeline STARTS (the glass rises and the WebGL rocks
+ * drift in) — as opposed to INTRO_REVEAL_EVENT, which fires later at the dock.
+ * Background elements that belong to the scene from the first frame (the
+ * volumetric clouds) settle in on this, alongside the rock entrance, so they're
+ * present throughout the welcome rather than popping in at the end.
+ */
+export const INTRO_START_EVENT = "ascnd:intro-start";
+
 const REDUCE_MOTION = "(prefers-reduced-motion: reduce)";
 
 /**

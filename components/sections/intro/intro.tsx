@@ -10,7 +10,11 @@ import {
   useSyncExternalStore,
 } from "react";
 import gsap from "gsap";
-import { INTRO_REVEAL_EVENT, introWillPlay } from "./intro-state";
+import {
+  INTRO_REVEAL_EVENT,
+  INTRO_START_EVENT,
+  introWillPlay,
+} from "./intro-state";
 import { CAMERA_Z, ROCK_Z } from "./intro-scene";
 import type { GlassAnim, RockEntry, RockLayout } from "./intro-scene";
 
@@ -203,6 +207,11 @@ export default function Intro() {
 
     const animObj = anim.current; // stable target for cleanup (ref-safe)
     const rockObjs = rockEntries.current;
+
+    // The scene is painted and the entrance is about to play — tell the
+    // background clouds to settle in alongside the rock drift (they listen for
+    // this and fade up over the same beat, so they're present for the welcome).
+    window.dispatchEvent(new Event(INTRO_START_EVENT));
 
     let revealed = false;
     const reveal = () => {
