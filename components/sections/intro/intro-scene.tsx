@@ -16,7 +16,7 @@ import type { Group, Mesh } from "three";
 // cold fetch (the rock cut-outs; the Environment HDR loads in its own Suspense
 // so it never blocks the reveal — see the canvas below).
 useTexture.preload("/rocks/left-rock.webp");
-useTexture.preload("/rocks/right-rock.png");
+useTexture.preload("/rocks/right-rock.webp");
 
 /**
  * The welcome-intro WebGL stage. Reuses the proven /lab/glass setup — PERSPECTIVE

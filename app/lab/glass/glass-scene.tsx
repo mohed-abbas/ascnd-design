@@ -29,7 +29,7 @@ const SHOTS = ["/shots/shot3.png", "/shots/shot4.png", "/shots/shot5.png", "/sho
 /** Throwaway colourful backdrop the glass refracts. */
 function TestBackdrop() {
   const shots = useTexture(SHOTS);
-  const [leftRock, rightRock] = useTexture(["/rocks/left-rock.webp", "/rocks/right-rock.png"]);
+  const [leftRock, rightRock] = useTexture(["/rocks/left-rock.webp", "/rocks/right-rock.webp"]);
   return (
     <group position={[0, 0, -2.2]}>
       {/* colourful tiles spread behind the word */}

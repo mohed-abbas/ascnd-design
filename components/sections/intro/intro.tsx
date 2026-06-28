@@ -156,7 +156,7 @@ export default function Intro() {
         // Scale about screen centre (×ROCK_DEPTH) so the plane, drawn at ROCK_Z,
         // projects to exactly this measured rect — flush to the edges, no gap.
         return {
-          src: side === "left" ? "/rocks/left-rock.webp" : "/rocks/right-rock.png",
+          src: side === "left" ? "/rocks/left-rock.webp" : "/rocks/right-rock.webp",
           cx: c.x * ROCK_DEPTH,
           cy: c.y * ROCK_DEPTH,
           w: r.width * wpp * ROCK_DEPTH,
