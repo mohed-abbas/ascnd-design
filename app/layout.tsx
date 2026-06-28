@@ -3,6 +3,7 @@ import { Geist_Mono, Instrument_Serif } from "next/font/google";
 import localFont from "next/font/local";
 import "./globals.css";
 import Background from "@/components/background/background";
+import CloudLayer from "@/components/background/cloud-layer";
 import LenisProvider from "@/components/providers/lenis-provider";
 
 const geistMono = Geist_Mono({
@@ -63,7 +64,12 @@ export default function RootLayout({
           }}
         />
         <LenisProvider>
+          {/* Two independent fixed layers at the root: the sky backdrop
+              (-z-20) and the volumetric clouds (-z-10), with page content
+              stacking above both. Both must stay at the root — a blurred
+              ancestor would break their `position: fixed`. */}
           <Background />
+          <CloudLayer />
           {children}
         </LenisProvider>
       </body>

@@ -52,6 +52,13 @@ function useCanvasEligible() {
   return useSyncExternalStore(subscribe, getSnapshot, () => false);
 }
 
+/**
+ * The volumetric clouds as their OWN fixed layer — a sibling of <Background/>,
+ * not nested inside it, so the sky and the clouds z-stack independently. Sits
+ * at -z-10 (above the -z-20 sky, below page content); pointer-events-none so it
+ * never intercepts clicks. Mounted at the root (layout.tsx) — required: a
+ * `filter`/`backdrop-filter` ancestor would break the fixed canvas.
+ */
 export default function CloudLayer() {
   const eligible = useCanvasEligible();
 
@@ -59,5 +66,9 @@ export default function CloudLayer() {
   // it here as the fallback for ineligible devices. Transparent for now.
   if (!eligible) return null;
 
-  return <CloudCanvas />;
+  return (
+    <div aria-hidden className="pointer-events-none fixed inset-0 -z-10">
+      <CloudCanvas />
+    </div>
+  );
 }
