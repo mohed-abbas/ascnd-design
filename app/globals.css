@@ -111,6 +111,14 @@ body {
   );
 }
 
+/* The right cliff sits lower/heavier at its base, so it needs a taller fade to
+   dissolve cleanly — push the band higher than the shared default (rock.tsx
+   tags the wrapper with data-rock-side). */
+[data-rock-side="right"] .rock-base-fade {
+  --rock-fade-bottom: 5%;
+  --rock-fade-top: 26%;
+}
+
 /* Grass-rock hover reveal (grass-rocks.tsx + rock-hover.tsx). The lush cliff
    overlay is hidden by a radial-gradient mask and uncovered only inside a soft
    disc that tracks the pointer. We keep the gradient's shape fixed and move it

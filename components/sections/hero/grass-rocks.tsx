@@ -12,8 +12,12 @@ import Image from "next/image";
  * and nothing reveals, so no hit-testing is needed.
  *
  * One full-hero overlay holds BOTH rocks so a single hero-relative mask drives
- * the reveal. Kept at z-0 like the bare rocks, rendered just after them so it
- * paints on top of the cliffs but stays under the centred collage/text.
+ * the reveal. It sits at z-[100] — ABOVE both bare cliffs, including the left
+ * rock which is lifted to z-[99] (rock.tsx) — so the hover reveal always paints
+ * on top of the bare rock it overlays. The overlay is transparent except at the
+ * cliff cut-outs and only ever shows grass inside the hover disc (which tracks
+ * the cursor over the edge-anchored cliffs), so a high z doesn't cover the
+ * centred collage/text.
  */
 const GRASS = {
   left: { src: "/rocks/left-rock-grass.webp", width: 378, edge: "left-0" },
@@ -25,7 +29,7 @@ export default function GrassRocks() {
     <div
       data-grass-overlay
       aria-hidden
-      className="pointer-events-none absolute inset-0 z-0 select-none"
+      className="pointer-events-none absolute inset-0 z-[100] select-none"
     >
       {(["left", "right"] as const).map((side) => {
         const { src, width, edge } = GRASS[side];
