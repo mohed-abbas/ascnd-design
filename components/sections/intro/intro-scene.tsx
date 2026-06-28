@@ -15,7 +15,7 @@ import type { Group, Mesh } from "three";
 // Warm the local assets ASAP so the scene's ready-gate isn't waiting on a
 // cold fetch (the rock cut-outs; the Environment HDR loads in its own Suspense
 // so it never blocks the reveal — see the canvas below).
-useTexture.preload("/rocks/left-rock.png");
+useTexture.preload("/rocks/left-rock.webp");
 useTexture.preload("/rocks/right-rock.png");
 
 /**

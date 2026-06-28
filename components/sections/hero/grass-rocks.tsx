@@ -20,7 +20,7 @@ import Image from "next/image";
  * centred collage/text.
  */
 const GRASS = {
-  left: { src: "/rocks/left-rock-grass.webp", width: 378, edge: "left-0" },
+  left: { src: "/rocks/left-rock-grass.webp", width: 357, edge: "left-0" },
   right: { src: "/rocks/right-rock-grass.webp", width: 344, edge: "right-0" },
 } as const;
 
