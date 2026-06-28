@@ -3,7 +3,7 @@
 import { useEffect, useLayoutEffect } from "react";
 import gsap from "gsap";
 import { SplitText } from "gsap/SplitText";
-import { INTRO_REVEAL_EVENT, introWillPlay } from "./intro/intro-state";
+import { INTRO_REVEAL_EVENT, introWillPlay } from "@/components/sections/intro/intro-state";
 
 gsap.registerPlugin(SplitText);
 

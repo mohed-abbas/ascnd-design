@@ -3,7 +3,7 @@
 import { useEffect, useLayoutEffect } from "react";
 import gsap from "gsap";
 import { SHOT_ARC_SLOTS, SHOT_BASE } from "./design-shots";
-import { INTRO_REVEAL_EVENT, introWillPlay } from "./intro/intro-state";
+import { INTRO_REVEAL_EVENT, introWillPlay } from "@/components/sections/intro/intro-state";
 
 // useLayoutEffect on the client (parks/plays before paint, no flash); falls back
 // to useEffect during SSR to avoid React's server warning. Mirrors rock-reveal.tsx.

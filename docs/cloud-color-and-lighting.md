@@ -81,12 +81,12 @@ drei lets `<Clouds material={...}>` override the per-instance material:
   context-loss resilience and mobile cost. Form comes from lighting, not motion.
 
 ## 6. Where (files)
-- `app/components/cloud-canvas.tsx` — `onCreated` (tone mapping), the `<ambientLight>` /
+- `components/background/cloud-canvas.tsx` — `onCreated` (tone mapping), the `<ambientLight>` /
   key-light block, `<Clouds material=…>`, and the `LAYERS` opacity tuning. All cloud
   colour/lighting lives here.
-- `app/components/background.tsx` — flat sky `#62abff` + grain (kept; user confirmed
+- `components/background/background.tsx` — flat sky `#62abff` + grain (kept; user confirmed
   perfect). The reference leans on drei `<Sky>`; we deliberately keep the flat fill.
-- `app/components/cloud-layer.tsx` — device gating (no-WebGL / reduced-motion / ≤768px).
+- `components/background/cloud-layer.tsx` — device gating (no-WebGL / reduced-motion / ≤768px).
   Unchanged.
 
 ## 7. Verification

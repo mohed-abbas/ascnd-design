@@ -1,5 +1,5 @@
-import Hero from "./components/hero";
-import Tagline from "./components/tagline";
+import Hero from "@/components/sections/hero/hero";
+import Tagline from "@/components/sections/tagline/tagline";
 
 export default function Home() {
   return (

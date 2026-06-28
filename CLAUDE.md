@@ -27,9 +27,39 @@ There is **no test runner configured** — no Jest/Vitest/Playwright, no test fi
 
 ## What this is
 
-A single-page marketing site for "ascnd" (a design-subscription product). `app/page.tsx` renders one thing: `<Hero/>`. All UI lives in `app/components/`. Layout is **Figma-driven** — components carry Figma node IDs in comments and use absolute pixel positioning mapped to a 1512×982 hero frame, so changes should be cross-referenced against the cited nodes.
+A single-page marketing site for "ascnd" (a design-subscription product). `app/page.tsx` composes the page sections (`<Hero/>`, `<Tagline/>`). UI lives in the root-level `components/` tree (see **Project structure** below). Layout is **Figma-driven** — components carry Figma node IDs in comments and use absolute pixel positioning mapped to a 1512×982 hero frame, so changes should be cross-referenced against the cited nodes.
 
 Stack: Next 16 (App Router, Turbopack) · React 19.2 · Tailwind v4 (CSS-first, `@theme` in `globals.css` — no `tailwind.config.js`) · TypeScript · Three.js / R3F. Path alias `@/*` → repo root.
+
+## Project structure
+
+The chosen organization is **Approach A — colocated feature folders** (Next's documented "store project files outside `app`" strategy). `app/` is kept **purely for routing**; all non-routing code lives in a root-level `components/` tree, imported via the `@/*` alias. Cross-folder imports use `@/components/...`; same-folder imports stay relative.
+
+```
+app/                          # routing ONLY — keep this thin
+  layout.tsx                  # root: <LenisProvider> → <Background> + page
+  page.tsx                    # composes the sections
+  globals.css  favicon.ico
+  fonts/                      # self-hosted Product Sans (next/font/local)
+  lab/glass/                  # the glass R3F sandbox route (scene colocated)
+components/
+  background/                 # fixed sky: background, cloud-layer, cloud-canvas
+  providers/                  # lenis-provider (global smooth-scroll)
+  ui/                         # shared chrome/primitives: navbar, wordmark, icons, logo
+  sections/                   # one folder per page section, self-contained
+    hero/                     # hero, hero-text, hero-reveal, grass-rocks, rock*, …
+    intro/                    # intro, intro-scene, intro-state (the shared reveal gate)
+    logos/                    # logos, logos-marquee (client-logo marquee)
+    design-shots/             # design-shots, design-shots-reveal
+    tagline/                  # tagline
+```
+
+Conventions:
+- **`app/` stays routing-only.** New routes go in `app/`; their UI is composed from `components/`. Don't add a flat `app/components/` dump back.
+- **Sections are self-contained**, but cross-section imports are allowed in this approach (e.g. `hero/hero.tsx` is the page composer — it pulls in `ui/navbar`, `sections/logos`, `sections/intro`, etc.).
+- **`sections/intro/intro-state.ts` is the shared animation gate.** It's imported by `intro`, `hero-reveal`, `rock-reveal`, and `design-shots-reveal` to keep the intro→hero cascade in sync — treat its path/contract as load-bearing.
+- **Future Stripe / Cal.com (Next 16 idiom):** UI-triggered mutations are **Server Actions** colocated with their feature (e.g. `components/sections/pricing/checkout.action.ts` with `"use server"`); webhooks/external callbacks are **Route Handlers** under `app/api/**/route.ts`. Shared clients/env go in a root `lib/` (e.g. `lib/stripe/`, `lib/cal/`, `lib/env.ts`). Don't create a generic `server/` dumping ground.
+- Promote to **Feature-Sliced Design** (layered `widgets/features/entities/shared` with enforced import direction) only if the product grows past ~20 features; Approach A's folders map cleanly onto it.
 
 ## Architecture — the layered rendering model
 

@@ -1,16 +1,16 @@
-import DesignShots from "./design-shots";
-import DesignShotsReveal from "./design-shots-reveal";
+import DesignShots from "@/components/sections/design-shots/design-shots";
+import DesignShotsReveal from "@/components/sections/design-shots/design-shots-reveal";
 import GrassRocks from "./grass-rocks";
 import HeroReveal from "./hero-reveal";
 import HeroText from "./hero-text";
-import Intro from "./intro/intro";
-import Logos from "./logos";
-import LogosMarquee from "./logos-marquee";
-import Navbar from "./navbar";
+import Intro from "@/components/sections/intro/intro";
+import Logos from "@/components/sections/logos/logos";
+import LogosMarquee from "@/components/sections/logos/logos-marquee";
+import Navbar from "@/components/ui/navbar";
 import Rock from "./rock";
 import RockHover from "./rock-hover";
 import RockReveal from "./rock-reveal";
-import Wordmark from "./wordmark";
+import Wordmark from "@/components/ui/wordmark";
 
 /**
  * Hero section — built component by component to match the Figma "Hero base"

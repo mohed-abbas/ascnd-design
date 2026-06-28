@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import { Geist_Mono, Instrument_Serif } from "next/font/google";
 import localFont from "next/font/local";
 import "./globals.css";
-import Background from "./components/background";
-import LenisProvider from "./components/lenis-provider";
+import Background from "@/components/background/background";
+import LenisProvider from "@/components/providers/lenis-provider";
 
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
