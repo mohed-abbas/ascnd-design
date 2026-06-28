@@ -10,11 +10,7 @@ import {
   useSyncExternalStore,
 } from "react";
 import gsap from "gsap";
-import {
-  INTRO_REVEAL_EVENT,
-  introWillPlay,
-  markIntroSeen,
-} from "./intro-state";
+import { INTRO_REVEAL_EVENT, introWillPlay } from "./intro-state";
 import { CAMERA_Z, ROCK_Z } from "./intro-scene";
 import type { GlassAnim, RockEntry, RockLayout } from "./intro-scene";
 
@@ -105,7 +101,6 @@ export default function Intro() {
     if (!hero || !slot) {
       // Can't place the glass — bail gracefully and let the hero reveal.
       window.dispatchEvent(new Event(INTRO_REVEAL_EVENT));
-      markIntroSeen();
       setDismissed(true);
       return;
     }
@@ -218,7 +213,6 @@ export default function Intro() {
 
     const tl = gsap.timeline({
       onComplete: () => {
-        markIntroSeen();
         lenisRef.current?.start();
         setDismissed(true);
       },

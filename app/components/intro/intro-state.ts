@@ -2,11 +2,17 @@
  * Shared gate for the welcome intro. Both <Intro> (which plays the WebGL
  * animation) and <HeroReveal> (which must WAIT for the intro to dock before
  * cascading the hero in) read `introWillPlay()` — memoised so it resolves the
- * SAME way for both, and crucially is captured BEFORE <Intro> marks the session
- * seen. <Intro> dispatches INTRO_REVEAL_EVENT at the dock; HeroReveal listens.
+ * SAME way for both within a page load. <Intro> dispatches INTRO_REVEAL_EVENT
+ * at the dock; HeroReveal / RockReveal / DesignShotsReveal listen for it.
+ *
+ * The intro replays on EVERY load that lands at the hero (top of page). It's
+ * suppressed by an explicit ?intro=skip, reduced-motion, missing WebGL, OR a
+ * load the browser restores mid-page (e.g. refreshing while scrolled down to a
+ * lower section): the glass docks onto the hero's wordmark and its rocks sit at
+ * the hero's base, so off the hero it has nothing to land on and would only
+ * lock scroll over content it doesn't belong to.
  */
 
-export const INTRO_SEEN_KEY = "ascnd:intro-seen";
 export const INTRO_REVEAL_EVENT = "ascnd:intro-reveal";
 
 const REDUCE_MOTION = "(prefers-reduced-motion: reduce)";
@@ -29,10 +35,31 @@ function hasWebGL(): boolean {
   }
 }
 
+// How close to the top counts as "at the hero". The browser restores scroll to
+// the exact saved pixel, so a small epsilon just absorbs sub-pixel rounding.
+const TOP_EPSILON = 4;
+
+/**
+ * Are we (essentially) at the top of the page? On a hard refresh the browser
+ * restores the previous scroll position during the initial layout — before
+ * React hydration runs — so `scrollY` already reflects the restored position by
+ * the time this first evaluates (Lenis hasn't initialised yet, so this is the
+ * native value, not a reset-to-0). `introWillPlay()` is memoised, so the answer
+ * is captured once and stays consistent for <Intro> and the reveals.
+ */
+function atHeroTop(): boolean {
+  const y =
+    window.scrollY ||
+    document.documentElement.scrollTop ||
+    document.body?.scrollTop ||
+    0;
+  return y <= TOP_EPSILON;
+}
+
 function computeShouldPlay(): boolean {
   if (typeof window === "undefined") return false;
 
-  // Dev/QA overrides: ?intro=force always plays, ?intro=skip never does.
+  // Dev/QA overrides: ?intro=force always plays (even mid-page), ?intro=skip never.
   const q = new URLSearchParams(window.location.search).get("intro");
   if (q === "force") return true;
   if (q === "skip") return false;
@@ -40,26 +67,16 @@ function computeShouldPlay(): boolean {
   if (window.matchMedia(REDUCE_MOTION).matches) return false;
   // No WebGL → the glass/rocks can't render; skip so the DOM rocks reveal normally.
   if (!hasWebGL()) return false;
-  try {
-    if (sessionStorage.getItem(INTRO_SEEN_KEY)) return false;
-  } catch {
-    /* private mode / blocked storage — fall through and play */
-  }
+  // Only welcome at the hero — never strand a mid-page refresh under a locked,
+  // off-screen intro (see file header).
+  if (!atHeroTop()) return false;
   return true;
 }
 
 let cached: boolean | undefined;
 
-/** Resolved once per page load, before the session is marked seen. */
+/** Resolved once per page load (memoised so <Intro> and the reveals agree). */
 export function introWillPlay(): boolean {
   if (cached === undefined) cached = computeShouldPlay();
   return cached;
-}
-
-export function markIntroSeen(): void {
-  try {
-    sessionStorage.setItem(INTRO_SEEN_KEY, "1");
-  } catch {
-    /* ignore */
-  }
 }
