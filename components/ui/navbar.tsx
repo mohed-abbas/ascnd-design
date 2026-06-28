@@ -122,7 +122,7 @@ export default function Navbar() {
       aria-label="Primary"
       data-reveal-soft
       data-reveal-order={2}
-      className="font-product pointer-events-none fixed right-[33px] top-[62.4%] z-50 h-[365px] w-[406px] max-w-[calc(100vw-3rem)] -translate-y-1/2"
+      className="font-product pointer-events-none fixed right-[33px] top-[62.4%] z-[999] h-[365px] w-[406px] max-w-[calc(100vw-3rem)] -translate-y-1/2"
     >
       {/* The one morphing glass surface. Its closed pill footprint is pinned
           here as the default/no-JS state; GSAP overrides the geometry inline on
