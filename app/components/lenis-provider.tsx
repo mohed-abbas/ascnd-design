@@ -1,7 +1,8 @@
 "use client";
 
 import { ReactLenis, type LenisRef } from "lenis/react";
-import { useEffect, useRef } from "react";
+import type Lenis from "lenis";
+import { useEffect, useMemo, useRef } from "react";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 
@@ -39,26 +40,44 @@ export default function LenisProvider({
 }) {
   const lenisRef = useRef<LenisRef>(null);
 
+  // Stable options: an inline `{ autoRaf: false }` literal changes identity on
+  // every render, which makes ReactLenis tear down and recreate the Lenis
+  // instance. That orphans the ticker's raf onto a dead instance while the live
+  // one is never driven — so nothing scrolls. Memoising keeps one instance.
+  const options = useMemo(() => ({ autoRaf: false }), []);
+
   useEffect(() => {
     gsap.registerPlugin(ScrollTrigger);
 
-    const lenis = lenisRef.current?.lenis;
-    if (!lenis) return;
+    // Drive Lenis from GSAP's ticker (one loop, no competing schedulers). Read
+    // the instance LAZILY every frame instead of capturing it once: the ref may
+    // not be populated when this effect first runs (ReactLenis creates the
+    // instance in its own effect), and if we bail or capture a stale reference,
+    // Lenis never gets its raf and the page freezes. Re-bind ScrollTrigger.update
+    // whenever the instance identity changes so cloud parallax stays in sync.
+    let bound: Lenis | null = null;
+    const update = (time: number) => {
+      const lenis = lenisRef.current?.lenis;
+      if (!lenis) return;
+      if (bound !== lenis) {
+        bound?.off("scroll", ScrollTrigger.update);
+        lenis.on("scroll", ScrollTrigger.update);
+        bound = lenis;
+      }
+      lenis.raf(time * 1000); // ms — Lenis expects the raw rAF timestamp
+    };
 
-    lenis.on("scroll", ScrollTrigger.update);
-
-    const raf = (time: number) => lenis.raf(time * 1000);
-    gsap.ticker.add(raf);
+    gsap.ticker.add(update);
     gsap.ticker.lagSmoothing(0);
 
     return () => {
-      lenis.off("scroll", ScrollTrigger.update);
-      gsap.ticker.remove(raf);
+      gsap.ticker.remove(update);
+      bound?.off("scroll", ScrollTrigger.update);
     };
   }, []);
 
   return (
-    <ReactLenis root options={{ autoRaf: false }} ref={lenisRef}>
+    <ReactLenis root options={options} ref={lenisRef}>
       {children}
     </ReactLenis>
   );
