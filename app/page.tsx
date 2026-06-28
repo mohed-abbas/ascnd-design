@@ -6,6 +6,9 @@ export default function Home() {
     <>
       <Hero />
       <Tagline />
+      {/* Empty full-viewport section over the shared sky — placeholder for the
+          next block; lets the cloud/parallax keep scrolling past the tagline. */}
+      <section data-spacer className="relative min-h-dvh w-full" />
     </>
   );
 }
