@@ -7,6 +7,7 @@ import * as THREE from "three";
 import type { Group } from "three";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
+import type { CloudSpec } from "./cloud-specs";
 
 /**
  * Volumetric cloud field (Three.js / R3F + drei <Clouds>).
@@ -66,24 +67,7 @@ const CLOUD = {
 } as const;
 const RANGE = 100;
 
-// Hero cloud placements. Position is given in screen-NDC (x,y each in [-1,1] —
-// centre is 0, +x right, +y up) so each cloud lands at a fixed spot on screen
-// regardless of viewport/aspect; <CloudPlacement> projects it onto the camera
-// ray. `dist` is how far along that ray to sit and only affects SIZE, not the
-// screen position. bounds/volume set the puffiness.
-type CloudSpec = {
-  key: string;
-  ndc: [number, number];
-  dist: number;
-  seed: number;
-  bounds: [number, number, number];
-  volume: number;
-};
-const HERO_CLOUDS: CloudSpec[] = [
-  { key: "top-right", ndc: [0.78, 0.72], dist: 22, seed: 4, bounds: [4, 1.2, 1], volume: 4 },
-  { key: "rock-left", ndc: [-0.62, -0.8], dist: 22, seed: 7, bounds: [3, 1, 1], volume: 3 },
-  { key: "rock-right", ndc: [0.62, -0.8], dist: 22, seed: 11, bounds: [3, 1, 1], volume: 3 },
-];
+// Cloud placements (NDC/dist/size) live in cloud-specs.ts — see CloudSpec.
 
 // Baked camera — a 3/4 above-front view; the angle plus the sprite's own
 // painted shading is what makes the billboards read as dimensional.
@@ -124,8 +108,10 @@ const PARALLAX = 3;
  * it.)
  */
 function CloudPlacement({
+  clouds,
   cloudRefs,
 }: {
+  clouds: CloudSpec[];
   cloudRefs: React.RefObject<(Group | null)[]>;
 }) {
   const camera = useThree((s) => s.camera);
@@ -135,7 +121,7 @@ function CloudPlacement({
 
   useEffect(() => {
     const v = new THREE.Vector3();
-    HERO_CLOUDS.forEach((c, i) => {
+    clouds.forEach((c, i) => {
       const g = cloudRefs.current[i];
       if (!g) return;
       v.set(c.ndc[0], c.ndc[1], 0.5).unproject(camera);
@@ -143,7 +129,7 @@ function CloudPlacement({
       g.position.copy(v);
     });
     invalidate();
-  }, [camera, width, height, invalidate, cloudRefs]);
+  }, [clouds, camera, width, height, invalidate, cloudRefs]);
 
   return null;
 }
@@ -277,7 +263,7 @@ function ContextWatchdog({
   return null;
 }
 
-export default function CloudCanvas() {
+export default function CloudCanvas({ clouds }: { clouds: CloudSpec[] }) {
   const fieldRef = useRef<Group | null>(null);
   const cloudRefs = useRef<(Group | null)[]>([]);
   // Bumping this remounts the <Canvas> with a fresh GL context — last resort
@@ -321,7 +307,7 @@ export default function CloudCanvas() {
         {/* Parallax shifts the whole field on scroll; each cloud sits at its own
             screen-anchored position inside it (set by <CloudPlacement>). */}
         <group ref={fieldRef}>
-          {HERO_CLOUDS.map((c, i) => (
+          {clouds.map((c, i) => (
             <group
               key={c.key}
               ref={(el) => {
@@ -334,7 +320,7 @@ export default function CloudCanvas() {
         </group>
       </Clouds>
 
-      <CloudPlacement cloudRefs={cloudRefs} />
+      <CloudPlacement clouds={clouds} cloudRefs={cloudRefs} />
       <ParallaxRig groupRef={fieldRef} />
       <InvalidateOnReady />
       <ContextWatchdog onUnrecoverable={remount} />

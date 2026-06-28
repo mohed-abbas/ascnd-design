@@ -2,6 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { useSyncExternalStore } from "react";
+import { SKY_CLOUDS, ROCK_CLOUDS } from "./cloud-specs";
 
 // The WebGL canvas is client-only; ssr:false must live in a Client Component
 // (Next disallows it in Server Components).
@@ -53,11 +54,18 @@ function useCanvasEligible() {
 }
 
 /**
- * The volumetric clouds as their OWN fixed layer — a sibling of <Background/>,
- * not nested inside it, so the sky and the clouds z-stack independently. Sits
- * at -z-10 (above the -z-20 sky, below page content); pointer-events-none so it
- * never intercepts clicks. Mounted at the root (layout.tsx) — required: a
- * `filter`/`backdrop-filter` ancestor would break the fixed canvas.
+ * The volumetric clouds, mounted at the root (layout.tsx) as TWO independent
+ * fixed layers so they can straddle the page content:
+ *  - SKY layer at -z-10 → behind content but above the -z-20 sky backdrop;
+ *    holds the distant sky clouds.
+ *  - FRONT layer at z-[1] → above the rocks (z-0) but below the wordmark
+ *    (z-10); holds the rock-base clouds so they OVERLAP the cliffs.
+ * Both are pointer-events-none (never intercept clicks) and transparent except
+ * where a cloud is drawn, so the front layer only covers the cliff bases.
+ * Required: no `filter`/`backdrop-filter` ancestor, or the fixed canvases break.
+ *
+ * Two <Canvas> = two WebGL contexts; acceptable since the whole thing is gated
+ * to eligible desktops, and each is a single batched <Clouds> draw.
  */
 export default function CloudLayer() {
   const eligible = useCanvasEligible();
@@ -67,8 +75,15 @@ export default function CloudLayer() {
   if (!eligible) return null;
 
   return (
-    <div aria-hidden className="pointer-events-none fixed inset-0 -z-10">
-      <CloudCanvas />
-    </div>
+    <>
+      {/* Distant sky clouds — behind the page content. */}
+      <div aria-hidden className="pointer-events-none fixed inset-0 -z-10">
+        <CloudCanvas clouds={SKY_CLOUDS} />
+      </div>
+      {/* Foreground clouds — in front of the rocks so they hug the cliff base. */}
+      <div aria-hidden className="pointer-events-none fixed inset-0 z-[1]">
+        <CloudCanvas clouds={ROCK_CLOUDS} />
+      </div>
+    </>
   );
 }
