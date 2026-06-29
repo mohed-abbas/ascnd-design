@@ -183,3 +183,96 @@ body {
     opacity: 1;
   }
 }
+
+/* ── Welcome loading screen (intro-loader.tsx) ──────────────────────────────
+   A pure DOM/CSS cover over the sky while the WebGL intro warms up. It carries
+   no background of its own — the real DOM sky shows through — and only floats a
+   few baked cloud-puff sprites with the breathing wordmark on top, so it paints
+   with the first CSS (no WebGL, no JS chunk to wait on). The container's
+   opacity is toggled in React for the crossfade-out; these rules drive the
+   drift, the wordmark breath, and the hairline progress sweep. */
+.loader-cloud {
+  position: absolute;
+  height: auto;
+  opacity: 0; /* fades in via loader-cloud-in to its per-cloud --op */
+  filter: blur(2px);
+  user-select: none;
+  /* Two independent animations: a one-shot fade-in (opacity) and an infinite
+     horizontal drift (transform) — different properties, so they compose. */
+  animation:
+    loader-cloud-in 1.2s ease-out forwards,
+    loader-drift var(--dur, 30s) linear var(--delay, 0s) infinite;
+  will-change: transform, opacity;
+}
+
+@keyframes loader-cloud-in {
+  to {
+    opacity: var(--op, 0.7);
+  }
+}
+
+@keyframes loader-drift {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(var(--to, 24vw));
+  }
+}
+
+/* Wordmark gently breathes so the hold feels alive rather than frozen. */
+.loader-wordmark {
+  opacity: 0.6;
+  animation: loader-breathe 2.6s ease-in-out infinite;
+  will-change: opacity;
+}
+
+@keyframes loader-breathe {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* Hairline progress — an indeterminate sweep (we have no real % until the Three
+   loader exists, which is the very thing we're waiting on). Reads as motion, not
+   a claim of exact progress. */
+.loader-progress {
+  position: relative;
+  width: 120px;
+  height: 2px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.22);
+}
+
+.loader-progress > span {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 40%;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.9);
+  animation: loader-progress-sweep 1.5s ease-in-out infinite;
+  will-change: transform;
+}
+
+@keyframes loader-progress-sweep {
+  0% {
+    transform: translateX(-120%);
+  }
+  100% {
+    transform: translateX(320%);
+  }
+}
+
+/* Reduced motion: never show the drifting cover at all (introWillPlay() is false
+   for these visitors too, so there's nothing to cover). */
+@media (prefers-reduced-motion: reduce) {
+  [data-intro-loader] {
+    display: none;
+  }
+}
