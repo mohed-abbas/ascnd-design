@@ -645,29 +645,29 @@ function Glass({
           height={0}
           curveSegments={32}
           bevelEnabled
-          bevelThickness={0.02}
-          bevelSize={0.04}
+          bevelThickness={0.175}
+          bevelSize={0.095}
           bevelOffset={0}
-          bevelSegments={16}
-          letterSpacing={-0.12}
+          bevelSegments={12}
+          letterSpacing={0.02}
         >
           ascnd
           <MeshTransmissionMaterial
             background={sky}
             transmission={1}
-            thickness={0}
-            roughness={0}
-            ior={1.25}
-            chromaticAberration={1.35}
-            anisotropicBlur={0.5}
-            distortion={2}
-            distortionScale={0.3}
-            temporalDistortion={0.02}
+            thickness={0.3}
+            roughness={0.31}
+            ior={1.28}
+            chromaticAberration={0.65}
+            anisotropicBlur={0.28}
+            distortion={0.2}
+            distortionScale={0.4}
+            temporalDistortion={0.28}
             samples={10}
-            resolution={1536}
+            resolution={1024}
             backside={true}
             backsideThickness={0.4}
-            clearcoat={1}
+            clearcoat={0}
             clearcoatRoughness={0}
             attenuationDistance={4}
             attenuationColor="#eaf4ff"
@@ -710,14 +710,17 @@ export default function IntroScene({
       // block). fov 11.82° at z=40 keeps the visible height at the z=0 plane at
       // 8.284 units — the SAME mapping <Intro> assumes (wpp = 8.284/innerHeight),
       // so positions/sizes are unchanged.
-      camera={{ position: [0, 0, CAMERA_Z], fov: 11.81, near: 0.1, far: 100 }}
+      camera={{ position: [0, 0, CAMERA_Z], fov: 11.82, near: 0.1, far: 100 }}
       onCreated={({ gl }) => {
         gl.toneMapping = THREE.NoToneMapping;
       }}
     >
+      {/* Ready-gate boundary: ONLY what the entrance needs on frame 0 — the rock
+          textures, the Text3D font, the (network-free) env. SceneReady lives here
+          so onReady fires the instant THOSE resolve. The shot tiles are NOT in
+          here: they're 7 extra textures that aren't visible until the dock ~2s in,
+          and bundling them onto this gate delayed the whole welcome. */}
       <Suspense fallback={null}>
-        {/* Tiles live here for the whole session — intro fly-in → conveyor. */}
-        <Tiles tiles={tiles} tileEntry={tileEntry} fieldRef={fieldRef} />
         {/* Glass + rocks are intro-phase guests: mounted only while welcoming,
             then unmounted so the steady scene is just the tile planes. They need
             only LOCAL assets (preloaded), so SceneReady fires fast. */}
@@ -730,6 +733,16 @@ export default function IntroScene({
             <SceneReady onReady={onReady} />
           </>
         )}
+      </Suspense>
+
+      {/* Tiles stream in on their OWN boundary so their shot textures never hold
+          up the ready gate above. They live here for the whole session (intro
+          fly-in → steady conveyor); the conveyor + scroll rig ride with them
+          (ScrollRig translates the tile field, so it belongs here). They bloom in
+          ~0.1s into the timeline and aren't prominent at the reveal, so a few
+          frames of late arrival is invisible — but it no longer blocks the start. */}
+      <Suspense fallback={null}>
+        <Tiles tiles={tiles} tileEntry={tileEntry} fieldRef={fieldRef} />
         <ConveyorRig
           tiles={tiles}
           arc={arc}
@@ -741,7 +754,17 @@ export default function IntroScene({
       {/* Local studio shine (see GlassEnvironment) — no network, so the glints
           are present on frame 1 instead of popping in late. Glass-only, so it
           rides the intro phase and unmounts with the glass. */}
-      {introActive && <GlassEnvironment />}
+      {introActive && (
+        <GlassEnvironment
+          environmentIntensity={1.85}
+          frontFill={0.5}
+          leftFill={2.15}
+          rightFill={2.6}
+          bottomFill={3.6}
+          keyGlint={5.2}
+          topRim={1.1}
+        />
+      )}
     </Canvas>
   );
 }
