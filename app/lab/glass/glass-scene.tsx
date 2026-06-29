@@ -39,8 +39,8 @@ const labConfig: { geo?: unknown; mat?: unknown; env?: unknown } = {};
  */
 function TunableEnvironment() {
   const env = useControls("Environment", {
-    environmentIntensity: { value: 1.4, min: 0, max: 4, step: 0.05 },
-    frontFill: { value: 1.4, min: 0, max: 6, step: 0.05 },
+    environmentIntensity: { value: 3, min: 0, max: 4, step: 0.05 },
+    frontFill: { value: 0.05, min: 0, max: 6, step: 0.05 },
     leftFill: { value: 1.7, min: 0, max: 6, step: 0.05 },
     rightFill: { value: 1.7, min: 0, max: 6, step: 0.05 },
     bottomFill: { value: 1.5, min: 0, max: 6, step: 0.05 },

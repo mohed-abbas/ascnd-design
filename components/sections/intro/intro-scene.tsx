@@ -178,8 +178,8 @@ export type GlassEnvProps = {
 };
 
 export function GlassEnvironment({
-  environmentIntensity = 1.4,
-  frontFill = 1.4,
+  environmentIntensity = 3,
+  frontFill = 0.05,
   leftFill = 1.7,
   rightFill = 1.7,
   bottomFill = 1.5,
@@ -643,34 +643,34 @@ function Glass({
           ref={textRef}
           font={font}
           size={glassSize}
-          height={0.06}
-          curveSegments={32}
+          height={0}
+          curveSegments={6}
           bevelEnabled
           bevelThickness={0.02}
-          bevelSize={0.02}
+          bevelSize={0.04}
           bevelOffset={0}
-          bevelSegments={6}
-          letterSpacing={-0.1}
+          bevelSegments={12}
+          letterSpacing={-0.12}
         >
           ascnd
           <MeshTransmissionMaterial
             background={sky}
             transmission={1}
-            thickness={0.56}
+            thickness={0}
             roughness={0}
-            ior={1.45}
-            chromaticAberration={1.15}
-            anisotropicBlur={0.1}
+            ior={1.25}
+            chromaticAberration={1.35}
+            anisotropicBlur={0.5}
             distortion={2}
             distortionScale={0.3}
-            temporalDistortion={0}
-            samples={24}
+            temporalDistortion={0.02}
+            samples={10}
             resolution={1536}
             backside={true}
             backsideThickness={0.4}
             clearcoat={1}
             clearcoatRoughness={0}
-            attenuationDistance={3}
+            attenuationDistance={4}
             attenuationColor="#eaf4ff"
             color="#ffffff"
             clippingPlanes={[GLASS_CLIP]}
