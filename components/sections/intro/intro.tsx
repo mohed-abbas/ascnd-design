@@ -151,6 +151,15 @@ export default function Intro() {
     lenisRef.current = lenis;
   }, [lenis]);
 
+  // Warm the heavy WebGL scene chunk (Three.js + drei) the instant we know the
+  // intro will play, so its download overlaps the DOM measure instead of only
+  // starting when <IntroScene> first renders. Shares the module cache with the
+  // dynamic() import below, so the lazy mount then resolves from cache. Gated on
+  // shouldPlay so returning/reduced-motion visitors never pay for it.
+  useEffect(() => {
+    if (shouldPlay) void import("./intro-scene");
+  }, [shouldPlay]);
+
   // Measure the hero once we're going to play, and build the plan.
   useIso(() => {
     if (!play) return;

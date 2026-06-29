@@ -3,11 +3,11 @@
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import {
   Center,
-  Environment,
   MeshTransmissionMaterial,
   Text3D,
   useTexture,
 } from "@react-three/drei";
+import { GlassEnvironment } from "@/components/sections/intro/intro-scene";
 import { Suspense, useEffect, useRef } from "react";
 import * as THREE from "three";
 import type { Group } from "three";
@@ -29,7 +29,29 @@ const SHOTS = ["/shots/shot3.png", "/shots/shot4.png", "/shots/shot5.png", "/sho
 
 // Latest Leva values, kept module-side so the "copy config" button reads fresh
 // data without touching a React ref during render (a lab-only convenience).
-const labConfig: { geo?: unknown; mat?: unknown } = {};
+const labConfig: { geo?: unknown; mat?: unknown; env?: unknown } = {};
+
+/**
+ * The shared GlassEnvironment driven by a Leva "Environment" folder so the team
+ * can dial the shine + outline lighting live. `frames={Infinity}` re-bakes the
+ * cubemap every frame so slider changes show instantly (lab-only cost; the intro
+ * keeps the default single bake). Values default to the production look.
+ */
+function TunableEnvironment() {
+  const env = useControls("Environment", {
+    environmentIntensity: { value: 1.4, min: 0, max: 4, step: 0.05 },
+    frontFill: { value: 1.4, min: 0, max: 6, step: 0.05 },
+    leftFill: { value: 1.7, min: 0, max: 6, step: 0.05 },
+    rightFill: { value: 1.7, min: 0, max: 6, step: 0.05 },
+    bottomFill: { value: 1.5, min: 0, max: 6, step: 0.05 },
+    keyGlint: { value: 4, min: 0, max: 10, step: 0.1 },
+    topRim: { value: 2.6, min: 0, max: 10, step: 0.1 },
+  });
+  useEffect(() => {
+    labConfig.env = env;
+  }, [env]);
+  return <GlassEnvironment frames={Infinity} {...env} />;
+}
 
 /** Throwaway colourful backdrop the glass refracts. */
 function TestBackdrop() {
@@ -187,8 +209,9 @@ export default function GlassScene() {
       <Suspense fallback={null}>
         <TestBackdrop />
         <GlassWord />
-        {/* Sheen for the bevels — the bright liquid-glass highlights. */}
-        <Environment preset="city" environmentIntensity={1.1} />
+        {/* Sheen for the bevels — the SAME local studio glints the intro uses,
+            now Leva-driven (Environment folder) for live tuning. */}
+        <TunableEnvironment />
         <directionalLight position={[3, 5, 6]} intensity={1.2} />
         <ambientLight intensity={0.4} />
       </Suspense>

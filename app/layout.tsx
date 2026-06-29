@@ -50,6 +50,14 @@ export default function RootLayout({
       className={`${geistMono.variable} ${productSans.variable} ${instrumentSerif.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col" suppressHydrationWarning>
+        {/* Warm the WebGL intro's Text3D font during HTML parse so it isn't a
+            serial wait after the (lazy) intro chunk downloads — it gates the
+            scene's ready signal. React 19 hoists this preload into <head>. */}
+        <link
+          rel="preload"
+          href="/fonts/product-sans-medium.typeface.json"
+          as="fetch"
+        />
         {/* Arm the on-load reveal before first paint. This runs synchronously
             during HTML parse (the same flash-prevention trick next-themes uses),
             so the `.reveal-armed` hidden state in globals.css applies the instant

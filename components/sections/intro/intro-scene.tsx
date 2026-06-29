@@ -4,6 +4,7 @@ import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import {
   Center,
   Environment,
+  Lightformer,
   MeshTransmissionMaterial,
   Text3D,
   useTexture,
@@ -145,6 +146,107 @@ export const TILE_Z = -0.2;
 // on screen. Its `constant` is set to the glyph baseline once the geometry is
 // measured (see <Glass>); the glass rises through it to unmask in place.
 const GLASS_CLIP = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+
+/**
+ * Local "studio" environment for the glass shine — a handful of <Lightformer>
+ * rects baked into a static env cubemap (no network fetch, so the reflections
+ * are present on the very first painted frame instead of popping in a beat
+ * later). The bright rectangles reflect off the glass bevels/clearcoat as crisp
+ * specular glints, which reads as glossy glass even under the telephoto camera
+ * (a head-on view barely sweeps a broad HDR, but placed glints still catch).
+ *
+ * Exported so /lab/glass renders the EXACT same shine — the lab stays a faithful
+ * preview, and passes Leva-driven intensities here for live tuning. The defaults
+ * ARE the production values, so the intro calls `<GlassEnvironment />` bare.
+ * `frames` defaults to 1, so the cubemap is rendered once (cheap); the lab passes
+ * `Infinity` so slider changes re-bake live.
+ */
+export type GlassEnvProps = {
+  /** scene.environmentIntensity — overall reflection strength. */
+  environmentIntensity?: number;
+  /** Broad front fill — lights the face + softens the whole outline. */
+  frontFill?: number;
+  /** Side/bottom fills — light the bevel "outline" from each direction. */
+  leftFill?: number;
+  rightFill?: number;
+  bottomFill?: number;
+  /** Bright glossy streaks (the "shine"). */
+  keyGlint?: number;
+  topRim?: number;
+  /** Cubemap re-bake cadence. 1 = bake once (prod); Infinity = live (lab). */
+  frames?: number;
+};
+
+export function GlassEnvironment({
+  environmentIntensity = 1.4,
+  frontFill = 1.4,
+  leftFill = 1.7,
+  rightFill = 1.7,
+  bottomFill = 1.5,
+  keyGlint = 4,
+  topRim = 2.6,
+  frames = 1,
+}: GlassEnvProps = {}) {
+  return (
+    <Environment
+      resolution={256}
+      environmentIntensity={environmentIntensity}
+      frames={frames}
+    >
+      {/* ── Surround fill ──────────────────────────────────────────────────
+          The bevel edges (the glyph "outline") graze the env at the silhouette,
+          so any DARK direction shows up as a dark outline there. A box of soft
+          fills — front + left + right + bottom — gives every edge normal
+          something bright to reflect, lighting the outline all the way round
+          instead of only where the bright glints point. */}
+      <Lightformer
+        form="rect"
+        intensity={frontFill}
+        color="#cfe3ff"
+        position={[0, 0, 9]}
+        scale={[26, 26, 1]}
+      />
+      <Lightformer
+        form="rect"
+        intensity={leftFill}
+        color="#dbe8ff"
+        position={[-9, 0, 5]}
+        scale={[6, 18, 1]}
+      />
+      <Lightformer
+        form="rect"
+        intensity={rightFill}
+        color="#e9f2ff"
+        position={[9, 0, 5]}
+        scale={[6, 18, 1]}
+      />
+      <Lightformer
+        form="rect"
+        intensity={bottomFill}
+        color="#eaf2ff"
+        position={[0, -8, 5]}
+        scale={[18, 5, 1]}
+      />
+      {/* ── Bright glints (the glossy "shine") ────────────────────────────── */}
+      {/* Key glint — upper-right: the main bright streak across the glyphs. */}
+      <Lightformer
+        form="rect"
+        intensity={keyGlint}
+        color="#ffffff"
+        position={[5, 5, 6]}
+        scale={[8, 10, 1]}
+      />
+      {/* Top rim — a thin bright bar that rides the upper bevel edge. */}
+      <Lightformer
+        form="rect"
+        intensity={topRim}
+        color="#ffffff"
+        position={[0, 7, 3]}
+        scale={[12, 2, 1]}
+      />
+    </Environment>
+  );
+}
 
 function Rocks({
   rocks,
@@ -544,8 +646,8 @@ function Glass({
           height={0.06}
           curveSegments={32}
           bevelEnabled
-          bevelThickness={0.045}
-          bevelSize={0.045}
+          bevelThickness={0.02}
+          bevelSize={0.02}
           bevelOffset={0}
           bevelSegments={6}
           letterSpacing={-0.1}
@@ -610,7 +712,7 @@ export default function IntroScene({
       // block). fov 11.82° at z=40 keeps the visible height at the z=0 plane at
       // 8.284 units — the SAME mapping <Intro> assumes (wpp = 8.284/innerHeight),
       // so positions/sizes are unchanged.
-      camera={{ position: [0, 0, CAMERA_Z], fov: 11.82 }}
+      camera={{ position: [0, 0, CAMERA_Z], fov: 11.81, near: 0.1, far: 100 }}
       onCreated={({ gl }) => {
         gl.toneMapping = THREE.NoToneMapping;
         gl.localClippingEnabled = true; // for the glass reveal clip plane
@@ -639,14 +741,10 @@ export default function IntroScene({
         />
         <ScrollRig fieldRef={fieldRef} />
       </Suspense>
-      {/* The Environment HDR is a remote fetch; its OWN boundary so it never
-          blocks the reveal — the glass picks up its reflections a beat later.
-          Only needed for the glass, so it rides the intro phase too. */}
-      {introActive && (
-        <Suspense fallback={null}>
-          <Environment preset="city" environmentIntensity={1.1} />
-        </Suspense>
-      )}
+      {/* Local studio shine (see GlassEnvironment) — no network, so the glints
+          are present on frame 1 instead of popping in late. Glass-only, so it
+          rides the intro phase and unmounts with the glass. */}
+      {introActive && <GlassEnvironment />}
     </Canvas>
   );
 }
