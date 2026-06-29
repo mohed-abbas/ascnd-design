@@ -30,7 +30,9 @@ const SOCIALS = [
 // clip-path is deliberately NOT used (the box must actually get bigger). The
 // backdrop-filter lives on this same element — its own resize is fine; a
 // clip-path/filter on an *ancestor* would turn it into a backdrop root and kill
-// the blur. Symmetric power2.inOut so open and close feel identical.
+// the blur. Open and close are NOT a symmetric reverse: on close the content
+// fades out FIRST (fast), then the glass collapses, so the retracting frame
+// never strands the links visibly outside it (see the toggle effect).
 const CLOSED = { top: 108, right: 22, bottom: 108, left: 332, borderRadius: 61 };
 const OPEN = { top: 0, right: 0, bottom: 0, left: 0, borderRadius: 34 };
 const DURATION = 0.65;
@@ -46,6 +48,7 @@ export default function Navbar() {
   const navRef = useRef<HTMLElement>(null);
   const surfaceRef = useRef<HTMLDivElement>(null);
   const tlRef = useRef<gsap.core.Timeline | null>(null);
+  const mounted = useRef(false);
   const panelId = useId();
 
   // Close on Escape and on click outside.
@@ -69,51 +72,57 @@ export default function Navbar() {
     };
   }, [open]);
 
-  // Build the morph timeline once (paused). The surface grows pill → panel,
-  // then the menu content (heading → links → socials) fades + rises in over the
-  // second half — by then the box already covers their positions, so they spawn
-  // onto the glass rather than floating in empty space. Reduced motion skips
-  // this; the [open] effect below snaps to end states instead.
+  // Drive the morph from `open`, building a fresh timeline each toggle so open
+  // and close can differ. OPEN: the surface grows pill → panel, then the content
+  // (heading → links → socials) fades + rises in over the second half — by then
+  // the box already covers their positions, so they spawn onto the glass rather
+  // than floating in empty space. CLOSE is deliberately NOT the reverse: the
+  // content fades out FIRST (fast), and the glass only starts collapsing once
+  // they're nearly gone — otherwise the frame retracts toward the pill while the
+  // links are still visible and strands them outside the glass ("text left
+  // behind"). The first render and reduced motion snap to the end state instead.
   useEffect(() => {
-    const surface = surfaceRef.current;
-    const nav = navRef.current;
-    if (!surface || !nav || window.matchMedia(REDUCE_MOTION).matches) return;
-
-    const items = nav.querySelectorAll<HTMLElement>("[data-menu-item]");
-    const ctx = gsap.context(() => {
-      tlRef.current = gsap
-        .timeline({ paused: true })
-        .fromTo(surface, CLOSED, { ...OPEN, duration: DURATION, ease: EASE })
-        .fromTo(
-          items,
-          { autoAlpha: 0, y: 10 },
-          { autoAlpha: 1, y: 0, duration: 0.4, ease: "power2.out", stagger: 0.06 },
-          0.3,
-        );
-    }, nav);
-
-    return () => {
-      ctx.revert(); // restores inline styles GSAP set
-      tlRef.current = null;
-    };
-  }, []);
-
-  // Drive the timeline from `open` — play out / reverse back (same speed both
-  // ways). Without a timeline (reduced motion / pre-mount) snap to end states.
-  useEffect(() => {
-    const tl = tlRef.current;
-    if (tl) {
-      if (open) tl.play();
-      else tl.reverse();
-      return;
-    }
-
     const surface = surfaceRef.current;
     const nav = navRef.current;
     if (!surface || !nav) return;
+
     const items = nav.querySelectorAll<HTMLElement>("[data-menu-item]");
-    gsap.set(surface, open ? OPEN : CLOSED);
-    gsap.set(items, { autoAlpha: open ? 1 : 0 });
+    const reduce = window.matchMedia(REDUCE_MOTION).matches;
+
+    // No entrance on first mount (or reduced motion): snap to current state.
+    if (!mounted.current || reduce) {
+      mounted.current = true;
+      gsap.set(surface, open ? OPEN : CLOSED);
+      gsap.set(items, { autoAlpha: open ? 1 : 0, y: 0 });
+      return;
+    }
+
+    tlRef.current?.kill();
+    const tl = gsap.timeline();
+
+    if (open) {
+      tl.to(surface, { ...OPEN, duration: DURATION, ease: EASE }, 0).fromTo(
+        items,
+        { autoAlpha: 0, y: 10 },
+        { autoAlpha: 1, y: 0, duration: 0.4, ease: "power2.out", stagger: 0.06 },
+        0.3,
+      );
+    } else {
+      // Content leaves first; the glass starts shrinking only once it's mostly
+      // gone, so the links are never stranded outside the retracting frame.
+      tl.to(items, {
+        autoAlpha: 0,
+        y: 10,
+        duration: 0.22,
+        ease: "power2.in",
+        stagger: 0.04,
+      }).to(surface, { ...CLOSED, duration: DURATION, ease: EASE }, 0.14);
+    }
+
+    tlRef.current = tl;
+    return () => {
+      tl.kill();
+    };
   }, [open]);
 
   return (
