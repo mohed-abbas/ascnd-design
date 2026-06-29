@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import gsap from "gsap";
+import { INTRO_REVEAL_EVENT, introWillPlay } from "@/components/sections/intro/intro-state";
 
 const REDUCE_MOTION = "(prefers-reduced-motion: reduce)";
 const REVEAL_SIZE = 340; // diameter (px) of the soft reveal disc
@@ -18,6 +19,10 @@ const FOLLOW = 0.18; // pointer-follow lerp factor per frame (lower = more lag)
  *
  * Mouse-only (no hover on touch) and disabled under prefers-reduced-motion, so
  * the overlay stays fully masked-out and only the bare cliffs show.
+ *
+ * When the welcome intro plays, the hover stays dormant until the glass docks
+ * (INTRO_REVEAL_EVENT) — otherwise hovering the rocks region mid-intro would
+ * reveal grass over the still-parked cliffs (see the wire/unwire gate below).
  */
 export default function RockHover() {
   useEffect(() => {
@@ -96,12 +101,34 @@ export default function RockHover() {
       });
     };
 
-    hero.addEventListener("pointermove", onMove);
-    hero.addEventListener("pointerleave", onLeave);
-
-    return () => {
+    const wire = () => {
+      hero.addEventListener("pointermove", onMove);
+      hero.addEventListener("pointerleave", onLeave);
+    };
+    const unwire = () => {
       hero.removeEventListener("pointermove", onMove);
       hero.removeEventListener("pointerleave", onLeave);
+    };
+
+    // While the welcome intro plays, the DOM cliffs are parked invisible but the
+    // grass overlay is always mounted (only the reveal disc masks it). If we wired
+    // the hover now, moving over the rocks region would open the disc and float a
+    // chunk of grass cliff over the still-playing WebGL scene. So mirror
+    // rock-reveal.tsx: hold off until the glass docks (INTRO_REVEAL_EVENT), when
+    // the real cliffs exist for the disc to reveal.
+    let stopWaiting: (() => void) | undefined;
+    if (introWillPlay()) {
+      const onReveal = () => wire();
+      window.addEventListener(INTRO_REVEAL_EVENT, onReveal, { once: true });
+      stopWaiting = () =>
+        window.removeEventListener(INTRO_REVEAL_EVENT, onReveal);
+    } else {
+      wire();
+    }
+
+    return () => {
+      stopWaiting?.();
+      unwire();
       gsap.killTweensOf(state);
       stop();
     };
