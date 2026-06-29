@@ -136,12 +136,19 @@ export default function CloudLayer() {
         <CloudCanvas clouds={SKY_CLOUDS} scrollFactor={0.6} />
       </div>
       {/* Foreground clouds — in front of the rocks so they hug the cliff base.
-          scrollFactor MUST stay 1: these are welded to the cliff feet (page
-          content scrolling 1:1); any damping slides them off the rocks. */}
+          z-[61] sits ABOVE the welcome intro's WebGL canvas (z-[60], intro.tsx)
+          so the rock-base skirt also overlaps the intro's cliffs, matching the
+          hero (otherwise the opaque intro rock planes hide the clouds behind
+          them and the bases read hard-cut). This is a thin band pinned to the
+          very bottom (ROCK_CLOUDS ndc y ≈ -1.02), so leapfrogging the top-anchored
+          wordmark (z-10)/content is spatially harmless — they never share screen
+          space — and it still sits below the grass hover overlay (z-100) and
+          navbar (z-999). scrollFactor MUST stay 1: these are welded to the cliff
+          feet (page content scrolling 1:1); any damping slides them off. */}
       <div
         aria-hidden
         style={reveal}
-        className="pointer-events-none fixed inset-0 z-[1]"
+        className="pointer-events-none fixed inset-0 z-[61]"
       >
         <CloudCanvas clouds={ROCK_CLOUDS} scrollFactor={1} />
       </div>
