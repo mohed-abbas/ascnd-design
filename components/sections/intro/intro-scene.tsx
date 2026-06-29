@@ -141,11 +141,11 @@ export const ROCK_Z = -0.3;
 // shot it crossfades to.
 export const TILE_Z = -0.2;
 
-// The glass reveal clip plane (world space): keeps only y ≥ baseline. Module
-// scope so it's a stable, freely-mutable instance — there's only ever one Glass
-// on screen. Its `constant` is set to the glyph baseline once the geometry is
-// measured (see <Glass>); the glass rises through it to unmask in place.
-const GLASS_CLIP = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+// The scene's visible height at the z=0 plane. The telephoto fov is chosen so
+// this is exactly 8.284 (matching <Intro>'s wpp = 8.284/innerHeight), so the
+// viewport bottom sits at world y = -VIEW_WORLD_H/2. The glass slides up from
+// below that edge, so its off-screen start is anchored here.
+const VIEW_WORLD_H = 8.284;
 
 /**
  * Local "studio" environment for the glass shine — a handful of <Lightformer>
@@ -583,7 +583,7 @@ function Glass({
 }: {
   anim: React.RefObject<GlassAnim>;
   glassSize: number;
-  /** World y the glass rests at after the reveal — anchors the clip baseline. */
+  /** World y the glass rests at after the reveal — the slide-up target. */
   restY: number;
   font?: string;
 }) {
@@ -593,13 +593,10 @@ function Glass({
   // transmission samples the transparent FBO (black) and the glass goes dark.
   const sky = useMemo(() => new THREE.Color("#62abff"), []);
 
-  // Measure the built glyph and anchor the world-space clip baseline (GLASS_CLIP)
-  // at its resting bottom. The glass enters fully BELOW the plane (clipped,
-  // invisible) and rises through it, so it's revealed bottom-up in place — the
-  // WebGL twin of the hero text's overflow:hidden masked slide-up, rather than
-  // flying up from the bottom of the screen. The plane is fixed in world, so the
-  // later dock (which moves UP, away from it) is never clipped. Half the glyph
-  // height drives both the baseline offset and the reveal travel.
+  // Measure half the glyph height so the off-screen start sits FULLY below the
+  // viewport edge (centre one half-height past the bottom). The glass slides up
+  // from there to its rest — a true bottom-of-screen entrance, fully visible the
+  // whole way (no mask), unlike the old clip-plane unmask-in-place reveal.
   const halfH = useRef(0);
 
   useLayoutEffect(() => {
@@ -609,16 +606,18 @@ function Glass({
     const bb = mesh.geometry.boundingBox;
     if (!bb) return;
     halfH.current = (bb.max.y - bb.min.y) / 2;
-    GLASS_CLIP.constant = -(restY - halfH.current); // keep world y ≥ baseline
-  }, [restY, glassSize, font]);
+  }, [glassSize, font]);
 
   useFrame(() => {
     const g = ref.current;
     const a = anim.current;
     if (!g || !a) return;
-    // reveal 0→1 lifts the glass from one glyph-height below the baseline (fully
-    // clipped) up to its rest; at reveal=1 the offset is 0. Dock keeps reveal=1.
-    const revealOffset = (a.reveal - 1) * 2 * halfH.current;
+    // reveal 0→1 slides the glass UP from just below the viewport bottom to its
+    // rest. At reveal=0 the centre sits a half-height past the bottom edge (fully
+    // off-screen); at reveal=1 the offset is 0 (at rest). Dock keeps reveal=1, so
+    // the offset stays 0 and never fights the dock travel.
+    const startY = -VIEW_WORLD_H / 2 - halfH.current; // fully below the screen
+    const revealOffset = (a.reveal - 1) * (restY - startY);
     g.position.set(a.x, a.y + revealOffset, 0);
     g.scale.setScalar(a.scale);
     g.rotation.set(a.rotX, a.rotY, 0);
@@ -673,7 +672,6 @@ function Glass({
             attenuationDistance={4}
             attenuationColor="#eaf4ff"
             color="#ffffff"
-            clippingPlanes={[GLASS_CLIP]}
           />
         </Text3D>
       </Center>
@@ -715,7 +713,6 @@ export default function IntroScene({
       camera={{ position: [0, 0, CAMERA_Z], fov: 11.81, near: 0.1, far: 100 }}
       onCreated={({ gl }) => {
         gl.toneMapping = THREE.NoToneMapping;
-        gl.localClippingEnabled = true; // for the glass reveal clip plane
       }}
     >
       <Suspense fallback={null}>
