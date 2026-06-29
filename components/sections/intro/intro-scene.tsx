@@ -541,33 +541,35 @@ function Glass({
           ref={textRef}
           font={font}
           size={glassSize}
-          height={glassSize * 0.018}
-          curveSegments={16}
+          height={0.06}
+          curveSegments={32}
           bevelEnabled
-          bevelThickness={glassSize * 0.006}
-          bevelSize={glassSize * 0.008}
+          bevelThickness={0.045}
+          bevelSize={0.045}
           bevelOffset={0}
-          bevelSegments={5}
-          letterSpacing={-glassSize * 0.03}
+          bevelSegments={6}
+          letterSpacing={-0.1}
         >
           ascnd
           <MeshTransmissionMaterial
             background={sky}
             transmission={1}
-            thickness={glassSize * 0.16}
-            roughness={0.16}
+            thickness={0.56}
+            roughness={0}
             ior={1.45}
-            chromaticAberration={0.6}
-            anisotropicBlur={0.28}
-            distortion={0.14}
+            chromaticAberration={1.15}
+            anisotropicBlur={0.1}
+            distortion={2}
             distortionScale={0.3}
-            temporalDistortion={0.05}
-            samples={8}
-            resolution={1024}
-            backside
-            backsideThickness={glassSize * 0.02}
+            temporalDistortion={0}
+            samples={24}
+            resolution={1536}
+            backside={true}
+            backsideThickness={0.4}
             clearcoat={1}
             clearcoatRoughness={0}
+            attenuationDistance={3}
+            attenuationColor="#eaf4ff"
             color="#ffffff"
             clippingPlanes={[GLASS_CLIP]}
           />
