@@ -50,6 +50,12 @@ const quad = (a: number, c: number, b: number, t: number) => {
 };
 // How hard each path is pulled toward the docking wordmark (0 = straight line).
 const TILE_GATHER = 0.42;
+// Squeeze the tiles' bloom spots toward the glyph's VERTICAL centre so they sit
+// in the text's core band rather than poking above/below the letters (the
+// far-up/down Figma scatter pushed the tiles around 'd' clear of the text).
+// Vertical only — horizontal spread is left at the authored Figma value. 1 = raw
+// Figma spread; smaller = tighter to the middle.
+const TILE_SCATTER_VSCALE = 0.55;
 // Seconds for the tiles to drape scatter → arc. Decoupled from the glass dock
 // (the shots have no DOM crossfade to sync to), so it can breathe — the glass
 // can land and fade while the tiles are still settling into the necklace.
@@ -290,7 +296,9 @@ export default function Intro() {
       // DESIGN_GLASS_DY lifts the offset onto the glass centre (slightly above
       // the frame centre in the design).
       const sx = glassScreenX + shot.scatter.dx * glassScale;
-      const sy = glassScreenY + (shot.scatter.dy - DESIGN_GLASS_DY) * glassScale;
+      const sy =
+        glassScreenY +
+        (shot.scatter.dy - DESIGN_GLASS_DY) * glassScale * TILE_SCATTER_VSCALE;
       const sWorld = toWorld(sx, sy);
       return {
         x: sWorld.x * TILE_DEPTH,
