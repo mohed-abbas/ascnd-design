@@ -37,7 +37,9 @@ const WIDTH_PER_SIZE = 2.55;
 const NAVBAR_FONT_PX = 38; // matches the DOM <Wordmark> (text-[38px]) dock target
 const WELCOME_LIFT = 52; // glyph sits 52px above the hero middle (Figma 200:203)
 const WELCOME_NUDGE_X = -4.91;
-const ROCK_DRIFT_PX = 10; // rocks settle down this far on entrance (matches DOM)
+// Rocks slide in from their own edge: each starts off-screen by this many of its
+// own widths (≥1 guarantees it's fully past the viewport edge), then settles to 0.
+const ROCK_SLIDE_FACTOR = 1.15;
 
 type Plan = {
   rocks: RockLayout[];
@@ -173,11 +175,13 @@ export default function Intro() {
     anim.current.scale = 1;
     anim.current.reveal = 0;
 
-    // Seed each rock hidden + lifted a touch, for the drift entrance (the WebGL
-    // mirror of the DOM rocks' drift: fade in + small downward settle).
-    rockEntries.current = rocks.map(() => ({
+    // Seed each rock hidden and pushed off-screen toward its OWN side (sign of
+    // cx: left rock has cx<0 → starts further left; right rock cx>0 → further
+    // right), so the entrance slides each cliff in from the viewport edge.
+    rockEntries.current = rocks.map((r) => ({
       opacity: 0,
-      yOffset: ROCK_DRIFT_PX * wpp,
+      xOffset: Math.sign(r.cx || -1) * r.w * ROCK_SLIDE_FACTOR,
+      yOffset: 0,
     }));
 
     setPlan({ rocks, glassSize, welcome, navbar });
@@ -241,9 +245,10 @@ export default function Intro() {
     const dockEnd = dockStart + DOCK;
 
     // ① reveal — the glass is unmasked in place, rising through its baseline
-    //    clip (same expo.out feel as the hero text), and the rocks drift in
-    //    alongside it (fade + settle, the WebGL twin of the DOM rocks' drift,
-    //    left leading right).
+    //    clip (same expo.out feel as the hero text), and the rocks slide in from
+    //    the sides alongside it (each cliff travels in from its own edge + fades
+    //    up; left leads right via the stagger). They reach rest (xOffset 0)
+    //    before the dock-end crossfade, so the DOM rocks land flush underneath.
     tl.to(
       anim.current,
       { reveal: 1, duration: REVEAL, ease: "expo.out" },
@@ -253,9 +258,9 @@ export default function Intro() {
       rockObjs,
       {
         opacity: 1,
-        yOffset: 0,
+        xOffset: 0,
         duration: 1.1,
-        ease: "power2.out",
+        ease: "power3.out",
         stagger: 0.1,
       },
       0,

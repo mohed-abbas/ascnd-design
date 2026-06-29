@@ -53,9 +53,12 @@ export type RockLayout = {
   h: number;
 };
 
-/** Per-rock entrance state, driven by <Intro>'s timeline (the WebGL "drift"). */
+/** Per-rock entrance state, driven by <Intro>'s timeline (the WebGL "slide"). */
 export type RockEntry = {
   opacity: number;
+  /** World-unit x offset added to the rock's resting position — seeded
+   *  off-screen toward the rock's own side so it slides in from the edge. */
+  xOffset: number;
   /** World-unit y offset added to the rock's resting position (settle). */
   yOffset: number;
 };
@@ -112,7 +115,10 @@ function Rocks({
       const mat = mats.current[i];
       if (mat) mat.opacity = e.opacity;
       const mesh = meshes.current[i];
-      if (mesh) mesh.position.y = r.cy + e.yOffset;
+      if (mesh) {
+        mesh.position.x = r.cx + e.xOffset;
+        mesh.position.y = r.cy + e.yOffset;
+      }
     });
   });
 
