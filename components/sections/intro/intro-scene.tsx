@@ -643,7 +643,7 @@ function Glass({
           font={font}
           size={glassSize}
           height={0}
-          curveSegments={24}
+          curveSegments={32}
           bevelEnabled
           bevelThickness={0.02}
           bevelSize={0.04}
