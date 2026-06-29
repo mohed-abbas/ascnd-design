@@ -15,13 +15,45 @@ import {
   INTRO_START_EVENT,
   introWillPlay,
 } from "./intro-state";
-import { CAMERA_Z, ROCK_Z } from "./intro-scene";
-import type { GlassAnim, RockEntry, RockLayout } from "./intro-scene";
+import { CAMERA_Z, ROCK_Z, TILE_Z } from "./intro-scene";
+import { SHOTS } from "@/components/sections/design-shots/shots-spec";
+import type {
+  ConveyorArc,
+  GlassAnim,
+  RockEntry,
+  RockLayout,
+  TileEntry,
+  TileLayout,
+} from "./intro-scene";
 
 // The rock planes render at ROCK_Z (behind the glass), so they project slightly
 // toward screen centre vs the z=0 mapping below. Scale their world coords by this
 // to cancel it — they land flush to the viewport edges, matching the DOM rocks.
 const ROCK_DEPTH = (CAMERA_Z - ROCK_Z) / CAMERA_Z;
+// Same projection compensation for the tile planes (drawn at TILE_Z).
+const TILE_DEPTH = (CAMERA_Z - TILE_Z) / CAMERA_Z;
+
+// introV2 design frame is 1920×1080; the glass "ascnd" glyph spans this many px
+// in it, and its centre sits this far below the frame centre. The shot tiles are
+// authored relative to the glass, so we anchor them to the LIVE glass: each
+// scatter offset/size scales by (runtime glass width / DESIGN_GLASS_W), which
+// makes the constellation track the letters at any viewport — dissolving the
+// 1920-vs-1512 mismatch (it never reads design px as viewport px).
+const DESIGN_GLASS_W = 1654;
+const DESIGN_GLASS_DY = -24;
+
+// Quadratic bezier on one axis — the tiles ride a curved path (scatter → control
+// → necklace) so they bow toward the wordmark/clasp before draping into the arc.
+const quad = (a: number, c: number, b: number, t: number) => {
+  const u = 1 - t;
+  return u * u * a + 2 * u * t * c + t * t * b;
+};
+// How hard each path is pulled toward the docking wordmark (0 = straight line).
+const TILE_GATHER = 0.42;
+// Seconds for the tiles to drape scatter → arc. Decoupled from the glass dock
+// (the shots have no DOM crossfade to sync to), so it can breathe — the glass
+// can land and fade while the tiles are still settling into the necklace.
+const TILE_FLIGHT = 1.5;
 
 const IntroScene = dynamic(() => import("./intro-scene"), { ssr: false });
 
@@ -41,11 +73,23 @@ const WELCOME_NUDGE_X = -4.91;
 // own widths (≥1 guarantees it's fully past the viewport edge), then settles to 0.
 const ROCK_SLIDE_FACTOR = 1.15;
 
+/** A tile's world-space pose at one end of its journey (center + edge length). */
+type TilePose = { x: number; y: number; scale: number };
+
 type Plan = {
   rocks: RockLayout[];
   glassSize: number;
   welcome: { x: number; y: number };
   navbar: { x: number; y: number; scale: number };
+  /** Static tile config (image + rounding + slot), index-matched to scatter/necklace. */
+  tiles: TileLayout[];
+  /** Where each tile blooms in behind the glass (Figma scatter, glass-anchored).
+   *  `null` for the hidden return tile, which never flies in. */
+  tileScatter: (TilePose | null)[];
+  /** Where each tile lands on the hero necklace (its resting arc slot, world). */
+  tileNecklace: TilePose[];
+  /** The full arc slot path (world) the steady-state conveyor rides. */
+  arc: ConveyorArc;
 };
 
 /**
@@ -72,6 +116,13 @@ export default function Intro() {
   const [dismissed, setDismissed] = useState(false);
   const play = shouldPlay && !dismissed;
 
+  // Intro phase: glass + rocks mounted in the scene, frameloop "always". Flipped
+  // off at the end so the canvas PERSISTS as the cheap steady-state tile scene.
+  const [introActive, setIntroActive] = useState(true);
+  // Run the steady-state conveyor — started the moment the fly-in lands the tiles
+  // on the arc (before the glass finishes fading), so they never freeze.
+  const [conveyor, setConveyor] = useState(false);
+
   const [plan, setPlan] = useState<Plan | null>(null);
   // The WebGL scene is lazy-loaded and its textures/font/HDR load under Suspense.
   // Gate the timeline on the scene actually being painted (onReady) so the
@@ -86,8 +137,10 @@ export default function Intro() {
     rotX: 0,
     rotY: 0,
     reveal: 0,
+    opacity: 1,
   });
   const rockEntries = useRef<RockEntry[]>([]);
+  const tileEntries = useRef<TileEntry[]>([]);
 
   // useLenis() can return a fresh ref across renders; mirror it into a ref so the
   // master-timeline effect can depend only on [play, plan] and never churn
@@ -174,6 +227,7 @@ export default function Intro() {
     anim.current.y = welcome.y;
     anim.current.scale = 1;
     anim.current.reveal = 0;
+    anim.current.opacity = 1;
 
     // Seed each rock hidden and pushed off-screen toward its OWN side (sign of
     // cx: left rock has cx<0 → starts further left; right rock cx>0 → further
@@ -184,7 +238,77 @@ export default function Intro() {
       yOffset: 0,
     }));
 
-    setPlan({ rocks, glassSize, welcome, navbar });
+    // Measure the full 8-slot arc path straight off the DOM rotors (hidden, but
+    // still laid out): this is both the conveyor path AND each tile's landing
+    // slot, so the WebGL necklace matches the DOM collage exactly. cx/cy/size are
+    // scaled by TILE_DEPTH so a plane at TILE_Z projects to the measured rect.
+    const arc: ConveyorArc = { xs: [], ys: [], sizes: [] };
+    const slotPose: TilePose[] = [];
+    for (let slot = 0; slot < 8; slot++) {
+      const rotor = document.querySelector<HTMLElement>(
+        `[data-shot-rotor][data-arc="${slot}"]`,
+      );
+      if (!rotor) continue;
+      const r = rotor.getBoundingClientRect();
+      const c = toWorld(r.left + r.width / 2, r.top + r.height / 2);
+      const pose = {
+        x: c.x * TILE_DEPTH,
+        y: c.y * TILE_DEPTH,
+        scale: r.width * wpp * TILE_DEPTH,
+      };
+      arc.xs[slot] = pose.x;
+      arc.ys[slot] = pose.y;
+      arc.sizes[slot] = pose.scale;
+      slotPose[slot] = pose;
+    }
+
+    // Tiles: each blooms in at a Figma-scatter spot anchored to the LIVE glass
+    // (offsets/sizes scaled by the runtime glass width), then flies onto its arc
+    // slot. The hidden return tile (no scatter) is seeded at its slot and only
+    // ever moves on the conveyor. Order/identity/arc come from the shared spec.
+    const glassScale = glassW / DESIGN_GLASS_W;
+    const glassScreenX = heroCx + WELCOME_NUDGE_X;
+    const glassScreenY = heroMidY - WELCOME_LIFT;
+
+    const tiles: TileLayout[] = SHOTS.map((shot) => ({
+      src: shot.src,
+      radiusRatio: shot.radius / shot.size,
+      arc: shot.arc,
+    }));
+    const tileNecklace: TilePose[] = SHOTS.map((shot) => slotPose[shot.arc]);
+    const tileScatter: (TilePose | null)[] = SHOTS.map((shot) => {
+      if (!shot.scatter) return null;
+      // DESIGN_GLASS_DY lifts the offset onto the glass centre (slightly above
+      // the frame centre in the design).
+      const sx = glassScreenX + shot.scatter.dx * glassScale;
+      const sy = glassScreenY + (shot.scatter.dy - DESIGN_GLASS_DY) * glassScale;
+      const sWorld = toWorld(sx, sy);
+      return {
+        x: sWorld.x * TILE_DEPTH,
+        y: sWorld.y * TILE_DEPTH,
+        scale: shot.scatter.size * glassScale * wpp * TILE_DEPTH,
+      };
+    });
+
+    // Seed: scatter tiles hidden + pre-shrunk for the bloom pop; the return tile
+    // parked hidden on its slot (the conveyor takes it from there).
+    tileEntries.current = SHOTS.map((_, i) => {
+      const sc = tileScatter[i];
+      if (sc) return { opacity: 0, x: sc.x, y: sc.y, scale: sc.scale * 0.86 };
+      const n = tileNecklace[i];
+      return { opacity: 0, x: n.x, y: n.y, scale: n.scale };
+    });
+
+    setPlan({
+      rocks,
+      glassSize,
+      welcome,
+      navbar,
+      tiles,
+      tileScatter,
+      tileNecklace,
+      arc,
+    });
   }, [play]);
 
   // Failsafe: if the scene never signals ready (slow GPU, load hiccup), start
@@ -211,6 +335,7 @@ export default function Intro() {
 
     const animObj = anim.current; // stable target for cleanup (ref-safe)
     const rockObjs = rockEntries.current;
+    const tileObjs = tileEntries.current;
 
     // The scene is painted and the entrance is about to play — tell the
     // background clouds to settle in alongside the rock drift (they listen for
@@ -227,7 +352,9 @@ export default function Intro() {
     const tl = gsap.timeline({
       onComplete: () => {
         lenisRef.current?.start();
-        setDismissed(true);
+        // Don't unmount — drop the glass/rocks (and switch the canvas to the
+        // cheap demand loop) so it persists as the steady-state tile scene.
+        setIntroActive(false);
       },
     });
 
@@ -266,6 +393,22 @@ export default function Intro() {
       0,
     );
 
+    // ①b tiles soft-bloom in place behind the glass (fade + scale pop to their
+    //    scatter size), refracting through it. Position stays at scatter; only
+    //    opacity + scale move here. They hold through the dock-start, then fly.
+    //    The hidden return tile has no scatter and is skipped (it only conveys).
+    let bloomIdx = 0;
+    plan.tiles.forEach((_, i) => {
+      const sc = plan.tileScatter[i];
+      if (!sc) return;
+      tl.to(
+        tileObjs[i],
+        { opacity: 1, scale: sc.scale, duration: 0.7, ease: "expo.out" },
+        0.1 + bloomIdx * 0.06,
+      );
+      bloomIdx++;
+    });
+
     // ② dock — shrink + travel onto the navbar slot (after a hold)
     tl.to(
       anim.current,
@@ -279,6 +422,44 @@ export default function Intro() {
       dockStart,
     );
 
+    // ②b tiles fly scatter → necklace along a curved path that bows toward the
+    //    docking wordmark (the clasp), then drape into the arc slot — gathering
+    //    with the glass, then settling. This rides its own slower duration
+    //    (TILE_FLIGHT), so the drape reads gracefully rather than racing the
+    //    dock; the conveyor then picks up the instant they land (below).
+    const tileFlight = TILE_FLIGHT;
+    plan.tiles.forEach((_, i) => {
+      const sc = plan.tileScatter[i];
+      if (!sc) return; // return tile never flies — it only conveys
+      const n = plan.tileNecklace[i];
+      // Control point: the straight midpoint pulled toward the wordmark slot.
+      const cx = (sc.x + n.x) / 2 + (plan.navbar.x - (sc.x + n.x) / 2) * TILE_GATHER;
+      const cy = (sc.y + n.y) / 2 + (plan.navbar.y - (sc.y + n.y) / 2) * TILE_GATHER;
+      const d = { t: 0 };
+      tl.to(
+        d,
+        {
+          t: 1,
+          duration: tileFlight,
+          ease: "power2.inOut",
+          onUpdate: () => {
+            const e = tileObjs[i];
+            if (!e) return;
+            e.x = quad(sc.x, cx, n.x, d.t);
+            e.y = quad(sc.y, cy, n.y, d.t);
+            e.scale = sc.scale + (n.scale - sc.scale) * d.t;
+          },
+        },
+        dockStart,
+      );
+    });
+
+    // Start the steady conveyor the instant the tiles land on the arc, so they
+    // flow straight from the fly-in into the rotation without a frozen beat. The
+    // fly-in ends exactly on the slot points, which is where the conveyor's p=0
+    // sits — seamless.
+    tl.call(() => setConveyor(true), undefined, dockStart + tileFlight);
+
     // ③ cascade the hero in as the glass is nearly landed. This also fires the
     //    DOM-rock crossfade (rock-reveal.tsx), an opacity-only ~0.35s fade — set
     //    early enough that the DOM rocks are SOLID by dockEnd, before the canvas
@@ -287,9 +468,17 @@ export default function Intro() {
     tl.call(reveal, undefined, dockEnd - 0.35);
 
     // …then fade the glass + WebGL rocks out onto the now-solid DOM rocks and the
-    // real DOM wordmark, once the glass has docked.
+    // real DOM wordmark, once the glass has docked. The CANVAS stays opaque (it
+    // now hosts the persistent tiles) — so we fade the glass MATERIAL and the
+    // rock planes individually rather than the whole wrapper. The tiles, sitting
+    // on the arc, stay fully visible through this.
     tl.to(
-      wrapperRef.current,
+      anim.current,
+      { opacity: 0, duration: 0.4, ease: "power2.out" },
+      dockEnd,
+    );
+    tl.to(
+      rockObjs,
       { opacity: 0, duration: 0.4, ease: "power2.out" },
       dockEnd,
     );
@@ -320,6 +509,7 @@ export default function Intro() {
         tl.kill();
         gsap.killTweensOf(animObj);
         gsap.killTweensOf(rockObjs);
+        gsap.killTweensOf(tileObjs);
         if (wordmark) gsap.killTweensOf(wordmark);
         lenisRef.current?.start();
       };
@@ -334,6 +524,7 @@ export default function Intro() {
       window.clearTimeout(failsafe);
       gsap.killTweensOf(animObj);
       gsap.killTweensOf(rockObjs);
+      gsap.killTweensOf(tileObjs);
       if (wordmark) gsap.killTweensOf(wordmark);
       lenisRef.current?.start();
     };
@@ -351,6 +542,11 @@ export default function Intro() {
         anim={anim}
         rocks={plan.rocks}
         rockEntry={rockEntries}
+        tiles={plan.tiles}
+        tileEntry={tileEntries}
+        arc={plan.arc}
+        introActive={introActive}
+        conveyor={conveyor}
         glassSize={plan.glassSize}
         restY={plan.welcome.y}
         onReady={() => setReady(true)}

@@ -2,8 +2,8 @@
 
 import { useEffect, useLayoutEffect } from "react";
 import gsap from "gsap";
-import { SHOT_ARC_SLOTS, SHOT_BASE } from "./design-shots";
-import { INTRO_REVEAL_EVENT, introWillPlay } from "@/components/sections/intro/intro-state";
+import { SHOT_ARC_SLOTS, SHOT_BASE } from "./shots-spec";
+import { INTRO_START_EVENT, introWillPlay } from "@/components/sections/intro/intro-state";
 
 // useLayoutEffect on the client (parks/plays before paint, no flash); falls back
 // to useEffect during SSR to avoid React's server warning. Mirrors rock-reveal.tsx.
@@ -165,21 +165,34 @@ export default function DesignShotsReveal() {
       );
     };
 
-    // While the welcome intro plays, the collage stays parked until the glass
-    // docks (INTRO_REVEAL_EVENT) so the welcome screen is just sky + rocks + glass.
-    let stopWaiting: (() => void) | undefined;
+    // When the welcome intro plays, the persistent WebGL scene owns the tiles for
+    // the whole session (scatter → fly onto the arc → conveyor), so the DOM
+    // collage stays hidden (armed `opacity:0`). We only confirm the scene really
+    // starts (INTRO_START_EVENT); if it never does — the canvas failed to mount —
+    // we fall back to the DOM bloom so the arc is never left blank.
     if (introWillPlay()) {
-      const onReveal = () => begin();
-      window.addEventListener(INTRO_REVEAL_EVENT, onReveal, { once: true });
-      stopWaiting = () =>
-        window.removeEventListener(INTRO_REVEAL_EVENT, onReveal);
-    } else {
-      begin();
+      let started = false;
+      const onStart = () => {
+        started = true;
+      };
+      window.addEventListener(INTRO_START_EVENT, onStart, { once: true });
+      const failsafe = window.setTimeout(() => {
+        if (!started) begin();
+      }, 5000);
+      return () => {
+        cancelled = true;
+        window.removeEventListener(INTRO_START_EVENT, onStart);
+        window.clearTimeout(failsafe);
+        tweens.forEach((t) => t.kill());
+      };
     }
+
+    // Otherwise (returning/mid-page/reduced-motion/no-WebGL) bloom the DOM tiles
+    // in and run the DOM conveyor as before.
+    begin();
 
     return () => {
       cancelled = true;
-      stopWaiting?.();
       tweens.forEach((t) => t.kill());
     };
   }, []);
