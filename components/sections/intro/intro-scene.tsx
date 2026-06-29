@@ -643,12 +643,12 @@ function Glass({
           font={font}
           size={glassSize}
           height={0}
-          curveSegments={6}
+          curveSegments={24}
           bevelEnabled
           bevelThickness={0.02}
           bevelSize={0.04}
           bevelOffset={0}
-          bevelSegments={12}
+          bevelSegments={16}
           letterSpacing={-0.12}
         >
           ascnd
