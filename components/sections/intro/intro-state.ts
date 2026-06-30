@@ -24,6 +24,16 @@ export const INTRO_REVEAL_EVENT = "ascnd:intro-reveal";
  */
 export const INTRO_START_EVENT = "ascnd:intro-start";
 
+/**
+ * Fired by <IntroLoader> when its welcome animation has fully played and faded
+ * out — the cue for <Intro> to start its master timeline. This INVERTS the old
+ * order: the loader now LEADS (plays its ~4.5s show while the WebGL scene warms
+ * up silently underneath), then releases the intro, instead of the intro
+ * starting on scene-paint and the loader dismissing behind it. <Intro> gates its
+ * timeline on this (with a failsafe), so the glass never rises under the cover.
+ */
+export const INTRO_GO_EVENT = "ascnd:intro-go";
+
 const REDUCE_MOTION = "(prefers-reduced-motion: reduce)";
 
 /**

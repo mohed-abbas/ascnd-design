@@ -11,6 +11,7 @@ import {
 } from "react";
 import gsap from "gsap";
 import {
+  INTRO_GO_EVENT,
   INTRO_REVEAL_EVENT,
   INTRO_START_EVENT,
   introWillPlay,
@@ -135,6 +136,10 @@ export default function Intro() {
   // entrance plays from the top instead of mid-animation (the "pop" after the
   // brief sky-only flash).
   const [ready, setReady] = useState(false);
+  // The loader leads: it plays its welcome over the warming scene, then fires
+  // INTRO_GO when it's faded out. We hold the master timeline until then so the
+  // glass never rises under the cover. Failsafe-released if the cue never lands.
+  const [released, setReleased] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const anim = useRef<GlassAnim>({
     x: 0,
@@ -336,6 +341,20 @@ export default function Intro() {
     return () => window.clearTimeout(t);
   }, [play]);
 
+  // Wait for the loader's INTRO_GO before running the timeline. Failsafe: if the
+  // loader never signals (e.g. it didn't mount), release after its full budget
+  // so the welcome can't deadlock the locked, hidden intro.
+  useEffect(() => {
+    if (!play) return;
+    const release = () => setReleased(true);
+    window.addEventListener(INTRO_GO_EVENT, release, { once: true });
+    const t = window.setTimeout(release, 7000);
+    return () => {
+      window.removeEventListener(INTRO_GO_EVENT, release);
+      window.clearTimeout(t);
+    };
+  }, [play]);
+
   // Run the master timeline once the plan is built AND the scene has painted.
   // Scroll locks as soon as we commit to playing (even during the load), but the
   // timeline itself is only built on `ready` so the entrance plays from frame 0.
@@ -343,8 +362,9 @@ export default function Intro() {
     if (!play || !plan) return;
 
     lenisRef.current?.stop(); // lock now — keep it locked through the load
-    if (!ready) {
-      // Waiting on the scene; stay locked, release if we unmount before it paints.
+    if (!ready || !released) {
+      // Waiting on the scene to paint AND the loader to hand off; stay locked,
+      // release the lock if we unmount before both land.
       return () => {
         lenisRef.current?.start();
       };
@@ -545,7 +565,7 @@ export default function Intro() {
       if (wordmark) gsap.killTweensOf(wordmark);
       lenisRef.current?.start();
     };
-  }, [play, plan, ready]);
+  }, [play, plan, ready, released]);
 
   if (!play || !plan) return null;
 

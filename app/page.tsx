@@ -1,5 +1,5 @@
 import Hero from "@/components/sections/hero/hero";
-// import IntroLoader from "@/components/sections/intro/intro-loader"; // temporarily disabled
+import IntroLoader from "@/components/sections/intro/intro-loader";
 import Tagline from "@/components/sections/tagline/tagline";
 
 export default function Home() {
@@ -7,9 +7,8 @@ export default function Home() {
     <>
       {/* Pure-DOM cover over the sky while the WebGL intro warms up. Rendered
           first so its markup ships at the top of the body and paints with the
-          first CSS, before any JS chunk loads. Temporarily disabled to test the
-          intro without the loader — re-enable by un-commenting. */}
-      {/* <IntroLoader /> */}
+          first CSS, before any JS chunk loads. */}
+      <IntroLoader />
       <Hero />
       <Tagline />
       {/* Empty full-viewport section over the shared sky — placeholder for the

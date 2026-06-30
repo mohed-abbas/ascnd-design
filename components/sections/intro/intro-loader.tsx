@@ -1,9 +1,13 @@
 "use client";
 
+import type { CSSProperties } from "react";
 import { useEffect, useState } from "react";
+import Logo from "@/components/ui/logo";
+// Wordmark temporarily disabled in the loader column (see commented block below).
+// import Wordmark from "@/components/ui/wordmark";
 import {
+  INTRO_GO_EVENT,
   INTRO_REVEAL_EVENT,
-  INTRO_START_EVENT,
   introWillPlay,
 } from "./intro-state";
 
@@ -12,28 +16,41 @@ import {
  * heavy WebGL intro warms up (the Three.js/drei chunk downloads + parses, the
  * rock/shot textures load, the transmission shader compiles). It deliberately
  * uses NO WebGL: the real volumetric clouds run on the same Three stack we're
- * waiting on, so a WebGL loader would take just as long to appear and couldn't
- * cover the gap. Instead a few baked cloud-puff sprites drift over the existing
- * DOM sky with the wordmark breathing in the middle, so the wait reads as a calm
- * cloudscape rather than a blank blue hold.
+ * waiting on, so a WebGL loader would take just as long to appear.
+ *
+ * Layout follows the Figma "Hero base" loader (node 263:198): a vertically-
+ * centred column — the ascend chevron mark, the "ascnd" wordmark, then a
+ * hairline progress bar — over the existing DOM sky. It carries NO background of
+ * its own: the global <Background/> (#62abff + grain) shows through, so there's
+ * no double-grain and the handoff to the live scene is on the exact same sky.
+ *
+ * THE LOADER LEADS (see intro-state.ts INTRO_GO_EVENT). It plays a fixed ~3s
+ * choreography, then releases <Intro>:
+ *   t≈0.2s  logo masked-reveal (rises from behind its own clip line)
+ *   0.3→2.4s hairline fills 0%→100% (determinate)
+ *   2.4s    begin the 0.6s opacity fade-out of the whole cover
+ *   3.0s    (fade done) dispatch INTRO_GO → the intro timeline starts on clean
+ *           sky; the scene has been warming under the cover and is ready by ~2.5s
+ * The entrance/fill are CSS so they paint before hydration (no JS chunk to wait
+ * on); JS only schedules the finale + fires the handoff.
  *
  * It is rendered on the server too (markup ships in the initial HTML) and is
- * visible by default, so it paints with the first CSS — before hydration, before
- * any JS chunk. The dismiss decision runs after hydration:
- *   • intro WILL play  → hold until the scene actually paints its first frame
- *     (INTRO_START_EVENT, fired by <Intro> when the master timeline starts), then
- *     crossfade out as the real clouds settle in and the glass rises. Both are
- *     empty sky at that instant, so the handoff is seamless. A failsafe drops it
- *     anyway if the scene ever stalls.
+ * visible by default. The play decision runs after hydration:
+ *   • intro WILL play  → run the welcome above, then hand off via INTRO_GO.
  *   • intro WON'T play (returning/mid-page/no-WebGL) → drop it next frame; the
  *     DOM hero reveals on its own with nothing heavy to wait on.
  *
  * Reduced motion hides it entirely via CSS (`display:none`), so those visitors
- * never see the drift — and introWillPlay() is false for them regardless.
+ * never see it — and introWillPlay() is false for them regardless.
  */
+
+// The fill lands at 0.3s delay + 2.1s = 2.4s; begin the fade there. The 0.6s
+// opacity transition (below) then completes the ~3s budget.
+const FADE_AT_MS = 2400;
+
 export default function IntroLoader() {
-  // `dismissing` fades the cover out; `done` unmounts it once the fade settles
-  // (so the drifting sprites stop painting). Both start false → visible on load.
+  // `dismissing` fades the cover out; `done` unmounts it once the fade settles.
+  // Both start false → visible on load.
   const [dismissing, setDismissing] = useState(false);
   const [done, setDone] = useState(false);
 
@@ -47,74 +64,59 @@ export default function IntroLoader() {
       return () => cancelAnimationFrame(raf);
     }
 
-    // Hold until the scene paints (INTRO_START), then crossfade out alongside the
-    // real clouds. Also listen for INTRO_REVEAL: the normal path fires START
-    // first, but <Intro>'s bail path (no hero/slot to place the glass) only ever
-    // fires REVEAL — so whichever lands first drops the cover.
-    window.addEventListener(INTRO_START_EVENT, dismiss, { once: true });
+    // Intro will play: run the welcome, then begin the fade once the fill lands.
+    const t = window.setTimeout(dismiss, FADE_AT_MS);
+    // Bail safety: if <Intro> can't place the glass it fires REVEAL immediately —
+    // drop the cover now rather than holding the full budget over a dead welcome.
     window.addEventListener(INTRO_REVEAL_EVENT, dismiss, { once: true });
-    // Failsafe: never trap the visitor behind the loader if the scene stalls.
-    const t = window.setTimeout(dismiss, 6000);
     return () => {
-      window.removeEventListener(INTRO_START_EVENT, dismiss);
-      window.removeEventListener(INTRO_REVEAL_EVENT, dismiss);
       window.clearTimeout(t);
+      window.removeEventListener(INTRO_REVEAL_EVENT, dismiss);
     };
   }, []);
 
   if (done) return null;
 
-  // Three baked puffs at hand-placed spots, each drifting at its own pace via CSS
-  // vars (globals.css turns these into the keyframe ranges). Sizes/opacities are
-  // soft so the cloudscape reads as a backdrop, not foreground objects.
-  const clouds = [
-    { top: "18%", left: "-12%", size: 460, op: 0.85, dur: "26s", to: "26vw", delay: "0s" },
-    { top: "54%", left: "58%", size: 540, op: 0.7, dur: "34s", to: "-22vw", delay: "-6s" },
-    { top: "72%", left: "8%", size: 360, op: 0.6, dur: "30s", to: "30vw", delay: "-14s" },
-  ];
-
   return (
     <div
       data-intro-loader
       aria-hidden
-      className={`pointer-events-none fixed inset-0 z-[80] overflow-hidden transition-opacity duration-[600ms] ease-out ${
+      className={`pointer-events-none fixed inset-0 z-[80] grid place-items-center overflow-hidden transition-opacity duration-[600ms] ease-out ${
         dismissing ? "opacity-0" : "opacity-100"
       }`}
       onTransitionEnd={() => {
-        if (dismissing) setDone(true);
+        if (!dismissing) return;
+        // Faded out — hand off. <Intro> starts its timeline on the now-clean sky;
+        // the scene warmed up under the cover, so there's no stall.
+        window.dispatchEvent(new Event(INTRO_GO_EVENT));
+        setDone(true);
       }}
     >
-      {clouds.map((c, i) => (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          key={i}
-          src="/textures/cloud-puff.png"
-          alt=""
-          className="loader-cloud"
-          style={
-            {
-              top: c.top,
-              left: c.left,
-              width: c.size,
-              "--op": c.op,
-              "--dur": c.dur,
-              "--to": c.to,
-              "--delay": c.delay,
-            } as React.CSSProperties
-          }
-        />
-      ))}
-
-      {/* Wordmark sits a touch above centre, near where the glass reveals, so the
-          loader → glass handoff lands in the same spot. */}
-      <div className="absolute inset-0 grid place-items-center">
-        <div className="flex -translate-y-[6%] flex-col items-center gap-6">
-          <span className="font-product loader-wordmark text-[clamp(56px,9vw,128px)] font-medium leading-none tracking-[-0.04em] text-white">
-            ascnd
-          </span>
-          <div className="loader-progress">
-            <span />
+      {/* The Figma "LogoContent" column (node 263:220) — chevron mark, wordmark,
+          hairline progress, stacked with a 50px gap and centre-aligned. */}
+      <div className="flex flex-col items-center gap-[50px]">
+        {/* Logo — masked reveal: rises from behind its own clip line. */}
+        <div className="loader-reveal">
+          <div
+            className="loader-rise"
+            style={{ "--rise-delay": "0.2s" } as CSSProperties}
+          >
+            <Logo className="block w-[204px] text-white" />
           </div>
+        </div>
+        {/* Wordmark — masked reveal, staggered a beat behind the logo. */}
+        {/* <div className="loader-reveal">
+          <div
+            className="loader-rise"
+            style={{ "--rise-delay": "0.45s" } as CSSProperties}
+          >
+            <Wordmark className="block text-[38.5px]" />
+          </div>
+        </div> */}
+        {/* Determinate hairline progress (node 263:227): fills 0%→100% across the
+            welcome, then the whole cover fades. */}
+        <div className="loader-track">
+          <span className="loader-fill" />
         </div>
       </div>
     </div>
