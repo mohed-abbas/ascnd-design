@@ -15,15 +15,25 @@ const REDUCE_MOTION = "(prefers-reduced-motion: reduce)";
 
 // Focus-pull timing.
 const DURATION = 1.5;
-const EASE = "power2.out";
+const EASE = "power2.out"; // blur clears fast, then settles
+// The headline rests under-scaled and grows to 1 as it sharpens, so the
+// statement reads as settling forward into focus (drives --tagline-scale,
+// applied as the native `scale` in globals.css). The scale uses a back-loaded
+// ease (vs the blur's front-loaded power2.out) ON PURPOSE: power2.out would do
+// most of the growth in the first ~0.4s while the text is still blurred, hiding
+// it. power1.in keeps the headline growing as it comes into focus, so the
+// scale-up is actually perceptible.
+const START_SCALE = 0.85;
+const SCALE_EASE = "power1.in";
 
 /**
  * Tagline focus-pull. Renders nothing. The headline rests soft-focused via CSS
  * (`blur-[0.43vw]` in tagline.tsx — that blurred state is the default, so it's
- * what SSR and no-JS show). On scroll, once the section's top crosses the 70%
- * line of the viewport, we tween the blur out to a crisp 0 — a camera pulling
- * focus as the statement comes into view. Scrolling back up reverses it, so the
- * line softens again when it leaves the frame.
+ * what SSR and no-JS show) and slightly under-scaled. On scroll, once the
+ * section's top crosses the 70% line of the viewport, we tween the blur out to a
+ * crisp 0 AND scale the headline up to 1 in lock-step — a camera pulling focus
+ * as the statement settles forward into view. Scrolling back up reverses it, so
+ * the line softens and eases back when it leaves the frame.
  *
  * The pull is driven by explicit ScrollTrigger callbacks (onEnter/onLeaveBack)
  * rather than `toggleActions`. This is deliberate: toggleActions are (re)applied
@@ -48,16 +58,26 @@ export default function TaglineReveal() {
     if (!line || !section) return;
 
     if (window.matchMedia(REDUCE_MOTION).matches) {
-      gsap.set(line, { filter: "blur(0px)" });
+      gsap.set(line, { filter: "blur(0px)", "--tagline-scale": 1 });
       return;
     }
 
-    const tween = gsap.to(line, {
-      filter: "blur(0px)",
-      duration: DURATION,
-      ease: EASE,
-      paused: true,
-    });
+    // Resting state for the scale half of the pull (the blur half rests in CSS).
+    gsap.set(line, { "--tagline-scale": START_SCALE });
+
+    // A paused timeline runs both channels together but with their OWN eases:
+    // the blur clears front-loaded (power2.out) while the scale grows back-loaded
+    // (power1.in), so the headline is still visibly swelling as it sharpens. The
+    // blur tween still captures its start lazily on first play, keeping the
+    // `0.43vw` resting blur viewport-responsive.
+    const tween = gsap
+      .timeline({ paused: true })
+      .to(line, { filter: "blur(0px)", duration: DURATION, ease: EASE }, 0)
+      .to(
+        line,
+        { "--tagline-scale": 1, duration: DURATION, ease: SCALE_EASE },
+        0,
+      );
 
     const st = ScrollTrigger.create({
       trigger: section,

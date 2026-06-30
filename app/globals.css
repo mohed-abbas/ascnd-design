@@ -166,6 +166,16 @@ body {
   transform: scale(0.86);
 }
 
+/* Tagline focus-pull also scales the headline up as it sharpens: tagline-reveal.tsx
+   animates --tagline-scale (0.92 → 1) in lock-step with the blur. The native
+   `scale` property is used (not a transform) so it composes with the Tailwind
+   translate-centering on [data-tagline-line] and stays viewport-responsive —
+   no frozen transform matrix to drift the centring on resize. Default 1 so
+   SSR / no-JS render the headline at full size. */
+[data-tagline-line] {
+  scale: var(--tagline-scale, 1);
+}
+
 /* Honour reduced-motion: stay armed (so the class can still gate JS), but show
    everything in its resting state with no transform. The orchestrator also
    bails out, so nothing animates. */
