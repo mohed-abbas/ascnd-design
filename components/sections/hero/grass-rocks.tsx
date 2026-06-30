@@ -44,6 +44,12 @@ export default function GrassRocks() {
               // Next's optimizer — it was re-encoding them at q=75 and capping
               // the width, which softened the reveal on HiDPI/tall viewports.
               unoptimized
+              // Above the fold and same dimensions as the bare <Rock> beneath
+              // it (which is also priority): the browser detects this overlay as
+              // the LCP element, so eager-load + preload it to clear the warning
+              // and avoid a late paint of the hero cliff.
+              priority
+              sizes={`${width}px`}
               className="rock-base-fade h-full w-auto object-bottom"
             />
           </div>
