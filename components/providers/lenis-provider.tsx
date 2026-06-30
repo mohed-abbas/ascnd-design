@@ -40,11 +40,16 @@ export default function LenisProvider({
 }) {
   const lenisRef = useRef<LenisRef>(null);
 
-  // Stable options: an inline `{ autoRaf: false }` literal changes identity on
-  // every render, which makes ReactLenis tear down and recreate the Lenis
-  // instance. That orphans the ticker's raf onto a dead instance while the live
-  // one is never driven — so nothing scrolls. Memoising keeps one instance.
-  const options = useMemo(() => ({ autoRaf: false }), []);
+  // Stable options: an inline literal changes identity on every render, which
+  // makes ReactLenis tear down and recreate the Lenis instance. That orphans the
+  // ticker's raf onto a dead instance while the live one is never driven — so
+  // nothing scrolls. Memoising keeps one instance.
+  //
+  // `autoRaf: false` hands the rAF to GSAP's ticker (see effect below).
+  // `duration: 1.8` lengthens the scroll-smoothing time constant (Lenis default
+  // is 1.2) for a heavier, more gliding feel — paired with Lenis' default
+  // easeOutExpo curve, which decelerates long and soft at this duration.
+  const options = useMemo(() => ({ autoRaf: false, duration: 1.8 }), []);
 
   useEffect(() => {
     gsap.registerPlugin(ScrollTrigger);

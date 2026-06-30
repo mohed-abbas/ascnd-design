@@ -14,7 +14,7 @@ const useIsomorphicLayoutEffect =
 const REDUCE_MOTION = "(prefers-reduced-motion: reduce)";
 
 // Focus-pull timing.
-const DURATION = 1.1;
+const DURATION = 1.5;
 const EASE = "power2.out";
 
 /**
