@@ -101,7 +101,7 @@ export default function CursorTrailCanvas() {
     scene.add(displayMesh);
 
     // Two 1/4-resolution half-float render targets — the ping-pong buffers.
-    const RT_SCALE = 0.25;
+    const RT_SCALE = 0.5;
     function createRenderTarget() {
       return new THREE.WebGLRenderTarget(
         sizes.width * RT_SCALE,

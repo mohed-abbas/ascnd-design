@@ -103,8 +103,8 @@ vec3 curlNoise( vec3 p ){
 void main() {
   vec2 uv = gl_FragCoord.xy / uResolution;
 
-  vec2 uv2 = uv + curlNoise(vec3(uv * 4. + uTime * 0.1, uTime * 0.1)).xy * uDt * 0.3;
-  uv += curlNoise(vec3(uv * 2. + uTime * 0.1, uTime * 0.1)).xy * uDt * 0.15;
+  vec2 uv2 = uv + curlNoise(vec3(uv * 4. + uTime * 0.1, uTime * 0.1)).xy * uDt * 0.15;
+  uv += curlNoise(vec3(uv * 2. + uTime * 0.1, uTime * 0.1)).xy * uDt * 0.08;
 
   vec3 mapColor = texture(uMap, uv).rgb;
   vec3 mapColor2 = texture(uMap, uv2).rgb;
@@ -118,16 +118,16 @@ void main() {
   float d = distance(uv, pointer);
 
   vec3 color = mix(mapColor, mapColor2, 0.5);
-  color *= 1. - uDt * 2.;
+  color *= 1. - uDt * 1.2;
   float speed = clamp(uSpeed * 2.,0.075,0.25);
   float t = smoothstep(speed, 0., d);
   float t2 = smoothstep(speed, 0., d);
   float t3 = smoothstep(speed, 0., d);
-  t2 = pow(t2,10.);
+  t2 = pow(t2,6.);
   t3 = pow(t3,4.);
   float scale = speed * 5.;
   t *= scale;
-  t2 *= scale;
+  t2 *= scale * 0.6;
   t3 *= scale;
 
   // BRAND PALETTE — retuned from the source purple/teal/white to an on-brand
@@ -137,7 +137,7 @@ void main() {
   //   hot core   → white
   color = mix(color, vec3(0.25, 0.45, 1.0), t);
   color = mix(color, vec3(0.55, 0.85, 1.0), t3);
-  color = mix(color, vec3(1.0), t2);
+  color = mix(color, vec3(0.85, 0.92, 1.0), t2);
 
   color = clamp(color, 0.0, 1.0);
 
