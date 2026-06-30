@@ -4,6 +4,7 @@ import localFont from "next/font/local";
 import "./globals.css";
 import Background from "@/components/background/background";
 import CloudLayer from "@/components/background/cloud-layer";
+import CursorTrail from "@/components/cursor/cursor-trail";
 import LenisProvider from "@/components/providers/lenis-provider";
 
 const geistMono = Geist_Mono({
@@ -89,6 +90,10 @@ export default function RootLayout({
               ancestor would break their `position: fixed`. */}
           <Background />
           <CloudLayer />
+          {/* Global cursor fluid-trail: a fixed additive-glow overlay at z-[90],
+              above the sky/content but below the foreground cliffs + navbar.
+              Root-mounted so no filtered ancestor breaks its fixed canvas. */}
+          <CursorTrail />
           {children}
         </LenisProvider>
       </body>
