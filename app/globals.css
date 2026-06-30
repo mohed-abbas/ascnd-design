@@ -97,8 +97,8 @@ body {
    inner images, so the two masks compose (disc ∩ base-fade) without conflict.
    Tune the band via the two custom properties. */
 .rock-base-fade {
-  --rock-fade-bottom: 3%; /* fully transparent from the base up to here */
-  --rock-fade-top: 15%; /* fully opaque from here up */
+  --rock-fade-bottom: 5%; /* fully transparent from the base up to here */
+  --rock-fade-top: 20%; /* fully opaque from here up */
   -webkit-mask-image: linear-gradient(
     to top,
     transparent var(--rock-fade-bottom),
