@@ -16,9 +16,6 @@ export const CARD_COPY = {
 /** Placeholder shown in every request-input row (Card2, Figma 140:13791). */
 export const REQUEST_PLACEHOLDER = "request anything...";
 
-/** The category tag on each request-input row, top→bottom. */
-export const REQUEST_TAGS = ["UI/UX", "Design", "Wireframe", "UI/UX", "UI/UX"] as const;
-
 export type ShotTile = {
   src: string;
   alt: string;
