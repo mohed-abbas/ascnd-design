@@ -176,6 +176,13 @@ body {
 [data-trise] {
   filter: blur(calc((1 - var(--p, 1)) * 0.43vw));
   will-change: filter;
+  /* The tight leading (0.961) lets descenders (e.g. the "y" in "you") spill
+     below the line box, and the fill clone's mask is clipped to the border-box —
+     so that overflow would render unfilled. Pad the box down to enclose the
+     descenders, then cancel the space with a matching negative margin so the
+     mask covers the full glyph without changing line spacing. */
+  padding-bottom: 0.22em;
+  margin-bottom: -0.22em;
 }
 [data-tfill] {
   --top: calc(100% - var(--p, 1) * 150%);
