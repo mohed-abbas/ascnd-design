@@ -26,10 +26,10 @@ const productSans = localFont({
   variable: "--font-product-sans",
   display: "swap",
   src: [
-    { path: "./fonts/ProductSans-Light.ttf", weight: "300", style: "normal" },
-    { path: "./fonts/ProductSans-Regular.ttf", weight: "400", style: "normal" },
-    { path: "./fonts/ProductSans-Medium.ttf", weight: "500", style: "normal" },
-    { path: "./fonts/ProductSans-Bold.ttf", weight: "700", style: "normal" },
+    { path: "./fonts/ProductSans-Light.woff2", weight: "300", style: "normal" },
+    { path: "./fonts/ProductSans-Regular.woff2", weight: "400", style: "normal" },
+    { path: "./fonts/ProductSans-Medium.woff2", weight: "500", style: "normal" },
+    { path: "./fonts/ProductSans-Bold.woff2", weight: "700", style: "normal" },
   ],
 });
 
