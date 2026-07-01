@@ -184,7 +184,14 @@ export default function Intro() {
       return;
     }
 
-    const W = window.innerWidth;
+    // Content width, NOT window.innerWidth: the WebGL <canvas> is fixed/inset-0,
+    // so it spans clientWidth (viewport minus a classic scrollbar). Using
+    // innerWidth here (which includes the scrollbar) centred the scene on
+    // innerWidth/2 while it actually renders at canvasWidth/2 — shifting the whole
+    // intro left by scrollbar/2 (~8px). That left a sky gap past the right rock
+    // and made the rocks/tiles jump right at the DOM crossfade. clientWidth
+    // matches the canvas, so the scene and the DOM line up exactly.
+    const W = document.documentElement.clientWidth;
     const H = window.innerHeight;
     // Perspective camera (z=10, fov=45): the z=0 plane spans 8.284 world units
     // vertically, so 1 CSS px ≈ wpp world units. Convert DOM centres to world.
