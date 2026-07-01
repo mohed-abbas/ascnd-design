@@ -166,14 +166,23 @@ body {
   transform: scale(0.86);
 }
 
-/* Tagline focus-pull also scales the headline up as it sharpens: tagline-reveal.tsx
-   animates --tagline-scale (0.92 → 1) in lock-step with the blur. The native
-   `scale` property is used (not a transform) so it composes with the Tailwind
-   translate-centering on [data-tagline-line] and stays viewport-responsive —
-   no frozen transform matrix to drift the centring on resize. Default 1 so
-   SSR / no-JS render the headline at full size. */
-[data-tagline-line] {
-  scale: var(--tagline-scale, 1);
+/* Tagline "supersize" reveal (air.inc-style) — scrubbed per line via --p (0→1,
+   set by tagline-reveal.tsx). Defaults to 1 so SSR / no-JS / reduced-motion
+   render the finished headline. Two channels off one variable, both
+   compositor-only (filter + mask), so no reflow — the text stays in place:
+     • blur — clears from the resting 0.43vw (design value) to crisp
+     • fill — a bright [data-tfill] clone is wiped in bottom→top over the dim
+              base through a progress-driven gradient mask. */
+[data-trise] {
+  filter: blur(calc((1 - var(--p, 1)) * 0.43vw));
+  will-change: filter;
+}
+[data-tfill] {
+  --top: calc(100% - var(--p, 1) * 150%);
+  --bottom: calc(100% - var(--p, 1) * 100%);
+  -webkit-mask-image: linear-gradient(transparent var(--top), #000 var(--bottom));
+  mask-image: linear-gradient(transparent var(--top), #000 var(--bottom));
+  will-change: mask;
 }
 
 /* Honour reduced-motion: stay armed (so the class can still gate JS), but show

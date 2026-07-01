@@ -6,95 +6,76 @@ import { ScrollTrigger } from "gsap/ScrollTrigger";
 
 gsap.registerPlugin(ScrollTrigger);
 
-// useLayoutEffect on the client (wires the trigger before paint, no flash);
+// useLayoutEffect on the client (arms the start state before paint, no flash);
 // falls back to useEffect during SSR. Mirrors the other *-reveal drivers.
 const useIsomorphicLayoutEffect =
   typeof window !== "undefined" ? useLayoutEffect : useEffect;
 
-const REDUCE_MOTION = "(prefers-reduced-motion: reduce)";
-
-// Focus-pull timing.
-const DURATION = 1.5;
-const EASE = "power2.out"; // blur clears fast, then settles
-// The headline rests under-scaled and grows to 1 as it sharpens, so the
-// statement reads as settling forward into focus (drives --tagline-scale,
-// applied as the native `scale` in globals.css). The scale uses a back-loaded
-// ease (vs the blur's front-loaded power2.out) ON PURPOSE: power2.out would do
-// most of the growth in the first ~0.4s while the text is still blurred, hiding
-// it. power1.in keeps the headline growing as it comes into focus, so the
-// scale-up is actually perceptible.
-const START_SCALE = 0.85;
-const SCALE_EASE = "power1.in";
+// Per-line offset into the scrubbed timeline (in the tween's 0..1 duration
+// units): line 2 starts 0.35 "behind" line 1, so the reveal cascades.
+const STAGGER = 0.35;
 
 /**
- * Tagline focus-pull. Renders nothing. The headline rests soft-focused via CSS
- * (`blur-[0.43vw]` in tagline.tsx — that blurred state is the default, so it's
- * what SSR and no-JS show) and slightly under-scaled. On scroll, once the
- * section's top crosses the 70% line of the viewport, we tween the blur out to a
- * crisp 0 AND scale the headline up to 1 in lock-step — a camera pulling focus
- * as the statement settles forward into view. Scrolling back up reverses it, so
- * the line softens and eases back when it leaves the frame.
+ * Tagline "supersize" reveal — modelled on air.inc's Supersize Text section.
+ * Renders nothing. Each line (see tagline.tsx) is driven by a single per-line
+ * CSS var `--p` (0 → 1), animated in globals.css across two channels (the text
+ * stays in place): its resting `0.43vw` blur clears to crisp, and a full-white
+ * clone is wiped in bottom→top over the dim base via a progress-driven gradient
+ * mask.
  *
- * The pull is driven by explicit ScrollTrigger callbacks (onEnter/onLeaveBack)
- * rather than `toggleActions`. This is deliberate: toggleActions are (re)applied
- * on every load/refresh from the trigger's resolved state, so a load that lands
- * with the tagline ALREADY past the start line — a refresh parked on this
- * section, or returning mid-page — would auto-run the pull, and the headline
- * visibly un-blurred "on load". Callbacks instead fire only when the scroll
- * actually CROSSES the start/end, never retroactively on mount. We then set the
- * correct resting state once (crisp if already in view, else the CSS blur), so
- * the focus-pull is purely a scroll-into-view effect, not a load effect.
+ * The reveal is SCRUBBED: `--p` is tied directly to scroll position, so it
+ * plays as the section enters and reverses as it leaves — no fixed duration.
+ * Because `scrub` reads the true scroll position, a load parked mid-section
+ * resolves to the correct progress with no "plays on load" flash (the pitfall
+ * `toggleActions` had), so no explicit onEnter/onLeaveBack callbacks are needed.
  *
- * The tween starts paused, so GSAP captures the *current* computed filter (the
- * `0.43vw` resolved to px) as its start lazily on first play — the resting blur
- * stays viewport-responsive at load and the tween only ever animates px→px.
- * Reduced-motion users get the crisp headline immediately (no soft resting state
- * they could never scroll out of).
+ * ScrollTrigger updates are already pumped by the global Lenis instance and its
+ * rAF runs off gsap.ticker (lenis-provider.tsx) — one loop, no competing
+ * scheduler — so the scrub is Lenis-smooth for free.
+ *
+ * Resting state: `--p` defaults to 1 in CSS, so SSR / no-JS / reduced-motion
+ * render the finished headline. When motion is allowed we arm `--p` to 0 in a
+ * layout effect (before paint) and let the scrub take over. `gsap.matchMedia`
+ * handles the reduced-motion branch and reverts everything on unmount.
  */
 export default function TaglineReveal() {
   useIsomorphicLayoutEffect(() => {
-    const line = document.querySelector<HTMLElement>("[data-tagline-line]");
-    const section = line?.closest<HTMLElement>("[data-tagline]");
-    if (!line || !section) return;
+    const section = document.querySelector<HTMLElement>("[data-tagline]");
+    const lines = gsap.utils.toArray<HTMLElement>("[data-trise]");
+    if (!section || !lines.length) return;
 
-    if (window.matchMedia(REDUCE_MOTION).matches) {
-      gsap.set(line, { filter: "blur(0px)", "--tagline-scale": 1 });
-      return;
-    }
+    const mm = gsap.matchMedia();
 
-    // Resting state for the scale half of the pull (the blur half rests in CSS).
-    gsap.set(line, { "--tagline-scale": START_SCALE });
-
-    // A paused timeline runs both channels together but with their OWN eases:
-    // the blur clears front-loaded (power2.out) while the scale grows back-loaded
-    // (power1.in), so the headline is still visibly swelling as it sharpens. The
-    // blur tween still captures its start lazily on first play, keeping the
-    // `0.43vw` resting blur viewport-responsive.
-    const tween = gsap
-      .timeline({ paused: true })
-      .to(line, { filter: "blur(0px)", duration: DURATION, ease: EASE }, 0)
-      .to(
-        line,
-        { "--tagline-scale": 1, duration: DURATION, ease: SCALE_EASE },
-        0,
-      );
-
-    const st = ScrollTrigger.create({
-      trigger: section,
-      start: "top 70%", // section top reaches 70% down the viewport
-      onEnter: () => tween.play(),
-      onLeaveBack: () => tween.reverse(),
+    // Reduced motion: leave the headline in its finished resting state.
+    mm.add("(prefers-reduced-motion: reduce)", () => {
+      gsap.set(lines, { "--p": 1 });
     });
 
-    // Resting state for the scroll position we loaded at: if the section is
-    // already in view (past the start line), snap straight to crisp with no
-    // animation; otherwise leave it at the CSS resting blur until scrolled in.
-    if (st.isActive) tween.progress(1);
+    mm.add("(prefers-reduced-motion: no-preference)", () => {
+      // Arm the start before paint (default CSS --p:1 keeps SSR/no-JS full).
+      gsap.set(lines, { "--p": 0 });
 
-    return () => {
-      st.kill();
-      tween.kill();
-    };
+      const tl = gsap.timeline({
+        scrollTrigger: {
+          trigger: section,
+          start: "top 65%", // begins as the section top passes 65% of the vh
+          end: "top -10%", // finishes just after the top clears the viewport
+          scrub: 0.5, // light smoothing on top of Lenis
+          invalidateOnRefresh: true, // re-measure on resize (vw-based sizing)
+        },
+      });
+
+      lines.forEach((line, i) =>
+        tl.fromTo(
+          line,
+          { "--p": 0 },
+          { "--p": 1, ease: "none", duration: 1 },
+          i * STAGGER,
+        ),
+      );
+    });
+
+    return () => mm.revert();
   }, []);
 
   return null;

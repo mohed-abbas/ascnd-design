@@ -14,26 +14,41 @@
  * project self-hosts; the design's "Black" weight isn't in app/fonts.
  *
  * Layout: the text block is centered in the viewport (absolute center +
- * `-translate` on both axes), but the copy itself is LEFT-aligned. `w-fit`
+ * `-translate` on both axes), but the copy itself is LEFT-aligned. `w-max`
  * shrinks the box to the widest line so the centered column reads as a tight,
- * left-ragged block; the hard `<br/>` pins the intended two lines ("look like
- * you" / "raised it.") so the ragged edge doesn't reflow by viewport width.
+ * left-ragged block. The two lines ("look like you" / "raised it.") are
+ * authored as explicit block spans (not a `<br/>`) so each can be its own
+ * overflow-hidden mask for the scroll reveal (see tagline-reveal.tsx).
  */
 import TaglineReveal from "./tagline-reveal";
 
 export default function Tagline() {
   return (
     <section data-tagline className="relative min-h-dvh w-full overflow-hidden">
-      {/* Pulls the headline's resting blur to crisp once the section crosses the
-          70% viewport line on scroll; renders nothing. */}
+      {/* Scrubs the per-line "supersize" reveal (rise + blur-clear + bright
+          fill) as the section crosses the viewport; renders nothing. */}
       <TaglineReveal />
       <p
-        data-tagline-line
-        className="absolute left-1/2 top-1/2 w-max -translate-x-1/2 -translate-y-1/2 text-left font-product text-[15.27vw] font-bold leading-[0.961] tracking-[-0.03em] text-white blur-[0.43vw]"
+        data-tagline-headline
+        className="absolute left-1/2 top-1/2 w-max -translate-x-1/2 -translate-y-1/2 text-left font-product text-[15.27vw] font-bold leading-[0.961] tracking-[-0.03em]"
       >
-        look like you
-        <br />
-        raised it.
+        {/* Each line stays in place while [data-trise] sharpens (blur-clear) and
+            a bright [data-tfill] clone is wiped over the dim base. Both channels
+            are driven by one per-line --p in globals.css. */}
+        {(["look like you", "raised it."] as const).map((line) => (
+          <span key={line} data-tline className="block">
+            <span data-trise className="relative block">
+              <span className="text-white/25">{line}</span>
+              <span
+                aria-hidden
+                data-tfill
+                className="absolute inset-0 text-white"
+              >
+                {line}
+              </span>
+            </span>
+          </span>
+        ))}
       </p>
     </section>
   );
