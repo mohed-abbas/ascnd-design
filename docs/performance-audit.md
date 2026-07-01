@@ -99,6 +99,12 @@ Driven via Playwright against the dev server (Chromium reported the true 120 Hz)
 - **Calibrate the watchdog `THRESHOLD_MS`** against a genuinely weak GPU (the M4 can't trip it naturally) — CPU-throttle in DevTools or temporarily lower the constant to confirm it demotes *before* visible stutter.
 - Extend the `gpu-tier.ts` renderer regexes from real weak-device profiling.
 
+### Glass GPU-cost fix (2026-07-01)
+
+**Symptom:** during the intro the *presented* framerate fell to ~33 fps on an M4 (everything else fine). **Diagnosis:** the glass was GPU-bound — the main thread ran 120 fps (rAF steady at 8.3 ms) but the GPU couldn't finish the MTM's passes in time, so vsync dropped presented frames. **This is invisible to rAF-delta profiling and to Playwright (headless = no vsync); the DevTools FPS meter is ground truth.**
+
+**Fix** (in `tiers.ts`, all tiers): drop `backside` and lower `resolution` (512→384 high). `backside` renders a whole extra scene pass and, on the `height={0}` (zero-extrusion) Text3D, its back face is near-coincident with the front — near-zero visual contribution here. `samples` stays 8 (refraction-blur sharpness kept). The glass is only ever *moving* (reveal/dock) or briefly *static* (0.45 s HOLD, where low fps on a near-static frame is imperceptible), so the cut lands where it can't be seen. **Needs FPS-meter confirmation on the user's Chrome.** If the HOLD beat looks too flat, the fallback is phased quality — full 512/backside only during the static HOLD (fps there is irrelevant), cheap during motion.
+
 ### Both remaining levers now wired (2026-07-01)
 
 - **Intro frameloop 60-cap (R4 item 3)** — the intro `<Canvas>` moved from `frameloop="always"` to `"demand"`, driven by a new `IntroFrameCap` rig that pumps `invalidate()` off the shared ticker at `heavyEffectFpsCap()` (60 on a fast panel, uncapped on a 60 Hz high tier). Halves the MTM's paint cost through the compile window on 120 Hz. Verified on the M4: intro plays and docks correctly, 0 console errors.

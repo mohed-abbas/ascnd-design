@@ -47,14 +47,20 @@ export interface QualityConfig {
 }
 
 export const TIERS: Record<TierName, QualityConfig> = {
-  // Reproduces the shipped visuals exactly — the safe default (see note above).
   high: {
     tier: "high",
     cursorRtScale: 0.5,
     cloudDprMax: 2,
+    // The glass was GPU-bound even on an M4 at 512/8/backside — the presented
+    // rate fell to ~33fps during the intro (the main thread ran 120fps; the GPU
+    // couldn't keep up). `backside` renders a WHOLE extra scene pass, and on
+    // this height=0 (zero-extrusion) text its back face is near-coincident with
+    // the front, so it contributes almost nothing here — dropped. `resolution`
+    // 512→384 cuts FBO fragments ~44% (imperceptible on small telephoto text).
+    // `samples` stays 8 to preserve the refraction-blur sharpness.
     mtmSamples: 8,
-    mtmResolution: 512,
-    mtmBackside: true,
+    mtmResolution: 384,
+    mtmBackside: false,
     text3dCurveSegments: 32,
     text3dBevelSegments: 12,
   },
@@ -63,8 +69,8 @@ export const TIERS: Record<TierName, QualityConfig> = {
     cursorRtScale: 0.45,
     cloudDprMax: 1.5,
     mtmSamples: 6,
-    mtmResolution: 384,
-    mtmBackside: true,
+    mtmResolution: 320,
+    mtmBackside: false,
     text3dCurveSegments: 16,
     text3dBevelSegments: 8,
   },
