@@ -65,8 +65,8 @@ export default function RootLayout({
             downloading until the lazy WebGL chunk has parsed and the scene has
             mounted — deeply serial. Preloading as image overlaps that ~1MB with
             the chunk download (useTexture / next-image then hit a warm cache). */}
-        <link rel="preload" href="/rocks/left-rock.webp" as="image" />
-        <link rel="preload" href="/rocks/right-rock.webp" as="image" />
+        <link rel="preload" href="/rocks/left-rock.avif" as="image" />
+        <link rel="preload" href="/rocks/right-rock.avif" as="image" />
         {/* The loader's cloud sprite (intro-loader.tsx) — small, and the real
             WebGL clouds reuse the same file, so one warm cache serves both. */}
         <link rel="preload" href="/textures/cloud-puff.png" as="image" />

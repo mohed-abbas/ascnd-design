@@ -18,8 +18,8 @@ import { ScrollTrigger } from "gsap/ScrollTrigger";
 // Warm the local assets ASAP so the scene's ready-gate isn't waiting on a
 // cold fetch (the rock cut-outs; the Environment HDR loads in its own Suspense
 // so it never blocks the reveal — see the canvas below).
-useTexture.preload("/rocks/left-rock.webp");
-useTexture.preload("/rocks/right-rock.webp");
+useTexture.preload("/rocks/left-rock.avif");
+useTexture.preload("/rocks/right-rock.avif");
 // The introV2 "shot" tiles (the necklace beads-to-be) refract through the glass,
 // so they live in the scene too — warm them alongside the rocks.
 for (const n of [2, 3, 4, 5, 6, 7, 8]) useTexture.preload(`/shots/shot${n}.png`);

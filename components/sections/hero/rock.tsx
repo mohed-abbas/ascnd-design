@@ -20,10 +20,12 @@ import Image from "next/image";
 type Side = "left" | "right";
 
 const ROCKS: Record<Side, { src: string; width: number; unoptimized?: boolean }> = {
-  // Hand-tuned 4× cut-outs — skip Next's optimizer (q75 re-encode softens it),
-  // matching the grass overlay's pipeline.
-  left: { src: "/rocks/left-rock.webp", width: 357, unoptimized: true },
-  right: { src: "/rocks/right-rock.webp", width: 344, unoptimized: true },
+  // Hand-tuned 4× cut-outs, pre-encoded to AVIF (q80, full 1428×3928 res — PSNR
+  // ~43dB RGB / ~62dB alpha vs the WebP master, i.e. visually lossless). Served
+  // via `unoptimized` so Next's on-demand optimizer (which softened the
+  // color-keyed edges at q75) never touches them. See docs/performance-audit.md.
+  left: { src: "/rocks/left-rock.avif", width: 357, unoptimized: true },
+  right: { src: "/rocks/right-rock.avif", width: 344, unoptimized: true },
 };
 
 export default function Rock({ side }: { side: Side }) {

@@ -20,8 +20,8 @@ import Image from "next/image";
  * centred collage/text.
  */
 const GRASS = {
-  left: { src: "/rocks/left-rock-grass.webp", width: 357, edge: "left-0" },
-  right: { src: "/rocks/right-rock-grass.webp", width: 344, edge: "right-0" },
+  left: { src: "/rocks/left-rock-grass.avif", width: 357, edge: "left-0" },
+  right: { src: "/rocks/right-rock-grass.avif", width: 344, edge: "right-0" },
 } as const;
 
 export default function GrassRocks() {
@@ -40,9 +40,10 @@ export default function GrassRocks() {
               alt=""
               width={width}
               height={982}
-              // Pre-baked WebP cut-outs (high-res, hand-tuned quality). Skip
-              // Next's optimizer — it was re-encoding them at q=75 and capping
-              // the width, which softened the reveal on HiDPI/tall viewports.
+              // Pre-baked AVIF cut-outs (q80, full 1428×3928 res — visually
+              // lossless vs the WebP master). Skip Next's optimizer — it was
+              // re-encoding them at q=75 and capping the width, which softened
+              // the reveal on HiDPI/tall viewports.
               unoptimized
               // Above the fold and same dimensions as the bare <Rock> beneath
               // it (which is also priority): the browser detects this overlay as

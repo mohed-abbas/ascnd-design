@@ -56,7 +56,7 @@ function TunableEnvironment() {
 /** Throwaway colourful backdrop the glass refracts. */
 function TestBackdrop() {
   const shots = useTexture(SHOTS);
-  const [leftRock, rightRock] = useTexture(["/rocks/left-rock.webp", "/rocks/right-rock.webp"]);
+  const [leftRock, rightRock] = useTexture(["/rocks/left-rock.avif", "/rocks/right-rock.avif"]);
   return (
     <group position={[0, 0, -2.2]}>
       {/* colourful tiles spread behind the word */}
