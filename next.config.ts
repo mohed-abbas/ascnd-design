@@ -15,6 +15,13 @@ const nextConfig: NextConfig = {
   // verified-clean production behavior. Re-add Strict Mode per-subtree with
   // <React.StrictMode> around non-WebGL trees if you want the dev checks back.
   reactStrictMode: false,
+  // Serve AVIF (then WebP) for images that DO go through Next's optimizer — the
+  // default is WebP-only. The hand-tuned rock cut-outs stay `unoptimized`
+  // (pre-encoded AVIF), so this only affects other next/image usage (e.g. the
+  // design-shot tiles). See docs/performance-audit.md A5.
+  images: {
+    formats: ["image/avif", "image/webp"],
+  },
 };
 
 export default nextConfig;

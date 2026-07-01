@@ -28,5 +28,12 @@
     "eslint-config-next": "16.2.9",
     "tailwindcss": "^4",
     "typescript": "^5"
-  }
+  },
+  "//browserslist": "Modern target — the site relies on WebGL2/AVIF/modern CSS anyway, so no need to transpile down or ship legacy polyfills (see docs/performance-audit.md T6).",
+  "browserslist": [
+    "chrome >= 111",
+    "edge >= 111",
+    "firefox >= 111",
+    "safari >= 16.4"
+  ]
 }
