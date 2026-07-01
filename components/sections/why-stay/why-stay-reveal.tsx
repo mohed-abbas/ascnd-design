@@ -15,8 +15,9 @@ const useIsomorphicLayoutEffect =
 // ── Scroll ranges (tune live) ───────────────────────────────────────────────
 const ENTER_START = "top 85%"; // heading/pill begin revealing as the section rises
 const ENTER_END = "top top"; // fully formed exactly as the section locks to the top
-const PER_PHRASE = 340; // px of scroll consumed per phrase while pinned
-const SCRUB = 0.5; // light smoothing on top of Lenis
+const PER_PHRASE = 420; // px of scroll consumed per phrase while pinned (slower = softer)
+const SCRUB = 0.8; // scroll-follow smoothing; higher = more glide/inertia
+const REEL_EASE = "sine.inOut"; // reel eases in/out so it's near-still at the pin edges
 
 // ── Timeline proportions (scrubbed → only the ratios matter) ────────────────
 const HEAD_DUR = 0.6; // per-character roll-up duration
@@ -104,18 +105,24 @@ export default function WhyStayReveal() {
           0,
         );
 
-      // 2) Pin — lock the section to the viewport and scrub the reel linearly
-      //    through every phrase (one continuous glide, no dwell), then release
-      //    so the page scrolls on. Pin distance scales with the phrase count.
+      // 2) Pin — lock the section to the viewport and scrub the reel through
+      //    every phrase (one continuous glide, no dwell), then release so the
+      //    page scrolls on. A sine.inOut ease keeps the reel near-still right at
+      //    the lock and release, so the pin feels soft rather than snapping into
+      //    and out of motion. Pin distance scales with the phrase count.
       gsap.to(stage, {
         "--reel-y": `${-(N - 1) * REEL_STEP}px`,
-        ease: "none",
+        ease: REEL_EASE,
         scrollTrigger: {
           trigger: section,
           start: "top top",
           end: `+=${PER_PHRASE * (N - 1)}`,
           pin: true,
-          anticipatePin: 1,
+          // No anticipatePin: with Lenis' smoothed velocity it fires the lock a
+          // few px early and snaps the section into place (a harsh landing).
+          // Lenis already bounds frame-to-frame scroll deltas, so the plain pin
+          // engages exactly when the section top reaches the top — a smooth
+          // settle with no jump.
           scrub: SCRUB,
           invalidateOnRefresh: true,
         },
