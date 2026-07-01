@@ -17,6 +17,9 @@ const REDUCE_MOTION = "(prefers-reduced-motion: reduce)";
 const STAGGER = 0.12; // gap between blocks in the cascade
 const DURATION = 0.7;
 const EASE = "expo.out";
+// The per-unit roll-up ease (headline chars, sub-paragraph words, CTAs) — the
+// same smooth settle as the tagline roll-up.
+const ROLL_EASE = "power3.out";
 
 /**
  * On-load reveal orchestrator. Renders nothing; on mount it builds a single
@@ -25,7 +28,11 @@ const EASE = "expo.out";
  * Blocks are marked declaratively in the components (no prop-drilling):
  *   [data-reveal]        masked slide-up (lives in an overflow:hidden wrapper)
  *   [data-reveal-fade]   fade + small slide (chrome / the mask-image logos row)
- *   [data-reveal-split]  the headline — SplitText splits it into masked lines
+ *   [data-reveal-soft]   opacity only (the navbar, whose translate must survive)
+ *   [data-reveal-split]  the headline — SplitText rolls it up per character
+ *   [data-reveal-words]  the sub-paragraph — SplitText rolls it up per word
+ *   [data-reveal-cta]    a button clip — the inner control rolls up, then the
+ *                        clip is lifted so hover/focus isn't shaved
  * Cascade order comes from each element's `data-reveal-order`.
  *
  * The hidden start state is CSS (`.reveal-armed` in globals.css, armed by the
@@ -45,7 +52,7 @@ export default function HeroReveal() {
       return;
     }
 
-    let split: SplitText | undefined;
+    const splits: SplitText[] = [];
     let ctx: gsap.Context | undefined;
     let cancelled = false;
 
@@ -65,19 +72,39 @@ export default function HeroReveal() {
       // that the yPercent tween never clears, freezing the block. Pinning y:0
       // in `from` makes GSAP own the full transform, so it resolves to identity.
 
-      // Headline → masked lines via SplitText; they rise line-by-line.
+      // Headline → per-character roll-up via SplitText (chars + mask): each
+      // glyph rises out of its own clip, staggered, like the tagline.
       const headline = root.querySelector<HTMLElement>("[data-reveal-split]");
       if (headline) {
-        split = new SplitText(headline, { type: "lines", mask: "lines" });
+        const s = new SplitText(headline, { type: "chars", mask: "chars" });
+        splits.push(s);
         gsap.set(headline, { opacity: 1 }); // opacity is unit-safe to set
-        const lines = split.lines;
         entries.push({
           order: Number(headline.dataset.revealOrder ?? 0),
           add: (tl, at) =>
             tl.fromTo(
-              lines,
+              s.chars,
               { yPercent: 110, y: 0 },
-              { yPercent: 0, duration: DURATION, ease: EASE, stagger: 0.08 },
+              { yPercent: 0, duration: DURATION, ease: ROLL_EASE, stagger: 0.02 },
+              at,
+            ),
+        });
+      }
+
+      // Sub-paragraph → per-word roll-up via SplitText (words + mask): each word
+      // rises out of its clip, staggered — cleaner than per-char for a sentence.
+      const bodyText = root.querySelector<HTMLElement>("[data-reveal-words]");
+      if (bodyText) {
+        const s = new SplitText(bodyText, { type: "words", mask: "words" });
+        splits.push(s);
+        gsap.set(bodyText, { opacity: 1 });
+        entries.push({
+          order: Number(bodyText.dataset.revealOrder ?? 0),
+          add: (tl, at) =>
+            tl.fromTo(
+              s.words,
+              { yPercent: 110, y: 0 },
+              { yPercent: 0, duration: DURATION, ease: ROLL_EASE, stagger: 0.03 },
               at,
             ),
         });
@@ -118,6 +145,34 @@ export default function HeroReveal() {
             ),
         });
       });
+
+      // CTAs → roll up too. Each button sits in an armed-only overflow clip
+      // (globals.css); we roll the inner <a> up out of it, then lift the clip
+      // the instant it settles so hover scale / focus rings aren't shaved.
+      const ctaWraps = Array.from(
+        root.querySelectorAll<HTMLElement>("[data-reveal-cta]"),
+      );
+      if (ctaWraps.length) {
+        const btns = ctaWraps
+          .map((w) => w.firstElementChild)
+          .filter(Boolean) as HTMLElement[];
+        entries.push({
+          order: Number(ctaWraps[0].dataset.revealOrder ?? 0),
+          add: (tl, at) =>
+            tl.fromTo(
+              btns,
+              { yPercent: 110, y: 0 },
+              {
+                yPercent: 0,
+                duration: DURATION,
+                ease: ROLL_EASE,
+                stagger: 0.08,
+                onComplete: () => gsap.set(ctaWraps, { overflow: "visible" }),
+              },
+              at,
+            ),
+        });
+      }
 
       // Soft blocks — opacity only. No transform touched, so the navbar keeps
       // its own translate-based centering.
@@ -172,7 +227,7 @@ export default function HeroReveal() {
       cancelled = true;
       stopWaiting?.();
       ctx?.revert(); // restores inline styles set above
-      split?.revert(); // unwraps SplitText line/mask markup
+      splits.forEach((s) => s.revert()); // unwraps SplitText char/word markup
     };
   }, []);
 
