@@ -226,6 +226,38 @@ body {
   }
 }
 
+/* ── "why teams stay" glass reel (why-stay.tsx / why-stay-reveal.tsx) ────────
+   Both reel columns — the dim base (the fog) and the bright magnified lens —
+   translate as ONE via the inherited `--reel-y`, set on the stage by the
+   scrubbed timeline. Defaults to 0 so SSR / no-JS / reduced-motion render the
+   first phrase centred in the pill. The lens's per-phrase magnification is a
+   static scale in the markup, so this shared translate keeps the two layers in
+   register at every scroll position. */
+[data-reel-col] {
+  transform: translateY(var(--reel-y, 0px));
+  will-change: transform;
+}
+
+/* The fog window: fade the stacked phrases to transparent above and below the
+   pill band so only the framed phrase reads. The opaque plateau (40%→60% of the
+   380px window) hugs the pill; neighbours sit in the fading zone. */
+[data-whystay-window] {
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 6%,
+    #000 40%,
+    #000 60%,
+    transparent 94%
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 6%,
+    #000 40%,
+    #000 60%,
+    transparent 94%
+  );
+}
+
 /* ── Welcome loading screen (intro-loader.tsx) ──────────────────────────────
    A pure DOM/CSS cover over the sky while the WebGL intro warms up. It carries
    no background of its own — the global <Background/> sky + grain show through —
