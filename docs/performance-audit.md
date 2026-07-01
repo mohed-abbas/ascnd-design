@@ -97,9 +97,12 @@ Driven via Playwright against the dev server (Chromium reported the true 120 Hz)
 - **Visual A/B of `medium`/`low` glass** (384/6 and 256/4-backside-off) — best judged live via `?tier=low` in a real browser (a 2 s transient is hard to screenshot). Confirm dispersion still reads as glass at the telephoto framing.
 - **Subjective 60-cap check:** on a 120 Hz panel the cursor sim is capped to 60 — confirm the trail still feels right (raise the cap if it dulls).
 - **Calibrate the watchdog `THRESHOLD_MS`** against a genuinely weak GPU (the M4 can't trip it naturally) — CPU-throttle in DevTools or temporarily lower the constant to confirm it demotes *before* visible stutter.
-- **Intro frameloop 60-cap** on 120 Hz panels (R4 item 3) — `heavyEffectFpsCap` exists but isn't yet wired into the intro's `frameloop="always"`.
-- **Pause `MorphRig` off-screen** (R5) — dpr cap done; the visibility gate is still pending.
 - Extend the `gpu-tier.ts` renderer regexes from real weak-device profiling.
+
+### Both remaining levers now wired (2026-07-01)
+
+- **Intro frameloop 60-cap (R4 item 3)** — the intro `<Canvas>` moved from `frameloop="always"` to `"demand"`, driven by a new `IntroFrameCap` rig that pumps `invalidate()` off the shared ticker at `heavyEffectFpsCap()` (60 on a fast panel, uncapped on a 60 Hz high tier). Halves the MTM's paint cost through the compile window on 120 Hz. Verified on the M4: intro plays and docks correctly, 0 console errors.
+- **Pause `MorphRig` off-screen (R5)** — the 30 fps cloud-morph pump now stops once scrolled past **1.5 vh** (all clouds are hero-anchored; the ROCK layer clears the top by ~1.2 vh), and repaints once on return. Threshold was **1.5 vh, not 2 vh**: the page is only 2 vh of scroll, so a 2 vh cutoff sat at `maxScroll` and never fired. Verified: scroll past + back repaints the clouds cleanly, no freeze.
 
 ---
 

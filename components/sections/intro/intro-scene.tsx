@@ -14,7 +14,7 @@ import * as THREE from "three";
 import type { Group, Mesh } from "three";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
-import { getQualityConfig } from "@/lib/perf/quality-store";
+import { getQualityConfig, heavyEffectFpsCap } from "@/lib/perf/quality-store";
 
 // Warm the local assets ASAP so the scene's ready-gate isn't waiting on a
 // cold fetch (the rock cut-outs; the Environment HDR loads in its own Suspense
@@ -718,6 +718,36 @@ function Glass({
   );
 }
 
+/**
+ * Drives the intro's paint loop off the single shared GSAP ticker, capped by
+ * heavyEffectFpsCap() (0 = ride the display on a 60Hz high tier; 60 on a fast
+ * panel or a stepped-down tier). With the canvas on frameloop="demand", this is
+ * what keeps the glass + rock entrance animating during the welcome — at a
+ * bounded rate, so a 120Hz panel doesn't pay double for the heavy MTM.
+ */
+function IntroFrameCap() {
+  const invalidate = useThree((s) => s.invalidate);
+
+  useEffect(() => {
+    let last = -Infinity;
+    const tick = (time: number) => {
+      const cap = heavyEffectFpsCap();
+      if (cap <= 0) {
+        invalidate();
+        return;
+      }
+      if (time - last >= 1 / cap) {
+        last = time;
+        invalidate();
+      }
+    };
+    gsap.ticker.add(tick);
+    return () => gsap.ticker.remove(tick);
+  }, [invalidate]);
+
+  return null;
+}
+
 export default function IntroScene({
   anim,
   rocks,
@@ -738,10 +768,12 @@ export default function IntroScene({
 
   return (
     <Canvas
-      // "always" while the glass is on screen (transmission + animation need a
-      // live loop); "demand" once it's gone — the steady tile conveyor/scroll
-      // pump invalidate() themselves, so the persistent canvas stays cheap.
-      frameloop={introActive ? "always" : "demand"}
+      // Always "demand": the persistent canvas is pumped by whoever needs frames
+      // — the tile conveyor/scroll rigs post-intro, and <IntroFrameCap> during
+      // the welcome. Demand (vs the old "always" during intro) lets us CAP the
+      // intro's paint rate: heavyEffectFpsCap holds it to 60 on a 120Hz panel,
+      // halving the MTM's frame cost through the compile window (audit R4 item 3).
+      frameloop="demand"
       dpr={[1, 2]}
       gl={{ antialias: true, alpha: true }}
       // Telephoto: far back + narrow FOV → the glyphs are viewed almost head-on
@@ -769,6 +801,7 @@ export default function IntroScene({
             <Glass anim={anim} glassSize={glassSize} restY={restY} font={font} />
             <directionalLight position={[3, 5, 6]} intensity={1.2} />
             <ambientLight intensity={0.4} />
+            <IntroFrameCap />
             <SceneReady onReady={onReady} />
           </>
         )}

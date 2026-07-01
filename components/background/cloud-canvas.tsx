@@ -246,17 +246,41 @@ function MorphRig() {
   const invalidate = useThree((s) => s.invalidate);
 
   useEffect(() => {
+    gsap.registerPlugin(ScrollTrigger);
     const STEP = 1 / 30; // seconds between repaints
     let last = 0;
+    // Pause the pump once the clouds have parallaxed off-screen. All clouds are
+    // hero-anchored; the ROCK layer (scrollFactor 1, the last to leave) clears
+    // the top edge by ~1.2 vh of scroll, so 1.5 vh is a safe cutoff with margin.
+    // A frozen morph off-screen costs nothing and is invisible; we repaint once
+    // on the way back so the clouds are current when they re-enter (audit R5).
+    let onScreen = true;
     // gsap.ticker passes elapsed time in seconds; throttle to STEP.
     const tick = (time: number) => {
+      if (!onScreen) return;
       if (time - last >= STEP) {
         last = time;
         invalidate();
       }
     };
     gsap.ticker.add(tick);
-    return () => gsap.ticker.remove(tick);
+
+    // Trigger-less ScrollTrigger: active once scrolled past 1.5× the viewport,
+    // where the hero-anchored clouds are gone. `start` is a function so it
+    // re-resolves on resize/refresh.
+    const st = ScrollTrigger.create({
+      start: () => window.innerHeight * 1.5,
+      end: "max",
+      onToggle: (self) => {
+        onScreen = !self.isActive;
+        if (onScreen) invalidate(); // repaint the skipped frame on return
+      },
+    });
+
+    return () => {
+      gsap.ticker.remove(tick);
+      st.kill();
+    };
   }, [invalidate]);
 
   return null;
