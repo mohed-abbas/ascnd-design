@@ -50,6 +50,7 @@ export default function LogosMarquee() {
 
     let cancelled = false;
     let tween: gsap.core.Tween | undefined;
+    let visible = true; // whether the marquee row is on screen (idle-gate)
 
     // (Re)build the marquee: strip any prior clones, clone the source group to
     // fill the viewport (+ one spare group for the wrap), then run the loop.
@@ -81,6 +82,8 @@ export default function LogosMarquee() {
         ease: "none",
         repeat: -1,
       });
+      // A rebuild while the row is off-screen shouldn't silently resume it.
+      if (!visible) tween.pause();
     };
 
     // Measure once fonts are settled so the cloned widths are final.
@@ -98,10 +101,23 @@ export default function LogosMarquee() {
     };
     window.addEventListener("resize", onResize);
 
+    // Idle-gate: the marquee lives in the hero, so once it scrolls out of view
+    // there's no reason to keep the infinite tween (and its live composited
+    // layer) running — every other loop on the site already pauses off-screen.
+    // The loop is seamless (frame at x=0 ≡ frame at x=-advance), so pausing and
+    // resuming at any point is invisible.
+    const io = new IntersectionObserver(([entry]) => {
+      visible = entry.isIntersecting;
+      if (visible) tween?.play();
+      else tween?.pause();
+    });
+    io.observe(viewport);
+
     return () => {
       cancelled = true;
       cancelAnimationFrame(raf);
       window.removeEventListener("resize", onResize);
+      io.disconnect();
       tween?.kill();
       track.querySelectorAll("[data-logos-clone]").forEach((n) => n.remove());
       gsap.set(track, { x: 0 });

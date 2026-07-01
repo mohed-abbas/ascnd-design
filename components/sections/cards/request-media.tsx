@@ -145,8 +145,15 @@ export default function RequestMedia() {
       });
 
       const typed = { n: 0 };
+      // The tween runs `n` continuously, but Math.round lands on the same integer
+      // for several consecutive frames — so guard against re-writing (and thus
+      // re-laying-out the <p>) an identical substring every frame.
+      let lastCount = -1;
       const paint = () => {
-        briefText.textContent = BRIEF.slice(0, Math.round(typed.n));
+        const count = Math.round(typed.n);
+        if (count === lastCount) return;
+        lastCount = count;
+        briefText.textContent = BRIEF.slice(0, count);
       };
 
       const tl = gsap.timeline({ repeat: -1, repeatDelay: 0.4, paused: true });
@@ -179,6 +186,7 @@ export default function RequestMedia() {
         // clear the typed brief + reset the tools for the next pass
         .add(() => {
           typed.n = 0;
+          lastCount = -1;
           briefText.textContent = "";
         })
         .set(tools, { scale: 0.4 });

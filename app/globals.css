@@ -167,12 +167,12 @@ body {
    on-load "bloom from center" (design-shots-reveal.tsx). Keyed on .reveal-armed
    so they hold before JS and stay visible for no-JS. The reveal wrapper carries
    no other transform (the tile's translate-centering lives on its parent, the
-   mirror flip on its child), so a plain scale park is safe. */
-[data-shot-rotor],
-[data-shot] {
-  will-change: transform, opacity;
-}
+   mirror flip on its child), so a plain scale park is safe.
 
+   will-change is deliberately NOT set here: it's applied in JS (begin(), in
+   design-shots-reveal.tsx) only when the DOM tiles actually animate. Setting it
+   permanently kept 16 compositor layers alive even in the common WebGL-intro
+   path, where this DOM collage stays hidden and never blooms. */
 .reveal-armed [data-shot] {
   opacity: 0;
   transform: scale(0.86);

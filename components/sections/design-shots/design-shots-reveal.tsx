@@ -88,14 +88,18 @@ export default function DesignShotsReveal() {
     const ys = SHOT_ARC_SLOTS.map((s) => s.y);
     const sizes = SHOT_ARC_SLOTS.map((s) => s.size);
 
+    // Cache each rotor's arc once — it was re-read from the dataset and
+    // string-parsed on every rotor on every frame.
+    const arcs = rotors.map((el) => Number(el.dataset.arc ?? 0));
+
     // Place every rotor for the current loop phase `p` (0..1). `fade` blends the
     // resting opacity (1, where the bloom left off) into the rotation's steady
     // opacity so the far tiles ease to translucent instead of popping.
     const state = { p: 0, fade: 0 };
     function render() {
-      rotors.forEach((el) => {
-        const arc = Number(el.dataset.arc ?? 0);
-        const s = ((state.p + arc / N) % 1) * N; // phase in [0, N)
+      for (let i = 0; i < rotors.length; i++) {
+        const el = rotors[i];
+        const s = ((state.p + arcs[i] / N) % 1) * N; // this rotor's phase in [0, N)
         // Fully visible across the entire front arc (slots 0..6 = far-L..far-R),
         // matching the static design where all seven tiles are solid. Only the
         // off-screen return leg (s in (6, 8)) is hidden: fade out just past
@@ -116,13 +120,15 @@ export default function DesignShotsReveal() {
                 ? (t - (span - EDGE_FADE)) / EDGE_FADE // fade in approaching far-L
                 : 0; // off-screen, hidden
         }
-        gsap.set(el, {
-          x: crClosed(xs, s),
-          y: crClosed(ys, s),
-          scale: crClosed(sizes, s) / SHOT_BASE,
-          opacity: gsap.utils.interpolate(1, steady, state.fade),
-        });
-      });
+        // Write transform/opacity straight to style rather than gsap.set() per
+        // rotor per frame — gsap.set spins up a throwaway zero-duration tween on
+        // every call (~8/frame here → GC churn). translate3d keeps each rotor on
+        // its own compositor layer (the will-change hint is armed in begin(),
+        // where the DOM path first animates). interpolate(1, steady, fade) is
+        // inlined to avoid its per-frame allocation.
+        el.style.transform = `translate3d(${crClosed(xs, s)}px, ${crClosed(ys, s)}px, 0) scale(${crClosed(sizes, s) / SHOT_BASE})`;
+        el.style.opacity = `${1 + (steady - 1) * state.fade}`;
+      }
     }
 
     function startRotation() {
@@ -148,6 +154,13 @@ export default function DesignShotsReveal() {
     // hand off to the rotation.
     const begin = () => {
       if (cancelled) return;
+      // Promote the tiles for the animation only. CSS no longer carries a
+      // permanent will-change on them, so in the common WebGL path (where this
+      // DOM collage stays hidden and never blooms) the 16 tile layers aren't
+      // kept alive for nothing. Set the hint right before they first animate —
+      // the bloom here, then the conveyor rides the same promoted layers.
+      shots.forEach((el) => (el.style.willChange = "transform, opacity"));
+      rotors.forEach((el) => (el.style.willChange = "transform, opacity"));
       tweens.push(
         gsap.fromTo(
           shots,
