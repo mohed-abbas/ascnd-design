@@ -23,6 +23,34 @@ The main thread is **not** the steady-state bottleneck (0 long tasks measured du
 
 ---
 
+## 1a. Phase 1 — Results (shipped 2026-07-01)
+
+Phase 1 (the quick wins from §8) is **implemented, production-build-verified, and merged.** No effect or visual was dropped. Every change was validated with `npm run lint` + `tsc --noEmit` + a live browser check (0 console/hydration errors), and a clean `npm run build`.
+
+| Item | Status | Commit | Result |
+|---|---|---|---|
+| **R2** idle-gate cursor trail | ✅ shipped | `30a1b4e` | sim parks after ~3.5 s of pointer stillness → **0 GPU when idle**; wakes on `pointermove` |
+| **R3** throttle + off-screen-pause conveyor | ✅ shipped | `30a1b4e` | persistent canvas repaint capped to ~30 fps; pauses entirely once the hero scrolls away |
+| **A1** rocks → AVIF (crispness-preserved) | ✅ shipped | `6c655e2` | full 1428×3928 res kept, q80 (PSNR ~43 dB RGB / ~62 dB alpha); **−443 KB**, applied to DOM `<Image>` + WebGL `useTexture` |
+| **A4** fonts → WOFF2 | ✅ shipped | `76d49e5` | 4 weights, no subsetting (623 glyphs each); **384 KB → 135 KB (−249 KB)**, shorter `fonts.ready` gate |
+| **A5** `images.formats` AVIF | ✅ shipped | `a8ca856` | optimized `next/image` output now prefers AVIF (rocks stay pre-encoded/`unoptimized`) |
+| **T6** modern `browserslist` + `tsconfig` target | ✅ shipped | `a8ca856` | Chrome/Edge/FF 111+, Safari 16.4+; ES2022 — drops the ~14 KB legacy-JS transpile/polyfills |
+| **A3** preload-herd trim + grass mobile-gate | ✅ shipped | `e5f7154` | rock preloads 4→2 (removed manual dups of `next/image priority`); grass `<Image>` gated on `(pointer: fine)` + not-reduced-motion and made `loading="lazy"` — **~1.3 MB not loaded on touch**, grass preloads 2→0 |
+| **A2** grain shrink | ↩️ reverted | — | reverted by request; original 1.4 MB `grain.png` retained |
+
+### Measured deltas
+- **First-load image bytes:** rocks −443 KB (AVIF); grass ~1.3 MB no longer downloaded on coarse-pointer devices; preload contention reduced (herd of high-priority requests trimmed to the true LCP + essentials).
+- **Fonts:** −249 KB (WOFF2).
+- **Legacy JS:** ~14 KB removed via modern build target (confirmed by production build).
+- **Runtime:** the idle page now rests — the cursor fluid-sim (previously the heaviest always-on cost) parks when the pointer is still, and the 4th (tile-conveyor) context throttles to 30 fps and stops off-screen. This targets the ~30 ms idle p95 spikes measured in §2.2.
+- **Grain (A2) reverted**, so ~1.23 MB of potential savings was intentionally left on the table.
+
+### Deferred (not yet done)
+- **Phase 2** — the actual 120/60 fps guarantee: refresh-rate detection + adaptive quality tier + frame-time watchdog (§6), cursor sim 60-cap + `RT_SCALE` 0.5→~0.4, transmission-material tiering, cloud DPR/off-screen. **Requires real 120 Hz + weak-GPU device testing.**
+- **Phase 3** — boot polish: defer cursor mount past the intro, flatten the intro forced-reflow, pre-split SplitText, phased-resolution glass, dead-asset cleanup.
+
+---
+
 ## 2. Current state (measured)
 
 ### 2.1 Lighthouse (mobile, production)
