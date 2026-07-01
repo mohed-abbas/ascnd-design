@@ -155,7 +155,14 @@ const GlassSurface: React.FC<GlassSurfaceProps> = ({
 
     const isWebkit =
       /Safari/.test(navigator.userAgent) && !/Chrome/.test(navigator.userAgent);
-    const isFirefox = /Firefox/.test(navigator.userAgent);
+    // Detect Gecko by an engine-only DOM property rather than the UA string:
+    // privacy browsers (e.g. Zen) spoof "Firefox" out of navigator.userAgent,
+    // but `MozAppearance` only exists on Gecko. Gecko renders the feImage +
+    // feDisplacementMap backdrop combo incorrectly, so it must take the CSS
+    // fallback regardless of what UA it reports.
+    const isFirefox =
+      /Firefox/.test(navigator.userAgent) ||
+      "MozAppearance" in document.documentElement.style;
 
     if (isWebkit || isFirefox) {
       return false;
@@ -301,16 +308,23 @@ const GlassSurface: React.FC<GlassSurfaceProps> = ({
                     inset 0 -1px 0 0 rgba(255, 255, 255, 0.3)`,
       };
     }
+    // Frosted-glass fallback (Firefox/Safari): the chromatic displacement
+    // filter is unavailable on these engines, so we can't refract the reel.
+    // The next-best "glass" is a genuine frost — enough blur that the big
+    // bright reel text melts into a smooth, even wash (reads as intentional)
+    // rather than the legible smears a light blur leaves behind. Saturation is
+    // kept near 1 so the blue sky isn't pushed into a vivid "blue bar", and a
+    // white body + rim highlights sell the pill edge.
     return {
       ...baseStyles,
-      background: "rgba(255, 255, 255, 0.25)",
-      backdropFilter: "blur(12px) saturate(1.8) brightness(1.1)",
-      WebkitBackdropFilter: "blur(12px) saturate(1.8) brightness(1.1)",
-      border: "1px solid rgba(255, 255, 255, 0.3)",
-      boxShadow: `0 8px 32px 0 rgba(31, 38, 135, 0.2),
-                  0 2px 16px 0 rgba(31, 38, 135, 0.1),
-                  inset 0 1px 0 0 rgba(255, 255, 255, 0.4),
-                  inset 0 -1px 0 0 rgba(255, 255, 255, 0.2)`,
+      background: "rgba(255, 255, 255, 0.14)",
+      backdropFilter: "blur(22px) saturate(1.05) brightness(1.06)",
+      WebkitBackdropFilter: "blur(22px) saturate(1.05) brightness(1.06)",
+      border: "1px solid rgba(255, 255, 255, 0.5)",
+      boxShadow: `0 8px 32px 0 rgba(31, 38, 135, 0.15),
+                  inset 0 1px 1px 0 rgba(255, 255, 255, 0.75),
+                  inset 0 -1px 1px 0 rgba(255, 255, 255, 0.3),
+                  inset 0 0 30px 0 rgba(255, 255, 255, 0.14)`,
     };
   };
 
