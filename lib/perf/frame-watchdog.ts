@@ -36,7 +36,9 @@ export function startFrameWatchdog(opts: WatchdogOptions = {}): () => void {
   const THRESHOLD_MS = opts.thresholdMs ?? 12;
   const EMA_ALPHA = opts.emaAlpha ?? 0.1;
   const SUSTAIN_MS = opts.sustainMs ?? 1500;
-  const WARMUP_MS = opts.warmupMs ?? 3000;
+  // Short by design: the controller already arms this AFTER the intro transient,
+  // so warmup only needs to absorb the first-frame burst at the arm moment.
+  const WARMUP_MS = opts.warmupMs ?? 1000;
   const COOLDOWN_MS = opts.cooldownMs ?? 4000;
 
   let ema = 0;

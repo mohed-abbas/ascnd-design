@@ -80,10 +80,23 @@ A capable machine (e.g. an M4) never trips the watchdog, so tiers must be driven
 - **Clouds** (`cloud-canvas.tsx`) — `dpr={[1, cloudDprMax]}` from the tier (R3F re-applies dpr on change).
 - **Intro glass** (`intro-scene.tsx`) — MTM `samples`/`resolution`/`backside` + Text3D `curveSegments`/`bevelSegments` from a **mount-time snapshot** (not reactive — avoids a mid-intro FBO rebuild flash).
 
-### Still to do (needs real hardware)
+### Verified on real hardware (M4 Pro, 120 Hz — 2026-07-01)
 
-- **Calibrate constants:** tier knob values in `tiers.ts`, and `THRESHOLD_MS`/`SUSTAIN`/`WARMUP`/`COOLDOWN` in `frame-watchdog.ts`, against a 120 Hz panel + a weak GPU. All are marked `CALIBRATE`.
-- **A/B the `medium`/`low` glass** (256/4, backside off) for acceptable dispersion at the telephoto framing.
+Driven via Playwright against the dev server (Chromium reported the true 120 Hz):
+
+- **C1 refresh detection** → `refreshHz=120` (measured rAF median 8.3 ms). ✅
+- **C2 GPU detection** → `gpu=strong` → starts `high`. ✅
+- **Sustained 120 fps at `high`** on the M4 (8.3 ms steady-state frame time). ✅
+- **Step-down chain** `high(0.5/dpr2) → medium(0.45/1.5) → low(0.4/1.25) → floor`; every consumer's config updates live and `stepDown()` returns `false` at the floor. ✅
+- **Override + debug API** (`?tier=`, `window.__quality`) work. ✅
+
+**Bug found & fixed:** the watchdog fired *during the intro* (MTM compile + HMR pushed the EMA over budget) and false-demoted the whole session to `medium`, despite steady state being a healthy 8.3 ms. Fix: the controller now **arms the watchdog only after `INTRO_REVEAL_EVENT` + an 800 ms settle** (failsafe timer for the intro-skipped path), and the watchdog's own warmup dropped 3000 → 1000 ms. Re-verified: boot stays `high`, "watchdog armed" logs post-intro, no false step-down.
+
+### Still to do (needs a weak GPU + the user's own Chrome)
+
+- **Visual A/B of `medium`/`low` glass** (384/6 and 256/4-backside-off) — best judged live via `?tier=low` in a real browser (a 2 s transient is hard to screenshot). Confirm dispersion still reads as glass at the telephoto framing.
+- **Subjective 60-cap check:** on a 120 Hz panel the cursor sim is capped to 60 — confirm the trail still feels right (raise the cap if it dulls).
+- **Calibrate the watchdog `THRESHOLD_MS`** against a genuinely weak GPU (the M4 can't trip it naturally) — CPU-throttle in DevTools or temporarily lower the constant to confirm it demotes *before* visible stutter.
 - **Intro frameloop 60-cap** on 120 Hz panels (R4 item 3) — `heavyEffectFpsCap` exists but isn't yet wired into the intro's `frameloop="always"`.
 - **Pause `MorphRig` off-screen** (R5) — dpr cap done; the visibility gate is still pending.
 - Extend the `gpu-tier.ts` renderer regexes from real weak-device profiling.
