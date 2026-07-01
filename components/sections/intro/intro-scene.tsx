@@ -774,7 +774,10 @@ export default function IntroScene({
       // intro's paint rate: heavyEffectFpsCap holds it to 60 on a 120Hz panel,
       // halving the MTM's frame cost through the compile window (audit R4 item 3).
       frameloop="demand"
-      dpr={[1, 2]}
+      // dpr capped at 1.5 (was 2): halves-ish the fragment cost of the persistent
+      // tile canvas's every-frame conveyor repaint on retina, with no visible
+      // softening of the shot images at this size (docs/performance-audit.md §6).
+      dpr={[1, 1.5]}
       gl={{ antialias: true, alpha: true }}
       // Telephoto: far back + narrow FOV → the glyphs are viewed almost head-on
       // so the thin extrusion shows no side faces (flat glass text, not a 3D

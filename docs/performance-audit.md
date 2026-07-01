@@ -99,6 +99,22 @@ Driven via Playwright against the dev server (Chromium reported the true 120 Hz)
 - **Calibrate the watchdog `THRESHOLD_MS`** against a genuinely weak GPU (the M4 can't trip it naturally) — CPU-throttle in DevTools or temporarily lower the constant to confirm it demotes *before* visible stutter.
 - Extend the `gpu-tier.ts` renderer regexes from real weak-device profiling.
 
+### Site-wide consistency — the real goal (2026-07-01)
+
+**User goal:** flat 120 fps site-wide, like air.inc (measured 115 fps steady on **93 MB GPU**). **Why air.inc is flat:** its rich hero is a pre-rendered video/image plate — one cheap composited layer, ~0 continuous shader work. **Why ours varies (120→101 everywhere, even in a prod build):** it runs **4 live WebGL contexts**, three of which repaint *continuously at 30 fps even at idle* (2 cloud canvases via `MorphRig`, the tile canvas via `ConveyorRig repeat:-1`), and all 4 are composited every displayed frame. Profiled on the M4 (Playwright, no vsync → optimistic): **44% of idle frames already exceed the 8.4 ms/120 fps budget**; pointer-move spikes to ~32 ms (cursor fluid sim). On a real vsync'd panel that variance is the visible 120→101.
+
+**Mechanism of the periodic dip:** a 30 fps repaint on a 120 Hz panel = every 4th frame does the heavy GPU work. At dpr 2 that repaint (~6 ms) lands at the frame budget → overflow → spike. At **dpr 1.5** it's ~3.5 ms → fits → flat.
+
+**User decisions (keep all effects, make each cheaper):** keep the live cloud billow, keep the cursor trail (tune harder), keep the tile conveyor live.
+
+**Round applied — dpr + cursor (non-destructive):**
+
+- Cloud `dpr` 2→**1.5** (tier `cloudDprMax`) — soft sprite, imperceptible; ~44% cheaper per repaint.
+- Intro tile `<Canvas>` `dpr` [1,2]→**[1,1.5]** — halves-ish the conveyor repaint cost on retina.
+- Cursor display `setPixelRatio` 2→**1.5** + `cursorRtScale` 0.5→**0.4** — cuts the per-pointer-move fluid-sim spike.
+
+Targets the periodic-spike mechanism directly. **Needs a prod rebuild + FPS-meter check on the user's Chrome** (Playwright headless has no vsync and can't measure the present-rate dips). If the glass intro still dips, next step is phased glass (full 512 only during the static HOLD beat, cheap during motion).
+
 ### Glass GPU-cost fix (2026-07-01)
 
 **Symptom:** during the intro the *presented* framerate fell to ~33 fps on an M4 (everything else fine). **Diagnosis:** the glass was GPU-bound — the main thread ran 120 fps (rAF steady at 8.3 ms) but the GPU couldn't finish the MTM's passes in time, so vsync dropped presented frames. **This is invisible to rAF-delta profiling and to Playwright (headless = no vsync); the DevTools FPS meter is ground truth.**

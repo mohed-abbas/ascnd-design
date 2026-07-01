@@ -168,7 +168,9 @@ export default function CursorTrailCanvas() {
       renderer.setSize(sizes.width, sizes.height);
       inputRT.setSize(sizes.width * rtScale, sizes.height * rtScale);
       outputRT.setSize(sizes.width * rtScale, sizes.height * rtScale);
-      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      // Cap the display pass at dpr 1.5 (was 2): the trail is a soft additive
+      // glow, so full retina density is wasted fragments (docs/performance-audit.md §6).
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
     }
 
     const onResize = () => {

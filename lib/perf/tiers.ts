@@ -49,8 +49,13 @@ export interface QualityConfig {
 export const TIERS: Record<TierName, QualityConfig> = {
   high: {
     tier: "high",
-    cursorRtScale: 0.5,
-    cloudDprMax: 2,
+    // 0.5→0.4: the fluid sim's fragment shader is the per-pointer-move spike
+    // (~17ms frames). 0.4 quarters-ish the RT fragment count vs 0.5; the trail
+    // is a soft additive glow so the lower resolution is invisible.
+    cursorRtScale: 0.4,
+    // 2→1.5: on a retina panel dpr 2 is 4× the fragments of dpr 1. The cloud
+    // sprite is soft, so 1.5 is imperceptible but cuts each 30fps repaint ~44%.
+    cloudDprMax: 1.5,
     // The glass was GPU-bound even on an M4 at 512/8/backside — the presented
     // rate fell to ~33fps during the intro (the main thread ran 120fps; the GPU
     // couldn't keep up). `backside` renders a WHOLE extra scene pass, and on
@@ -66,7 +71,7 @@ export const TIERS: Record<TierName, QualityConfig> = {
   },
   medium: {
     tier: "medium",
-    cursorRtScale: 0.45,
+    cursorRtScale: 0.35,
     cloudDprMax: 1.5,
     mtmSamples: 6,
     mtmResolution: 320,
@@ -76,7 +81,7 @@ export const TIERS: Record<TierName, QualityConfig> = {
   },
   low: {
     tier: "low",
-    cursorRtScale: 0.4,
+    cursorRtScale: 0.3,
     cloudDprMax: 1.25,
     mtmSamples: 4,
     mtmResolution: 256,
