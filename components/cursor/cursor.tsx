@@ -7,9 +7,9 @@ import {
   introWillPlay,
 } from "@/components/sections/intro/intro-state";
 
-// The WebGL canvas is client-only; ssr:false must live in a Client Component
+// The WebGL fluid sim is client-only; ssr:false must live in a Client Component
 // (Next disallows it in Server Components). Mirrors cloud-layer.tsx.
-const CursorTrailCanvas = dynamic(() => import("./cursor-trail-canvas"), {
+const SplashCursor = dynamic(() => import("./splash-cursor"), {
   ssr: false,
 });
 
@@ -32,7 +32,7 @@ function hasWebGL() {
 
 const REDUCE_MOTION = "(prefers-reduced-motion: reduce)";
 const SMALL_SCREEN = "(max-width: 768px)";
-// A fluid cursor trail is meaningless without a real cursor — gate out touch /
+// A fluid cursor effect is meaningless without a real cursor — gate out touch /
 // coarse-pointer devices (the analog of the cloud layer's screen-size check).
 const FINE_POINTER = "(pointer: fine)";
 
@@ -56,21 +56,21 @@ function getSnapshot() {
 }
 
 /**
- * Resolve whether the cursor-trail canvas should mount. Skipped on
- * reduced-motion, small screens, coarse/no pointer (touch), and devices
- * without WebGL. Server snapshot is always `false`, so SSR renders nothing and
- * re-evaluates after hydration — no mismatch — and reacts to motion / pointer /
- * breakpoint changes live. Mirrors cloud-layer.tsx's gate.
+ * Resolve whether the fluid cursor should mount. Skipped on reduced-motion,
+ * small screens, coarse/no pointer (touch), and devices without WebGL. Server
+ * snapshot is always `false`, so SSR renders nothing and re-evaluates after
+ * hydration — no mismatch — and reacts to motion / pointer / breakpoint changes
+ * live. Mirrors cloud-layer.tsx's gate.
  */
-function useCanvasEligible() {
+function useCursorEligible() {
   return useSyncExternalStore(subscribe, getSnapshot, () => false);
 }
 
 /**
  * Defer the cursor mount until the intro has docked (docs/performance-audit.md
- * T1). During the intro the fluid-sim shader would compile alongside the glass
+ * T1). During the intro the fluid-sim shaders would compile alongside the glass
  * MTM in the most GPU-starved window, and its WebGL context would compete with
- * the glass for GPU the whole time — for a trail no one sees under a scroll-
+ * the glass for GPU the whole time — for an effect no one sees under a scroll-
  * locked welcome. So we wait for INTRO_REVEAL_EVENT (the dock). When the intro
  * is skipped (returning mid-page, reduced-motion, no WebGL) it mounts at once.
  * A failsafe reveals it even if the event never fires, so it can't get stuck.
@@ -93,32 +93,18 @@ function usePastIntro() {
 }
 
 /**
- * Global cursor fluid-trail, mounted at the root (layout.tsx) as a single
- * fixed overlay. Sits at z-[90]: above the sky, clouds, hero text/shots/logos,
- * and the far right cliff (z-0), but BELOW the near left cliff (z-[99]), the
- * grass-hover overlay (z-[100]) and the navbar (z-[999]) — so the prominent
- * foreground chrome occludes the glow. (The far right cliff sits behind the
- * hero text, so it can't also occlude the trail without hiding text; see
- * docs/cursor-trail.md for the toggle.)
- *
- * pointer-events-none (wrapper AND canvas element) so it never intercepts
- * clicks. mix-blend-mode: screen makes the trail composite as additive light.
- * Required: no `filter`/`backdrop-filter` ancestor, or the fixed canvas breaks
- * — hence the root mount.
+ * Global fluid-simulation cursor (React Bits' SplashCursor), mounted at the
+ * root (layout.tsx). SplashCursor renders its own `position: fixed`,
+ * `pointer-events: none` full-viewport <canvas>, so it never intercepts clicks;
+ * this wrapper only decides *whether* it mounts (eligible device + past the
+ * intro). Required: no `filter`/`backdrop-filter` ancestor, or the fixed canvas
+ * breaks — hence the root mount.
  */
-export default function CursorTrail() {
-  const eligible = useCanvasEligible();
+export default function Cursor() {
+  const eligible = useCursorEligible();
   const pastIntro = usePastIntro();
   // Eligible device AND the intro has finished (or was skipped) — see usePastIntro.
   if (!eligible || !pastIntro) return null;
 
-  return (
-    <div
-      aria-hidden
-      className="pointer-events-none fixed inset-0 z-[90]"
-      style={{ mixBlendMode: "screen" }}
-    >
-      <CursorTrailCanvas />
-    </div>
-  );
+  return <SplashCursor CURL={4} COLOR="#ffffff" />;
 }

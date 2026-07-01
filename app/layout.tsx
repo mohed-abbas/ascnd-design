@@ -4,7 +4,7 @@ import localFont from "next/font/local";
 import "./globals.css";
 import Background from "@/components/background/background";
 import CloudLayer from "@/components/background/cloud-layer";
-import CursorTrail from "@/components/cursor/cursor-trail";
+import Cursor from "@/components/cursor/cursor";
 import LenisProvider from "@/components/providers/lenis-provider";
 import QualityController from "@/components/providers/quality-controller";
 
@@ -92,10 +92,11 @@ export default function RootLayout({
               ancestor would break their `position: fixed`. */}
           <Background />
           <CloudLayer />
-          {/* Global cursor fluid-trail: a fixed additive-glow overlay at z-[90],
-              above the sky/content but below the foreground cliffs + navbar.
-              Root-mounted so no filtered ancestor breaks its fixed canvas. */}
-          <CursorTrail />
+          {/* Global fluid-simulation cursor (React Bits SplashCursor): a fixed,
+              pointer-events-none WebGL overlay. Root-mounted so no filtered
+              ancestor breaks its fixed canvas. Gated for reduced-motion / touch
+              / small screens / no-WebGL and deferred until the intro docks. */}
+          <Cursor />
           {children}
         </LenisProvider>
       </body>
