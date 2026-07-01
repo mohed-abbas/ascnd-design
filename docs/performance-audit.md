@@ -115,6 +115,8 @@ Driven via Playwright against the dev server (Chromium reported the true 120 Hz)
 
 Targets the periodic-spike mechanism directly. **Needs a prod rebuild + FPS-meter check on the user's Chrome** (Playwright headless has no vsync and can't measure the present-rate dips). If the glass intro still dips, next step is phased glass (full 512 only during the static HOLD beat, cheap during motion).
 
+**Follow-up — defer the cursor past the intro (T1, user-suggested):** `CursorTrail` now gates its mount on `INTRO_REVEAL_EVENT` (the dock), like the clouds, with a failsafe for the intro-skipped path. During the intro the fluid-sim shader no longer compiles alongside the glass MTM, and its WebGL context isn't mounted — so the glass reveal has one fewer context competing for GPU (3 contexts during the intro instead of 4). Directly targets the glass-intro dip. No downside: the intro is scroll-locked and the trail is unseen there.
+
 ### Glass GPU-cost fix (2026-07-01)
 
 **Symptom:** during the intro the *presented* framerate fell to ~33 fps on an M4 (everything else fine). **Diagnosis:** the glass was GPU-bound — the main thread ran 120 fps (rAF steady at 8.3 ms) but the GPU couldn't finish the MTM's passes in time, so vsync dropped presented frames. **This is invisible to rAF-delta profiling and to Playwright (headless = no vsync); the DevTools FPS meter is ground truth.**

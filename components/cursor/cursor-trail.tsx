@@ -1,7 +1,11 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useSyncExternalStore } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
+import {
+  INTRO_REVEAL_EVENT,
+  introWillPlay,
+} from "@/components/sections/intro/intro-state";
 
 // The WebGL canvas is client-only; ssr:false must live in a Client Component
 // (Next disallows it in Server Components). Mirrors cloud-layer.tsx.
@@ -63,6 +67,32 @@ function useCanvasEligible() {
 }
 
 /**
+ * Defer the cursor mount until the intro has docked (docs/performance-audit.md
+ * T1). During the intro the fluid-sim shader would compile alongside the glass
+ * MTM in the most GPU-starved window, and its WebGL context would compete with
+ * the glass for GPU the whole time — for a trail no one sees under a scroll-
+ * locked welcome. So we wait for INTRO_REVEAL_EVENT (the dock). When the intro
+ * is skipped (returning mid-page, reduced-motion, no WebGL) it mounts at once.
+ * A failsafe reveals it even if the event never fires, so it can't get stuck.
+ */
+function usePastIntro() {
+  const [past, setPast] = useState(() => !introWillPlay());
+
+  useEffect(() => {
+    if (past) return;
+    const onReveal = () => setPast(true);
+    window.addEventListener(INTRO_REVEAL_EVENT, onReveal, { once: true });
+    const failsafe = setTimeout(() => setPast(true), 9000);
+    return () => {
+      window.removeEventListener(INTRO_REVEAL_EVENT, onReveal);
+      clearTimeout(failsafe);
+    };
+  }, [past]);
+
+  return past;
+}
+
+/**
  * Global cursor fluid-trail, mounted at the root (layout.tsx) as a single
  * fixed overlay. Sits at z-[90]: above the sky, clouds, hero text/shots/logos,
  * and the far right cliff (z-0), but BELOW the near left cliff (z-[99]), the
@@ -78,7 +108,9 @@ function useCanvasEligible() {
  */
 export default function CursorTrail() {
   const eligible = useCanvasEligible();
-  if (!eligible) return null;
+  const pastIntro = usePastIntro();
+  // Eligible device AND the intro has finished (or was skipped) — see usePastIntro.
+  if (!eligible || !pastIntro) return null;
 
   return (
     <div
