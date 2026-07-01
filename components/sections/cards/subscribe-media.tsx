@@ -17,6 +17,8 @@ const AURA = "linear-gradient(90deg, #ffe8b7, #bbfc73, #ffe8b7)";
 const CURSOR_DX = -95;
 const CURSOR_DY = -60;
 
+const END_LABEL = "creating your board";
+
 /**
  * Card3 "subscribe" media (Figma start 220:163 → end 124:265).
  *
@@ -38,6 +40,7 @@ export default function SubscribeMedia() {
   const endRef = useRef<HTMLDivElement>(null);
   const cursorRef = useRef<HTMLDivElement>(null);
   const shimmerRef = useRef<HTMLDivElement>(null);
+  const labelRef = useRef<HTMLSpanElement>(null);
 
   useEffect(() => {
     const root = rootRef.current;
@@ -45,13 +48,17 @@ export default function SubscribeMedia() {
     const endBtn = endRef.current;
     const cursor = cursorRef.current;
     const shimmer = shimmerRef.current;
-    if (!root || !startBtn || !endBtn || !cursor || !shimmer) return;
+    const label = labelRef.current;
+    if (!root || !startBtn || !endBtn || !cursor || !shimmer || !label) return;
     if (window.matchMedia(REDUCE_MOTION).matches) return;
+
+    const chars = gsap.utils.toArray<HTMLElement>(label.querySelectorAll("[data-char]"));
 
     const ctx = gsap.context(() => {
       gsap.set(endBtn, { autoAlpha: 0, scale: 0.9 });
       gsap.set(startBtn, { autoAlpha: 1, scale: 1 });
       gsap.set(cursor, { x: 0, y: 0, scale: 1, autoAlpha: 1 });
+      gsap.set(chars, { yPercent: 110 });
 
       // Continuous aura sweep — cheap, only visible while the end button is up.
       const sweep = gsap.to([shimmer.querySelector("[data-aura-ring]"), shimmer.querySelector("[data-aura-glow]")], {
@@ -84,10 +91,17 @@ export default function SubscribeMedia() {
           { autoAlpha: 1, scale: 1, duration: 0.34, ease: "back.out(2)" },
           "morph+=0.05"
         )
+        // the label rolls up, character by character, out of the clip
+        .to(
+          chars,
+          { yPercent: 0, duration: 0.5, ease: "power3.out", stagger: 0.03 },
+          "morph+=0.2"
+        )
         // hold, glowing
         .to({}, { duration: 1.5 })
         // reset to the start state for the next loop
         .to(endBtn, { autoAlpha: 0, scale: 0.9, duration: 0.32, ease: "power2.in" })
+        .set(chars, { yPercent: 110 })
         .set(cursor, { x: 0, y: 0, scale: 1 })
         .to([startBtn, cursor], { autoAlpha: 1, duration: 0.32, ease: "power2.out" });
 
@@ -170,8 +184,17 @@ export default function SubscribeMedia() {
                 "inset 0px -2px 1px 0px #f2f2f2, inset 0px -2px 2px 0px rgba(0,0,0,0.5)",
             }}
           >
-            <span className="whitespace-nowrap font-product text-[21.333px] leading-none text-[#263138]">
-              creating your board
+            <span
+              ref={labelRef}
+              className="whitespace-nowrap font-product text-[21.333px] leading-[1.2] text-[#263138]"
+            >
+              {END_LABEL.split("").map((c, i) => (
+                <span key={i} className="inline-block overflow-hidden align-bottom">
+                  <span data-char className="inline-block">
+                    {c === " " ? " " : c}
+                  </span>
+                </span>
+              ))}
             </span>
           </div>
         </div>
