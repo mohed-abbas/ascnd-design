@@ -20,19 +20,17 @@ const SCRUB = 0.5; // light smoothing on top of Lenis
 // ── Timeline proportions (scrubbed → only the ratios matter) ────────────────
 const HEAD_DUR = 0.6; // per-character roll-up duration
 const HEAD_STAGGER = 0.05; // gap between heading characters
-const PILL_DUR = 0.7; // pill + lens fade-in
-const ENTER = 0.7; // first phrase rolling into the pill
-const ROLL = 0.55; // each phrase→next roll
-const HOLD = 1.15; // dwell on each phrase (reading time)
-const ROLL_EASE = "power3.out";
+const PILL_DUR = 0.7; // pill fade-in
+const REEL_DUR = 6; // linear scrub across all phrases (smooth, no dwell)
+const ROLL_EASE = "power3.out"; // heading roll-up ease
 
 /**
  * "why teams stay" scrubbed orchestrator. Renders nothing. On mount it builds one
  * scroll-scrubbed timeline over the section:
- *   1. the heading rolls up per character + the glass pill / lens fade in, then
- *   2. the reel cycles through every phrase — a quick `power3.out` roll into the
- *      pill, then a dwell so it can be read — by animating a single inherited
- *      `--reel-y` (px) that both the base and lens columns translate by.
+ *   1. the heading rolls up per character + the glass pill fades in, then
+ *   2. the reel scrubs SMOOTHLY and linearly through every phrase — tied directly
+ *      to scroll, with no dwell between phrases — by animating a single inherited
+ *      `--reel-y` (px) that the reel column translates by.
  *
  * SCRUBBED: `--reel-y` is tied to scroll position, so it plays forward as the
  * section enters and reverses as it leaves, with no fixed duration. Because
@@ -66,9 +64,9 @@ export default function WhyStayReveal() {
     });
 
     mm.add("(prefers-reduced-motion: no-preference)", () => {
-      // Arm the hidden start before paint: reel parked one step low (pill empty),
-      // heading glyphs below their clips, pill + lens invisible.
-      gsap.set(stage, { "--reel-y": `${REEL_STEP}px` });
+      // Arm the hidden start before paint: reel at the first phrase, heading
+      // glyphs below their clips, pill invisible.
+      gsap.set(stage, { "--reel-y": "0px" });
       if (chars.length) gsap.set(chars, { yPercent: 110 });
       if (pill) gsap.set(pill, { autoAlpha: 0, scale: 0.96 });
 
@@ -92,19 +90,15 @@ export default function WhyStayReveal() {
           0,
         );
 
-      // Reel — starts just after the heading settles. First phrase rolls in, then
-      // each subsequent phrase after a dwell (the `+=HOLD` gap is the reading beat).
+      // Reel — one smooth, linear scrub from the first phrase to the last, tied
+      // directly to scroll (no dwell between phrases). Starts just after the
+      // heading settles so it owns the bulk of the scroll range.
       const headEnd = HEAD_DUR + HEAD_STAGGER * chars.length;
-      tl.to(stage, { "--reel-y": "0px", duration: ENTER, ease: ROLL_EASE }, headEnd + 0.25);
-      for (let i = 1; i < N; i++) {
-        tl.to(
-          stage,
-          { "--reel-y": `${-i * REEL_STEP}px`, duration: ROLL, ease: ROLL_EASE },
-          `+=${HOLD}`,
-        );
-      }
-      // Trailing dwell so the last phrase rests centred through the end of the scrub.
-      tl.to({}, { duration: HOLD });
+      tl.to(
+        stage,
+        { "--reel-y": `${-(N - 1) * REEL_STEP}px`, duration: REEL_DUR, ease: "none" },
+        headEnd + 0.25,
+      );
     });
 
     return () => mm.revert();
