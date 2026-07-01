@@ -143,7 +143,7 @@ export default function ReceiveMedia() {
     <div ref={rootRef} className="absolute inset-0">
       {/* Clipped grid window — the blur target. */}
       <div
-        className="absolute left-[31px] top-[30px] h-[300px] w-[378px] overflow-hidden"
+        className="absolute left-[31px] top-[30px] h-[300px] w-[378px] overflow-hidden rounded-[12px]"
         style={{ WebkitMaskImage: FADE, maskImage: FADE }}
       >
         <div ref={gridRef} className="absolute left-[-75px] top-[-88px] h-[510px] w-[594px]">
