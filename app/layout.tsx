@@ -59,14 +59,11 @@ export default function RootLayout({
           href="/fonts/product-sans-medium.typeface.json"
           as="fetch"
         />
-        {/* Warm the two bare cliff cut-outs during HTML parse. They're the
-            heaviest assets on the intro's ready gate (the WebGL <Rocks> suspend
-            on them) AND back the DOM cliffs, yet today they don't start
-            downloading until the lazy WebGL chunk has parsed and the scene has
-            mounted — deeply serial. Preloading as image overlaps that ~1MB with
-            the chunk download (useTexture / next-image then hit a warm cache). */}
-        <link rel="preload" href="/rocks/left-rock.avif" as="image" />
-        <link rel="preload" href="/rocks/right-rock.avif" as="image" />
+        {/* The bare cliff cut-outs are NOT hand-preloaded here anymore: the DOM
+            <Rock> (rock.tsx) is `priority`, so next/image already emits an
+            identical image preload in the SSR <head> (which also warms the cache
+            the WebGL <Rocks> useTexture then hits). A manual dup just doubled the
+            <link> for the same href. See docs/performance-audit.md A3. */}
         {/* The loader's cloud sprite (intro-loader.tsx) — small, and the real
             WebGL clouds reuse the same file, so one warm cache serves both. */}
         <link rel="preload" href="/textures/cloud-puff.png" as="image" />
