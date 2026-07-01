@@ -153,7 +153,10 @@ export default function ReceiveMedia() {
               className="absolute overflow-hidden rounded-[12px]"
               style={{ left: t.x, top: t.y, width: t.w, height: t.h }}
             >
-              <Image src={t.src} alt={t.alt} fill sizes="300px" className="object-cover" />
+              {/* Served unoptimized: the tiles are 3× vector-mockup exports, so
+                  the raw PNG stays razor-sharp on retina — Next's AVIF/WebP
+                  re-encode was softening the fine dashboard text. */}
+              <Image src={t.src} alt={t.alt} fill sizes="300px" unoptimized className="object-cover" />
             </div>
           ))}
         </div>
