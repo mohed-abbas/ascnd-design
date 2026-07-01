@@ -130,14 +130,16 @@ void main() {
   t2 *= scale * 0.6;
   t3 *= scale;
 
-  // BRAND PALETTE — retuned from the source purple/teal/white to an on-brand
-  // luminous blue that reads as additive light over the #62abff sky:
-  //   outer halo → saturated brand blue/indigo
-  //   mid ring   → soft sky-cyan
-  //   hot core   → white
-  color = mix(color, vec3(0.25, 0.45, 1.0), t);
-  color = mix(color, vec3(0.55, 0.85, 1.0), t3);
-  color = mix(color, vec3(0.85, 0.92, 1.0), t2);
+  // BRAND PALETTE — a white ramp matching the site's clouds (#ffffff) rather
+  // than a blue tint, so the trail reads as the same cloud-light over the
+  // #62abff sky. Kept very slightly cool so it sits against the blue backdrop
+  // (the screen blend + alpha=luminance let the sky glow through the halo):
+  //   outer halo → dim cool white (faint haze)
+  //   mid ring   → soft white
+  //   hot core   → near-pure cloud white
+  color = mix(color, vec3(0.55, 0.62, 0.72), t);
+  color = mix(color, vec3(0.80, 0.86, 0.94), t3);
+  color = mix(color, vec3(0.96, 0.98, 1.00), t2);
 
   color = clamp(color, 0.0, 1.0);
 
