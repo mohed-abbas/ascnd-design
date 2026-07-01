@@ -663,8 +663,8 @@ function Glass({
             distortion={0.2}
             distortionScale={0.4}
             temporalDistortion={0.28}
-            samples={10}
-            resolution={1024}
+            samples={8}
+            resolution={512}
             backside={true}
             backsideThickness={0.4}
             clearcoat={0}
