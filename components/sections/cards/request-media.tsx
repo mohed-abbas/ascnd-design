@@ -162,25 +162,26 @@ export default function RequestMedia() {
         .to(tools, { autoAlpha: 1, scale: 1, duration: 0.3, ease: "back.out(2)", stagger: 0.08 }, ">-0.4")
         // hold the finished request
         .to({}, { duration: 1.0 })
-        // submit: fly up + out while the card shrinks and the queue glides up —
-        // a slow, eased collapse mirroring the expand so it compacts smoothly
-        .addLabel("submit")
-        .to(active, { y: -70, autoAlpha: 0, duration: 0.55, ease: "power2.in" }, "submit")
-        .to(active, { height: ROW_H, borderRadius: 37, duration: 0.95, ease: "power2.inOut" }, "submit+=0.05")
-        // reset (invisible) for the next request, tag cycled
+        // compact back down into the "request anything…" pill (queue glides up),
+        // crossfading the brief out and the placeholder in as it shrinks — stays
+        // in place the whole time so it never leaves an empty gap. Tag cycles so
+        // the pill returns as the next request.
+        .addLabel("compact")
         .add(() => {
           pass += 1;
           const tag = ACTIVE_TAGS[pass % ACTIVE_TAGS.length];
           activeTagEls.forEach((el) => (el.textContent = tag));
+        })
+        .to(active, { height: ROW_H, borderRadius: 37, duration: 0.95, ease: "power2.inOut" }, "compact")
+        .to(tools, { autoAlpha: 0, duration: 0.3, ease: "power1.out" }, "compact")
+        .to(expanded, { autoAlpha: 0, duration: 0.45, ease: "power1.out" }, "compact")
+        .to(collapsed, { autoAlpha: 1, duration: 0.5, ease: "power1.out" }, "compact+=0.25")
+        // clear the typed brief + reset the tools for the next pass
+        .add(() => {
           typed.n = 0;
           briefText.textContent = "";
         })
-        .set(expanded, { autoAlpha: 0 })
-        .set(collapsed, { autoAlpha: 1 })
-        .set(tools, { autoAlpha: 0, scale: 0.4 })
-        .set(active, { y: 0 })
-        // fresh pill fades back in at the top
-        .to(active, { autoAlpha: 1, duration: 0.3, ease: "power2.out" });
+        .set(tools, { scale: 0.4 });
 
       const io = new IntersectionObserver(
         ([entry]) => {
