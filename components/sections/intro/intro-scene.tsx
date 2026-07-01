@@ -474,7 +474,17 @@ function ConveyorRig({
     const REVOLUTION = SLOT_TIME * N;
     const state = { p: 0 };
 
+    // Repaint cap: the necklace drifts slowly, so a full-refresh-rate repaint
+    // (60/120fps) of this persistent canvas is wasted work. The tween's onUpdate
+    // still advances `state.p` every tick (cheap), but we only recompute poses +
+    // invalidate() at ~30fps. See docs/performance-audit.md R3.
+    const MIN_FRAME = 1 / 30;
+    let lastRender = -Infinity;
+
     const render = () => {
+      const now = performance.now() / 1000;
+      if (now - lastRender < MIN_FRAME) return;
+      lastRender = now;
       const entries = tileEntry.current;
       if (!entries) return;
       tiles.forEach((t, i) => {
@@ -509,8 +519,29 @@ function ConveyorRig({
       repeat: -1,
       onUpdate: render,
     });
+
+    // Off-screen pause: the tiles live in the hero collage, so once the hero has
+    // fully scrolled above the viewport the conveyor is invisible — stop it
+    // entirely (0 GPU) and resume when it scrolls back. Gated on the hero
+    // element being fully gone, so it never pauses while any tile is visible.
+    gsap.registerPlugin(ScrollTrigger);
+    const heroEl = document.querySelector<HTMLElement>("[data-hero]");
+    const vis = heroEl
+      ? ScrollTrigger.create({
+          trigger: heroEl,
+          start: "bottom top", // hero's bottom passes the viewport top → fully gone
+          end: "max",
+          onEnter: () => tw.pause(),
+          onLeaveBack: () => {
+            tw.resume();
+            invalidate();
+          },
+        })
+      : null;
+
     return () => {
       tw.kill();
+      vis?.kill();
     };
   }, [running, tiles, arc, tileEntry, invalidate]);
 

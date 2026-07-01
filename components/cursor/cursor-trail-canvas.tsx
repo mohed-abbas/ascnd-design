@@ -24,6 +24,10 @@ import {
  *   as additive glow over the sky (the wrapper sets mix-blend-mode: screen).
  * - Driven off GSAP's shared ticker — NOT a private requestAnimationFrame —
  *   per the "one loop, no competing schedulers" mandate (lenis-provider.tsx).
+ * - Idle-gated: the sim only rides the ticker while the pointer is (recently)
+ *   moving; it parks after the trail fades so a still cursor costs 0 GPU (the
+ *   fragment shader is the heaviest always-on cost on the page — see
+ *   docs/performance-audit.md R2). The next pointermove wakes it.
  * - The camera / OrbitControls / tweakpane from the source are dropped: the
  *   shaders write clip-space positions directly, so the camera is unused.
  * - Full teardown on unmount (the source leaked everything).
@@ -141,6 +145,8 @@ export default function CursorTrailCanvas() {
     const onPointerMove = (ev: PointerEvent) => {
       pointer.x = (ev.clientX / sizes.width) * 2 - 1;
       pointer.y = -(ev.clientY / sizes.height) * 2 + 1;
+      lastMoveAt = performance.now();
+      start(); // wake the sim if it parked while the pointer sat still
     };
     window.addEventListener("pointermove", onPointerMove);
 
@@ -170,6 +176,16 @@ export default function CursorTrailCanvas() {
     // Driven by GSAP's shared ticker. `deltaMs` is ms since the last tick;
     // the source used THREE.Clock.getDelta() (seconds), so divide.
     const update = (_time: number, deltaMs: number) => {
+      // Idle-gate: once the pointer has been still long enough for the trail to
+      // fully fade, park the loop — a motionless cursor then costs 0 GPU (the
+      // sim's fragment shader is the single heaviest always-on cost on the page).
+      // onPointerMove re-adds this callback on the next move. IDLE_TIMEOUT covers
+      // the trail's ~3s decay, so the frozen last frame is identical to a live
+      // one (a still pointer renders the same steady state every frame anyway).
+      if (performance.now() - lastMoveAt > IDLE_TIMEOUT_MS) {
+        stop();
+        return;
+      }
       const dt = deltaMs / 1000;
       time += dt;
 
@@ -205,7 +221,21 @@ export default function CursorTrailCanvas() {
       outputRT = temp;
     };
 
-    gsap.ticker.add(update);
+    // Idle-gate machinery: the sim only rides the shared ticker while the pointer
+    // is (recently) moving. Starts parked — the first pointermove wakes it.
+    let running = false;
+    let lastMoveAt = 0;
+    const IDLE_TIMEOUT_MS = 3500; // stillness before parking (covers the trail fade)
+    const start = () => {
+      if (running) return;
+      running = true;
+      gsap.ticker.add(update);
+    };
+    const stop = () => {
+      if (!running) return;
+      running = false;
+      gsap.ticker.remove(update);
+    };
 
     return () => {
       gsap.ticker.remove(update);
