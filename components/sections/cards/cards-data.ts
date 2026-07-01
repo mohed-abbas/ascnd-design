@@ -13,28 +13,11 @@ export const CARD_COPY = {
   receive: "work back in a few business days on average. revise until it's right.",
 } as const;
 
-/** The three tool icons under each request row (Card2), left→right at 17/46/75. */
-export const TOOL_ICONS = [
-  { src: "/cards/tool-attach.svg", alt: "" },
-  { src: "/cards/tool-format.svg", alt: "" },
-  { src: "/cards/tool-copy.svg", alt: "" },
-] as const;
+/** Placeholder shown in every request-input row (Card2, Figma 140:13791). */
+export const REQUEST_PLACEHOLDER = "request anything...";
 
-export type RequestItem = {
-  /** Expanded row (full brief, 205px) vs collapsed (103px). */
-  tall: boolean;
-  body: string;
-};
-
-/** Card2 "request" rows. First is the expanded brief; the rest are collapsed. */
-export const REQUEST_ITEMS: RequestItem[] = [
-  {
-    tall: true,
-    body: "hey, need a landing page for our seed round launch. brand's mostly done, i'll drop the figma. should feel fast and a bit premium, think linear not corporate. hero, social proof, pricing, faq. can we get a first look by fri|",
-  },
-  { tall: false, body: CARD_COPY.request },
-  { tall: false, body: CARD_COPY.request },
-];
+/** The category tag on each request-input row, top→bottom. */
+export const REQUEST_TAGS = ["UI/UX", "Design", "Wireframe", "UI/UX", "UI/UX"] as const;
 
 export type ShotTile = {
   src: string;
