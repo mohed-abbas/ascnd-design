@@ -7,6 +7,11 @@ import {
   trailFragmentShader,
   trailVertexShader,
 } from "./cursor-trail-shaders";
+import {
+  getQualityConfig,
+  heavyEffectFpsCap,
+  subscribeQuality,
+} from "@/lib/perf/quality-store";
 
 /**
  * GPU fluid cursor-trail, ported from `cursor-trail-main/src/main.js`
@@ -104,12 +109,14 @@ export default function CursorTrailCanvas() {
     const scene = new THREE.Scene();
     scene.add(displayMesh);
 
-    // Two 1/4-resolution half-float render targets — the ping-pong buffers.
-    const RT_SCALE = 0.5;
+    // Half-float ping-pong buffers. Their resolution scale is driven by the
+    // adaptive-quality tier (docs/performance-audit.md §6): high 0.5 → low 0.4.
+    // Read once here; the subscription below resizes them when the tier steps.
+    let rtScale = getQualityConfig().cursorRtScale;
     function createRenderTarget() {
       return new THREE.WebGLRenderTarget(
-        sizes.width * RT_SCALE,
-        sizes.height * RT_SCALE,
+        sizes.width * rtScale,
+        sizes.height * rtScale,
         {
           type: THREE.HalfFloatType,
           minFilter: THREE.LinearFilter,
@@ -127,7 +134,7 @@ export default function CursorTrailCanvas() {
       fragmentShader: trailFragmentShader,
       uniforms: {
         uResolution: new THREE.Uniform(
-          new THREE.Vector2(sizes.width * RT_SCALE, sizes.height * RT_SCALE)
+          new THREE.Vector2(sizes.width * rtScale, sizes.height * rtScale)
         ),
         uMap: new THREE.Uniform(null),
         uPointer: new THREE.Uniform(new THREE.Vector2(0, 0)),
@@ -155,12 +162,12 @@ export default function CursorTrailCanvas() {
       // positions, so the camera is unused (a bare THREE.Camera has no
       // projection to update).
       trailMaterial.uniforms.uResolution.value.set(
-        sizes.width * RT_SCALE,
-        sizes.height * RT_SCALE
+        sizes.width * rtScale,
+        sizes.height * rtScale
       );
       renderer.setSize(sizes.width, sizes.height);
-      inputRT.setSize(sizes.width * RT_SCALE, sizes.height * RT_SCALE);
-      outputRT.setSize(sizes.width * RT_SCALE, sizes.height * RT_SCALE);
+      inputRT.setSize(sizes.width * rtScale, sizes.height * rtScale);
+      outputRT.setSize(sizes.width * rtScale, sizes.height * rtScale);
       renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     }
 
@@ -173,6 +180,10 @@ export default function CursorTrailCanvas() {
     applySize();
 
     let time = 0;
+    // Frame-time accumulator for the adaptive fps cap (see below). Accumulating
+    // skipped frames' dt keeps the sim integration time-accurate when capped.
+    let accumMs = 0;
+    let fpsCap = heavyEffectFpsCap();
     // Driven by GSAP's shared ticker. `deltaMs` is ms since the last tick;
     // the source used THREE.Clock.getDelta() (seconds), so divide.
     const update = (_time: number, deltaMs: number) => {
@@ -186,7 +197,14 @@ export default function CursorTrailCanvas() {
         stop();
         return;
       }
-      const dt = deltaMs / 1000;
+      // Adaptive fps cap (docs/performance-audit.md §6): the fluid sim looks
+      // identical above 60fps but costs ~2× on a 120Hz panel, so heavyEffectFpsCap
+      // caps it there (0 = uncapped, ride the display on a 60Hz high tier). Bail
+      // until a full capped interval of frame time has accumulated.
+      accumMs += deltaMs;
+      if (fpsCap > 0 && accumMs < 1000 / fpsCap) return;
+      const dt = accumMs / 1000;
+      accumMs = 0;
       time += dt;
 
       trailMaterial.uniforms.uTime.value = time;
@@ -237,7 +255,22 @@ export default function CursorTrailCanvas() {
       gsap.ticker.remove(update);
     };
 
+    // React to adaptive-quality tier changes (startup pick / watchdog step-down):
+    // re-read the fps cap and resize the ping-pong buffers to the new RT scale.
+    // On a capable machine the tier stays `high` (== shipped values) and this is
+    // a no-op; on a struggling one the watchdog drops rtScale here to recover.
+    const onQuality = () => {
+      fpsCap = heavyEffectFpsCap();
+      const nextScale = getQualityConfig().cursorRtScale;
+      if (nextScale !== rtScale) {
+        rtScale = nextScale;
+        applySize();
+      }
+    };
+    const unsubscribeQuality = subscribeQuality(onQuality);
+
     return () => {
+      unsubscribeQuality();
       gsap.ticker.remove(update);
       window.removeEventListener("pointermove", onPointerMove);
       window.removeEventListener("resize", onResize);

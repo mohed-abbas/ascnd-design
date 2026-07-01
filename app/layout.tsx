@@ -6,6 +6,7 @@ import Background from "@/components/background/background";
 import CloudLayer from "@/components/background/cloud-layer";
 import CursorTrail from "@/components/cursor/cursor-trail";
 import LenisProvider from "@/components/providers/lenis-provider";
+import QualityController from "@/components/providers/quality-controller";
 
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
@@ -80,6 +81,10 @@ export default function RootLayout({
             __html: "document.documentElement.classList.add('reveal-armed');",
           }}
         />
+        {/* Adaptive-quality boot: detects refresh rate + GPU strength, picks a
+            starting tier, and arms the frame-time watchdog on the shared ticker
+            (docs/performance-audit.md §6). Renders nothing. */}
+        <QualityController />
         <LenisProvider>
           {/* Two independent fixed layers at the root: the sky backdrop
               (-z-20) and the volumetric clouds (-z-10), with page content

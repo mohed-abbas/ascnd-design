@@ -46,8 +46,47 @@ Phase 1 (the quick wins from §8) is **implemented, production-build-verified, a
 - **Grain (A2) reverted**, so ~1.23 MB of potential savings was intentionally left on the table.
 
 ### Deferred (not yet done)
-- **Phase 2** — the actual 120/60 fps guarantee: refresh-rate detection + adaptive quality tier + frame-time watchdog (§6), cursor sim 60-cap + `RT_SCALE` 0.5→~0.4, transmission-material tiering, cloud DPR/off-screen. **Requires real 120 Hz + weak-GPU device testing.**
 - **Phase 3** — boot polish: defer cursor mount past the intro, flatten the intro forced-reflow, pre-split SplitText, phased-resolution glass, dead-asset cleanup.
+
+---
+
+## 1b. Phase 2 — Scaffolding landed (in progress, 2026-07-01)
+
+The adaptive-quality **plumbing (§6 C1–C4)** is built and wired, with **conservative defaults that reproduce the shipped look 1:1 on capable hardware** (the `high` tier == current values, and `unknown` GPU starts high). What remains is **on-hardware calibration** of the tier constants and thresholds — which needs a real 120 Hz panel + a genuinely weak GPU. Nothing here changes the look until the watchdog demotes a struggling machine.
+
+### New subsystem — `lib/perf/`
+
+| File | Role (audit ref) |
+| --- | --- |
+| `tiers.ts` | Tier table: `high`/`medium`/`low` → the GPU-cost knobs (cursor RT scale, cloud dpr cap, MTM samples/resolution/backside, Text3D tessellation). `high` = shipped values. |
+| `refresh-rate.ts` | **C1** — median of ~30 rAF deltas → snapped Hz (SSR-safe → 60). |
+| `gpu-tier.ts` | **C2** — unmasked-renderer + memory/core heuristic → `strong`/`weak`/`unknown`. |
+| `quality-store.ts` | **C2/C3 state** — framework-agnostic store: `initQuality`, one-way `stepDownTier`, `heavyEffectFpsCap` (60 on fast panels / stepped tiers), subscribe. |
+| `frame-watchdog.ts` | **C3** — EMA of frame time on the shared GSAP ticker; sustained overrun → one step down, with warmup + cooldown. |
+| `use-quality.ts` | React binding (`useSyncExternalStore`, server snapshot = `high` → no hydration mismatch). |
+
+`components/providers/quality-controller.tsx` boots it (detect → `initQuality` → arm watchdog), mounted once in `layout.tsx`.
+
+### Calibration affordances
+
+A capable machine (e.g. an M4) never trips the watchdog, so tiers must be driven by hand to eyeball `medium`/`low`:
+
+- **`?tier=high|medium|low`** — pins a tier (freezes the watchdog) for A/B. Applied synchronously so even the intro glass snapshot picks it up.
+- **`window.__quality`** (dev only) — `{ tier, refreshHz, config, force(t), stepDown() }`, and every tier change logs to the console.
+
+### Consumers wired (live)
+
+- **Cursor sim** (`cursor-trail-canvas.tsx`) — reads `cursorRtScale`; **fps cap** via a dt-accumulator (integration stays time-accurate when capped); resizes the ping-pong buffers on tier change.
+- **Clouds** (`cloud-canvas.tsx`) — `dpr={[1, cloudDprMax]}` from the tier (R3F re-applies dpr on change).
+- **Intro glass** (`intro-scene.tsx`) — MTM `samples`/`resolution`/`backside` + Text3D `curveSegments`/`bevelSegments` from a **mount-time snapshot** (not reactive — avoids a mid-intro FBO rebuild flash).
+
+### Still to do (needs real hardware)
+
+- **Calibrate constants:** tier knob values in `tiers.ts`, and `THRESHOLD_MS`/`SUSTAIN`/`WARMUP`/`COOLDOWN` in `frame-watchdog.ts`, against a 120 Hz panel + a weak GPU. All are marked `CALIBRATE`.
+- **A/B the `medium`/`low` glass** (256/4, backside off) for acceptable dispersion at the telephoto framing.
+- **Intro frameloop 60-cap** on 120 Hz panels (R4 item 3) — `heavyEffectFpsCap` exists but isn't yet wired into the intro's `frameloop="always"`.
+- **Pause `MorphRig` off-screen** (R5) — dpr cap done; the visibility gate is still pending.
+- Extend the `gpu-tier.ts` renderer regexes from real weak-device profiling.
 
 ---
 

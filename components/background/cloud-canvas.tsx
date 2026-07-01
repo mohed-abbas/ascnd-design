@@ -8,6 +8,7 @@ import type { Group } from "three";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import type { CloudSpec } from "./cloud-specs";
+import { useQuality } from "@/lib/perf/use-quality";
 
 /**
  * Volumetric cloud field (Three.js / R3F + drei <Clouds>).
@@ -374,11 +375,16 @@ export default function CloudCanvas({
   const [canvasKey, setCanvasKey] = useState(0);
   const remount = useCallback(() => setCanvasKey((k) => k + 1), []);
 
+  // Adaptive dpr cap (docs/performance-audit.md §6): the soft sprite hides low
+  // device-pixel-ratio, so a struggling machine can drop the ceiling (high 2 →
+  // low 1.25) to quarter the FBO fragment count. R3F re-applies dpr on change.
+  const { cloudDprMax } = useQuality();
+
   return (
     <Canvas
       key={canvasKey}
       frameloop="demand"
-      dpr={[1, 2]}
+      dpr={[1, cloudDprMax]}
       gl={{ antialias: true, alpha: true }}
       camera={{ position: CAMERA.position, fov: CAMERA.fov }}
       // Aim the static camera at the origin once, before the first frame, so

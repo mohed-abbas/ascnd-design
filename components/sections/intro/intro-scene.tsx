@@ -14,6 +14,7 @@ import * as THREE from "three";
 import type { Group, Mesh } from "three";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
+import { getQualityConfig } from "@/lib/perf/quality-store";
 
 // Warm the local assets ASAP so the scene's ready-gate isn't waiting on a
 // cold fetch (the rock cut-outs; the Environment HDR loads in its own Suspense
@@ -624,6 +625,13 @@ function Glass({
   // transmission samples the transparent FBO (black) and the glass goes dark.
   const sky = useMemo(() => new THREE.Color("#62abff"), []);
 
+  // Adaptive glass quality (docs/performance-audit.md §6): the MTM is the intro's
+  // heaviest frame cost (~3 scene renders/frame with backside on). Snapshot the
+  // tier ONCE at mount — NOT reactively — so a watchdog step-down can't rebuild
+  // the FBO mid-intro and flash the glass. The intro is short enough that the
+  // starting tier is what matters here; the watchdog's warmup outlasts it anyway.
+  const q = useMemo(() => getQualityConfig(), []);
+
   // Measure half the glyph height so the off-screen start sits FULLY below the
   // viewport edge (centre one half-height past the bottom). The glass slides up
   // from there to its rest — a true bottom-of-screen entrance, fully visible the
@@ -674,12 +682,12 @@ function Glass({
           font={font}
           size={glassSize}
           height={0}
-          curveSegments={32}
+          curveSegments={q.text3dCurveSegments}
           bevelEnabled
           bevelThickness={0.175}
           bevelSize={0.095}
           bevelOffset={0}
-          bevelSegments={12}
+          bevelSegments={q.text3dBevelSegments}
           letterSpacing={0.02}
         >
           ascnd
@@ -694,9 +702,9 @@ function Glass({
             distortion={0.2}
             distortionScale={0.4}
             temporalDistortion={0.28}
-            samples={8}
-            resolution={512}
-            backside={true}
+            samples={q.mtmSamples}
+            resolution={q.mtmResolution}
+            backside={q.mtmBackside}
             backsideThickness={0.4}
             clearcoat={0}
             clearcoatRoughness={0}
