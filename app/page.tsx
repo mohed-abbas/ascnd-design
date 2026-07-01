@@ -15,8 +15,16 @@ export default function Home() {
       <Tagline />
       {/* Three-card row (subscribe · request · receive) over the shared sky. */}
       <Cards />
-      {/* Glass-pill "slot reel" of selling points ("why teams stay"). */}
-      <WhyStay />
+      {/* Glass-pill "slot reel" of selling points ("why teams stay").
+          Wrapped in a plain block div ON PURPOSE: <body> is a flex column, and
+          ScrollTrigger cannot add pin-spacing to a direct child of a flex/grid
+          container — the flex layout swallows the pin-spacer's padding, so the
+          pinned reel would get zero scroll room and the page would freeze when
+          it reached this section. The block wrapper gives the pin normal block
+          flow to grow into. Don't remove it. */}
+      <div className="shrink-0">
+        <WhyStay />
+      </div>
     </>
   );
 }

@@ -7,10 +7,12 @@
  * (fixed px, centre-anchored) and stays transparent so the fixed <Background/> +
  * clouds show through.
  *
- * Motion is SCROLL-SCRUBBED (why-stay-reveal.tsx): as the section crosses the
- * viewport the heading rolls up per character, the pill fades in, then the reel
- * cycles through every phrase with a dwell on each. Resting state (SSR / no-JS /
- * reduced-motion) shows the heading assembled and the first phrase centred.
+ * Motion is SCROLL-SCRUBBED + PINNED (why-stay-reveal.tsx): as the section rises
+ * in, the heading rolls up per character and the pill fades in; the section then
+ * PINS to the viewport and continued scrolling glides the reel linearly through
+ * every phrase (one continuous scrub, no dwell) before the pin releases and the
+ * page scrolls on. Resting state (SSR / no-JS / reduced-motion) shows the heading
+ * assembled and the first phrase centred, with no pin.
  *
  * The glass is <GlassSurface/> (components/ui) — a transparent pill whose
  * `backdrop-filter` runs a chromatic per-channel SVG displacement, so the bright
