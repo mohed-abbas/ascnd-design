@@ -28,12 +28,60 @@ export type CloudSpec = {
   seed: number;
   bounds: [number, number, number];
   volume: number;
-  /** Section anchor in viewport heights down the page (0 = hero). */
-  anchorVh: number;
+  /**
+   * FIELD clouds (hero + rock bases): section anchor in viewport heights down the
+   * page (0 = hero). These parallax continuously with the page. Mutually exclusive
+   * with `section`.
+   */
+  anchorVh?: number;
+  /**
+   * SECTION clouds: bind the cloud to a section so it SLIDES into its `ndc` rest
+   * spot as the section enters, HOLDS there while the section is on screen (the
+   * hold spans any pin automatically), then SLIDES out as it leaves — instead of
+   * parallaxing continuously. Mutually exclusive with `anchorVh`. See <SectionRig>.
+   */
+  section?: SectionBind;
+};
+
+export type SectionBind = {
+  /** CSS selector for the section element (e.g. "[data-cards]"). */
+  trigger: string;
+  /**
+   * Fixed distance (in viewport-heights) the cloud spends sliding IN and sliding
+   * OUT of its rest spot (default 0.7). Fixed — not a fraction of the crossing —
+   * so a pinned section (longer crossing) slides the same and just holds longer.
+   */
+  slide?: number;
+  /** How far (in viewport-heights) the cloud slides in/out of its rest spot (default 1). */
+  travel?: number;
 };
 
 export const SKY_CLOUDS: CloudSpec[] = [
   { key: "top-right", ndc: [0.78, 0.72], dist: 22, seed: 4, bounds: [4, 1.2, 1], volume: 4, anchorVh: 0 },
+  // Cards section ("ground to launch in days") — one sky cloud low on the right,
+  // same size as the hero top-right. It slides in with the card row, holds at the
+  // bottom-right while the section is on screen, then slides out.
+  {
+    key: "cards-br",
+    ndc: [0.78, -0.7],
+    dist: 22,
+    seed: 11,
+    bounds: [4, 1.2, 1],
+    volume: 4,
+    section: { trigger: "[data-cards]" },
+  },
+  // Why-stay section ("why teams stay") — a BIGGER cloud on the left. The section
+  // PINS, so its scroll crossing is long; the cloud holds left of the glass reel
+  // for that whole span, then slides out.
+  {
+    key: "whystay-left",
+    ndc: [-0.78, 0.1],
+    dist: 22,
+    seed: 21,
+    bounds: [5.5, 1.8, 1],
+    volume: 6,
+    section: { trigger: "[data-whystay]" },
+  },
 ];
 
 // Rock-base banks — a WIDE, SHALLOW strip that just skirts the foot of each

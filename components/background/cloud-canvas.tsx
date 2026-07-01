@@ -176,7 +176,7 @@ function CloudPlacement({
       const g = cloudRefs.current[i];
       if (!g) return;
       placeOnRay(camera, c.ndc[0], c.ndc[1], c.dist, v);
-      g.position.set(v.x, v.y - c.anchorVh * vwh * scrollFactor, v.z);
+      g.position.set(v.x, v.y - (c.anchorVh ?? 0) * vwh * scrollFactor, v.z);
     });
     invalidate();
   }, [clouds, camera, width, height, invalidate, cloudRefs, scrollFactor]);
@@ -229,6 +229,103 @@ function ScrollAnchorRig({
     // width/height: recompute worldPerPx when the viewport (and thus the world
     // height at REF_DIST) changes.
   }, [groupRef, camera, width, height, invalidate, scrollFactor]);
+
+  return null;
+}
+
+/**
+ * Section-anchored clouds. Unlike the field clouds (hero + rock bases) which
+ * parallax continuously with the page, a section cloud is driven by ITS OWN
+ * section's scroll crossing, so it: SLIDES into its `ndc` rest spot as the
+ * section enters, HOLDS there motionless while the section is on screen — the
+ * hold automatically spans any pin, since a pinned section's scroll crossing is
+ * simply longer — then SLIDES up and out as the section leaves. These clouds sit
+ * OUTSIDE the parallax field group, so only this rig moves them.
+ *
+ * Motion is a single scrubbed curve over the section's crossing (from section top
+ * at viewport bottom, to section bottom at viewport top): the cloud eases from
+ * `travel` below the rest spot up to it over a FIXED `slide` distance, HOLDS at
+ * rest for the whole middle, then eases up to `travel` above over a final `slide`.
+ *
+ * The slide distance is fixed in viewport-heights (not a fraction of the crossing)
+ * so a PINNED section behaves identically to a plain one: the pin only lengthens
+ * the crossing, which the hold simply absorbs — the cloud still slides in/out over
+ * the same distance while the section enters/leaves, and stays put while it's
+ * docked. Demand mode, so each update invalidate()s a repaint.
+ */
+function SectionRig({
+  clouds,
+  cloudRefs,
+}: {
+  clouds: CloudSpec[];
+  cloudRefs: React.RefObject<(Group | null)[]>;
+}) {
+  const camera = useThree((s) => s.camera);
+  const width = useThree((s) => s.size.width);
+  const height = useThree((s) => s.size.height);
+  const invalidate = useThree((s) => s.invalidate);
+
+  useEffect(() => {
+    gsap.registerPlugin(ScrollTrigger);
+    const vwh = viewportWorldHeight(camera);
+    const rest = new THREE.Vector3();
+    const triggers: ScrollTrigger[] = [];
+
+    clouds.forEach((c, i) => {
+      const bind = c.section;
+      if (!bind) return;
+      const section = document.querySelector<HTMLElement>(bind.trigger);
+      if (!section) return;
+
+      // Rest world point at the cloud's ndc/dist — where it holds while its
+      // section is on screen.
+      placeOnRay(camera, c.ndc[0], c.ndc[1], c.dist, rest);
+      const restX = rest.x;
+      const restY = rest.y;
+      const restZ = rest.z;
+
+      const travel = (bind.travel ?? 1) * vwh; // world units slid in/out
+      const slidePx = (bind.slide ?? 0.7) * window.innerHeight; // fixed slide distance
+
+      // smoothstep for soft starts/stops at the hold boundaries.
+      const smooth = (t: number) => t * t * (3 - 2 * t);
+      const clamp01 = (t: number) => (t < 0 ? 0 : t > 1 ? 1 : t);
+
+      const apply = (self: ScrollTrigger) => {
+        const g = cloudRefs.current[i];
+        if (!g) return;
+        const total = self.end - self.start;
+        // Clamp the slide so two slides never overlap on a short crossing (hold ≥ 0).
+        const slide = Math.min(slidePx, total / 2);
+        const scroll = self.start + self.progress * total;
+        let d: number; // offset from rest, in [-1, 1] × travel
+        if (scroll <= self.start + slide) {
+          d = -1 + smooth(clamp01((scroll - self.start) / slide)); // slide in: below → rest
+        } else if (scroll >= self.end - slide) {
+          d = smooth(clamp01((scroll - (self.end - slide)) / slide)); // rest → above
+        } else {
+          d = 0; // hold at rest (spans the pin, if any)
+        }
+        g.position.set(restX, restY + d * travel, restZ);
+        invalidate();
+      };
+
+      const st = ScrollTrigger.create({
+        trigger: section,
+        start: "top bottom",
+        end: "bottom top",
+        scrub: true,
+        invalidateOnRefresh: true,
+        onUpdate: (self) => apply(self),
+        onRefresh: (self) => apply(self),
+      });
+      triggers.push(st);
+      apply(st); // seed (starts below when the section is still down-page)
+    });
+
+    return () => triggers.forEach((t) => t.kill());
+    // width/height: rest point + vwh depend on the projected viewport.
+  }, [clouds, cloudRefs, camera, width, height, invalidate]);
 
   return null;
 }
@@ -392,8 +489,15 @@ export default function CloudCanvas({
   /** Per-layer scroll damping (1 = welded to page; < 1 = slower parallax). */
   scrollFactor?: number;
 }) {
+  // Field clouds (hero + rock bases) parallax with the page via <ScrollAnchorRig>
+  // + <CloudPlacement>; section clouds (bound to a section) slide/hold/slide via
+  // <SectionRig>. Split so each set gets the right rig and its own ref list.
+  const fieldClouds = clouds.filter((c) => !c.section);
+  const sectionClouds = clouds.filter((c) => c.section);
+
   const fieldRef = useRef<Group | null>(null);
   const cloudRefs = useRef<(Group | null)[]>([]);
+  const sectionRefs = useRef<(Group | null)[]>([]);
   // Bumping this remounts the <Canvas> with a fresh GL context — last resort
   // when a lost context never restores. See <ContextWatchdog>.
   const [canvasKey, setCanvasKey] = useState(0);
@@ -443,11 +547,11 @@ export default function CloudCanvas({
         range={RANGE}
         frustumCulled={false}
       >
-        {/* <ScrollAnchorRig> translates the whole field on scroll so clouds move
-            with the page; each cloud sits at its own screen-anchored position
-            inside it (set by <CloudPlacement>). */}
+        {/* Field clouds: <ScrollAnchorRig> translates this whole group on scroll
+            so they move with the page; each sits at its own screen-anchored
+            position inside it (set by <CloudPlacement>). */}
         <group ref={fieldRef}>
-          {clouds.map((c, i) => (
+          {fieldClouds.map((c, i) => (
             <group
               key={c.key}
               ref={(el) => {
@@ -458,10 +562,24 @@ export default function CloudCanvas({
             </group>
           ))}
         </group>
+
+        {/* Section clouds: OUTSIDE the field group (no page parallax); driven by
+            their section's crossing via <SectionRig> (slide in → hold → slide out). */}
+        {sectionClouds.map((c, i) => (
+          <group
+            key={c.key}
+            ref={(el) => {
+              sectionRefs.current[i] = el;
+            }}
+          >
+            <Cloud {...CLOUD} seed={c.seed} bounds={c.bounds} volume={c.volume} />
+          </group>
+        ))}
       </Clouds>
 
-      <CloudPlacement clouds={clouds} cloudRefs={cloudRefs} scrollFactor={scrollFactor} />
+      <CloudPlacement clouds={fieldClouds} cloudRefs={cloudRefs} scrollFactor={scrollFactor} />
       <ScrollAnchorRig groupRef={fieldRef} scrollFactor={scrollFactor} />
+      <SectionRig clouds={sectionClouds} cloudRefs={sectionRefs} />
       <MorphRig />
       <InvalidateOnReady />
       <ContextWatchdog onUnrecoverable={remount} />
