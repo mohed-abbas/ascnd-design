@@ -167,22 +167,20 @@ body {
 }
 
 /* Tagline "supersize" reveal (air.inc-style) — scrubbed per line via --p (0→1,
-   set by tagline-reveal.tsx). Defaults to 1 so SSR / no-JS / reduced-motion
-   render the finished headline. Two channels off one variable, both
-   compositor-only (filter + mask), so no reflow — the text stays in place:
+   set on the line by tagline-reveal.tsx and inherited down to each character's
+   [data-tfill]). Defaults to 1 so SSR / no-JS / reduced-motion render the
+   finished headline. Two compositor-only channels off one variable (the line
+   stays in place):
      • blur — clears from the resting 0.43vw (design value) to crisp
-     • fill — a bright [data-tfill] clone is wiped in bottom→top over the dim
-              base through a progress-driven gradient mask. */
+     • fill — a bright [data-tfill] clone (one per character) is wiped in
+              bottom→top over the dim base through a progress-driven gradient
+              mask.
+   The third channel, the per-character roll-up, is a GSAP transform on each
+   [data-tchar] mover; its padding-bottom (set inline) gives descenders room
+   inside the overflow-hidden clip, so the mask (below) also covers them. */
 [data-trise] {
   filter: blur(calc((1 - var(--p, 1)) * 0.43vw));
   will-change: filter;
-  /* The tight leading (0.961) lets descenders (e.g. the "y" in "you") spill
-     below the line box, and the fill clone's mask is clipped to the border-box —
-     so that overflow would render unfilled. Pad the box down to enclose the
-     descenders, then cancel the space with a matching negative margin so the
-     mask covers the full glyph without changing line spacing. */
-  padding-bottom: 0.22em;
-  margin-bottom: -0.22em;
 }
 [data-tfill] {
   --top: calc(100% - var(--p, 1) * 150%);

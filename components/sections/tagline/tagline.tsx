@@ -17,35 +17,64 @@
  * `-translate` on both axes), but the copy itself is LEFT-aligned. `w-max`
  * shrinks the box to the widest line so the centered column reads as a tight,
  * left-ragged block. The two lines ("look like you" / "raised it.") are
- * authored as explicit block spans (not a `<br/>`) so each can be its own
- * overflow-hidden mask for the scroll reveal (see tagline-reveal.tsx).
+ * authored as explicit block spans (not a `<br/>`) and split into per-character
+ * clip units for the scroll reveal (see tagline-reveal.tsx).
  */
 import TaglineReveal from "./tagline-reveal";
 
+const LINES = ["look like you", "raised it."] as const;
+
 export default function Tagline() {
+  // A single sequence index across both lines so the per-character roll-up
+  // cascades continuously (line 2 picks up where line 1 left off).
+  let si = 0;
+
   return (
     <section data-tagline className="relative min-h-dvh w-full overflow-hidden">
-      {/* Scrubs the per-line "supersize" reveal (rise + blur-clear + bright
-          fill) as the section crosses the viewport; renders nothing. */}
+      {/* Scrubs the per-line "supersize" reveal (per-char roll-up + blur-clear +
+          bright fill) as the section crosses the viewport; renders nothing. */}
       <TaglineReveal />
       <p
         data-tagline-headline
         className="absolute left-1/2 top-1/2 w-max -translate-x-1/2 -translate-y-1/2 text-left font-product text-[15.27vw] font-bold leading-[0.961] tracking-[-0.03em]"
       >
-        {/* Each line stays in place while [data-trise] sharpens (blur-clear) and
-            a bright [data-tfill] clone is wiped over the dim base. Both channels
-            are driven by one per-line --p in globals.css. */}
-        {(["look like you", "raised it."] as const).map((line) => (
+        {/* Three channels off one per-line --p (globals.css): [data-trise] on the
+            line sharpens (blur-clear), and each character's [data-tfill] clone is
+            wiped over the dim base. On top, each [data-tchar] mover rolls up out
+            of its overflow-hidden clip (GSAP, tagline-reveal.tsx). The mover
+            holds BOTH the dim base and the bright fill so they roll up together;
+            its padding-bottom gives descenders (the "y" in "you") room inside the
+            clip, cancelled by the clip's negative margin so line spacing holds. */}
+        {LINES.map((line) => (
           <span key={line} data-tline className="block">
             <span data-trise className="relative block">
-              <span className="text-white/25">{line}</span>
-              <span
-                aria-hidden
-                data-tfill
-                className="absolute inset-0 text-white"
-              >
-                {line}
-              </span>
+              {line.split("").map((ch, i) => {
+                const glyph = ch === " " ? " " : ch;
+                const idx = si++;
+                return (
+                  <span
+                    key={i}
+                    className="inline-block overflow-hidden align-bottom"
+                    style={{ marginBottom: "-0.22em" }}
+                  >
+                    <span
+                      data-tchar
+                      data-si={idx}
+                      className="relative inline-block will-change-transform"
+                      style={{ paddingBottom: "0.22em" }}
+                    >
+                      <span className="text-white/25">{glyph}</span>
+                      <span
+                        aria-hidden
+                        data-tfill
+                        className="absolute inset-0 text-white"
+                      >
+                        {glyph}
+                      </span>
+                    </span>
+                  </span>
+                );
+              })}
             </span>
           </span>
         ))}
