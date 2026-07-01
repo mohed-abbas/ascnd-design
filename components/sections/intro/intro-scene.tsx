@@ -475,17 +475,24 @@ function ConveyorRig({
     const REVOLUTION = SLOT_TIME * N;
     const state = { p: 0 };
 
-    // Repaint cap: the necklace drifts slowly, so a full-refresh-rate repaint
-    // (60/120fps) of this persistent canvas is wasted work. The tween's onUpdate
-    // still advances `state.p` every tick (cheap), but we only recompute poses +
-    // invalidate() at ~30fps. See docs/performance-audit.md R3.
-    const MIN_FRAME = 1 / 30;
+    // Repaint cap: the tween's onUpdate advances `state.p` every ticker tick
+    // (cheap), but we only recompute poses + invalidate() at the bounded rate
+    // heavyEffectFpsCap() gives — 60fps on a 120Hz panel, display-rate on a 60Hz
+    // one (cap 0 = ride the display) — mirroring the intro's IntroFrameCap so the
+    // necklace drifts as smoothly as the rest of the page. This was a flat ~30fps
+    // (docs/performance-audit.md R3), but at 30 the slow drift read as stuttery
+    // next to the 60/120fps DOM animations. Affordable at 60: the steady scene is
+    // just 8 unlit textured quads (the glass/rocks are unmounted) at dpr≤1.5, and
+    // it still pauses entirely off-screen (below), so it stays well within budget.
     let lastRender = -Infinity;
 
     const render = () => {
-      const now = performance.now() / 1000;
-      if (now - lastRender < MIN_FRAME) return;
-      lastRender = now;
+      const cap = heavyEffectFpsCap(); // 0 = ride the display (≤60Hz), else 60
+      if (cap > 0) {
+        const now = performance.now() / 1000;
+        if (now - lastRender < 1 / cap) return;
+        lastRender = now;
+      }
       const entries = tileEntry.current;
       if (!entries) return;
       tiles.forEach((t, i) => {

@@ -30,7 +30,7 @@ Phase 1 (the quick wins from §8) is **implemented, production-build-verified, a
 | Item | Status | Commit | Result |
 |---|---|---|---|
 | **R2** idle-gate cursor trail | ✅ shipped | `30a1b4e` | sim parks after ~3.5 s of pointer stillness → **0 GPU when idle**; wakes on `pointermove` |
-| **R3** throttle + off-screen-pause conveyor | ✅ shipped | `30a1b4e` | persistent canvas repaint capped to ~30 fps; pauses entirely once the hero scrolls away |
+| **R3** throttle + off-screen-pause conveyor | ✅ shipped | `30a1b4e` | persistent canvas repaint capped + pauses entirely once the hero scrolls away. **Later raised 30 → 60 fps** (`heavyEffectFpsCap()`, bounded on 120 Hz): at 30 fps the slow drift read as stuttery next to the 60/120 fps DOM animations, and the steady scene is cheap (8 unlit quads, glass unmounted, dpr ≤ 1.5) — the off-screen pause is unchanged |
 | **A1** rocks → AVIF (crispness-preserved) | ✅ shipped | `6c655e2` | full 1428×3928 res kept, q80 (PSNR ~43 dB RGB / ~62 dB alpha); **−443 KB**, applied to DOM `<Image>` + WebGL `useTexture` |
 | **A4** fonts → WOFF2 | ✅ shipped | `76d49e5` | 4 weights, no subsetting (623 glyphs each); **384 KB → 135 KB (−249 KB)**, shorter `fonts.ready` gate |
 | **A5** `images.formats` AVIF | ✅ shipped | `a8ca856` | optimized `next/image` output now prefers AVIF (rocks stay pre-encoded/`unoptimized`) |
