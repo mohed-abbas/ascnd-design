@@ -2,7 +2,7 @@
  * Adaptive quality tiers (docs/performance-audit.md §6 C2, Phase 2 items 8–10).
  *
  * One tier = one coherent set of GPU-cost knobs shared by every heavy effect
- * (cursor fluid sim, volumetric clouds, intro liquid glass). The quality store
+ * (volumetric clouds, intro liquid glass). The quality store
  * (quality-store.ts) holds the *current* tier; the frame-time watchdog
  * (frame-watchdog.ts) steps it DOWN under sustained load. Consumers read the
  * derived config and never touch tier logic directly.
@@ -25,10 +25,6 @@ export const TIER_ORDER: readonly TierName[] = ["high", "medium", "low"] as cons
 export interface QualityConfig {
   readonly tier: TierName;
 
-  // ── Cursor fluid sim (components/cursor/cursor-trail-canvas.tsx) ──
-  /** Ping-pong render-target resolution scale. Lower = fewer fragment ops. */
-  readonly cursorRtScale: number;
-
   // ── Volumetric clouds (components/background/cloud-canvas.tsx) ──
   /** Upper bound of the Canvas `dpr={[1, x]}`. The soft sprite hides low dpr. */
   readonly cloudDprMax: number;
@@ -49,10 +45,6 @@ export interface QualityConfig {
 export const TIERS: Record<TierName, QualityConfig> = {
   high: {
     tier: "high",
-    // 0.5→0.4: the fluid sim's fragment shader is the per-pointer-move spike
-    // (~17ms frames). 0.4 quarters-ish the RT fragment count vs 0.5; the trail
-    // is a soft additive glow so the lower resolution is invisible.
-    cursorRtScale: 0.4,
     // 2→1.5: on a retina panel dpr 2 is 4× the fragments of dpr 1. The cloud
     // sprite is soft, so 1.5 is imperceptible but cuts each 30fps repaint ~44%.
     cloudDprMax: 1.5,
@@ -71,7 +63,6 @@ export const TIERS: Record<TierName, QualityConfig> = {
   },
   medium: {
     tier: "medium",
-    cursorRtScale: 0.35,
     cloudDprMax: 1.5,
     mtmSamples: 6,
     mtmResolution: 320,
@@ -81,7 +72,6 @@ export const TIERS: Record<TierName, QualityConfig> = {
   },
   low: {
     tier: "low",
-    cursorRtScale: 0.3,
     cloudDprMax: 1.25,
     mtmSamples: 4,
     mtmResolution: 256,

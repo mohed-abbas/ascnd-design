@@ -83,11 +83,12 @@ export function getRefreshHz(): number {
 }
 
 /**
- * The fps cap for the *heavy, look-invariant* effects — the fluid cursor and the
- * liquid glass. Both are visually identical above 60 fps but cost ~2× on a
- * 120 Hz panel, so cap them to 60 on any fast panel OR any stepped-down tier
- * (audit item 9). Returns 0 = uncapped (ride the display) on a 60 Hz high tier.
- * Clouds are already 30 fps-throttled; parallax/scroll effects are NOT capped.
+ * The fps cap for the *heavy, look-invariant* effects — the intro liquid glass
+ * and the tile conveyor. Both are visually identical above 60 fps but cost ~2×
+ * on a 120 Hz panel, so cap them to 60 on any fast panel OR any stepped-down
+ * tier (audit item 9). Returns 0 = uncapped (ride the display) on a 60 Hz high
+ * tier. Clouds are already 30 fps-throttled; parallax/scroll effects are NOT
+ * capped.
  */
 export function heavyEffectFpsCap(): number {
   return refreshHz > 70 || currentTier !== "high" ? 60 : 0;
