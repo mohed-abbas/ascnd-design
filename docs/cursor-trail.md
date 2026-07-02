@@ -1,5 +1,10 @@
 # Fluid-simulation cursor
 
+> **Historical.** This effect was removed and replaced by the DOM/glass custom
+> cursor — see `docs/custom-cursor.md`. `components/cursor/` no longer contains
+> `splash-cursor.tsx`; this file is kept for the lineage/rationale only.
+
+
 A global cursor effect: the pointer splats swirling, dissipating colour across
 the viewport. This is [React Bits' `SplashCursor`](https://reactbits.dev) — a
 GPU fluid (Navier–Stokes dye/velocity) solver — vendored into the repo.

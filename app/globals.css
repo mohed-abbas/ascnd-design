@@ -33,6 +33,15 @@ body {
   font-family: var(--font-sans);
 }
 
+/* Custom cursor — hide the native cursor ONLY while the JS-mounted custom
+   cursor is live. Scoped to a data attribute that components/cursor sets after
+   it mounts and confirms eligibility, so touch / no-JS / SSR keep their native
+   cursor (a global `cursor: none` would strip it from everyone). */
+html[data-custom-cursor="on"],
+html[data-custom-cursor="on"] * {
+  cursor: none;
+}
+
 /* ─── On-load reveal (hero text slide-up) ──────────────────────────────────
    Initial hidden state for the staggered on-load reveal. It is keyed on the
    `.reveal-armed` class, which a synchronous inline script in layout.tsx adds

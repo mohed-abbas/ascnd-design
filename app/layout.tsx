@@ -4,6 +4,7 @@ import localFont from "next/font/local";
 import "./globals.css";
 import Background from "@/components/background/background";
 import CloudLayer from "@/components/background/cloud-layer";
+import Cursor from "@/components/cursor/cursor";
 import LenisProvider from "@/components/providers/lenis-provider";
 import QualityController from "@/components/providers/quality-controller";
 
@@ -120,6 +121,11 @@ export default function RootLayout({
           <Background />
           <CloudLayer />
           {children}
+          {/* Custom cursor — last child so it paints on top (its glass lens
+              samples everything behind it), and a sibling of the fixed sky
+              layers so no filter/backdrop-filter ancestor breaks it. Gated to
+              real-mouse desktops; renders nothing otherwise. */}
+          <Cursor />
         </LenisProvider>
       </body>
     </html>
