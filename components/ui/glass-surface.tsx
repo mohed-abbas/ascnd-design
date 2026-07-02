@@ -136,9 +136,12 @@ const GlassSurface: React.FC<GlassSurfaceProps> = ({
   const isDarkMode = useDarkMode();
 
   const generateDisplacementMap = () => {
-    const rect = containerRef.current?.getBoundingClientRect();
-    const actualWidth = rect?.width || 400;
-    const actualHeight = rect?.height || 200;
+    // Layout size, NOT getBoundingClientRect: the why-stay entrance animates
+    // the pill's wrapper from scale 0.96, and gBCR bakes that transform into
+    // the map's aspect (the reveal arms the scale in a layout effect, before
+    // this ever runs). offsetWidth/Height are transform-independent.
+    const actualWidth = containerRef.current?.offsetWidth || 400;
+    const actualHeight = containerRef.current?.offsetHeight || 200;
     const edgeSize = Math.min(actualWidth, actualHeight) * (borderWidth * 0.5);
 
     const svgContent = `
@@ -163,7 +166,18 @@ const GlassSurface: React.FC<GlassSurfaceProps> = ({
     return `data:image/svg+xml,${encodeURIComponent(svgContent)}`;
   };
 
+  // Regeneration is EXPENSIVE relative to what it looks like: the data-URI is
+  // an SVG the feImage must re-decode and re-rasterize INCLUDING its baked
+  // blur(12px). Upstream regenerated it 3× on mount (two effects + the
+  // ResizeObserver's initial fire) and on every resize tick — dedupe on the
+  // inputs so identical maps are never rebuilt.
+  const lastMapKeyRef = useRef<string>("");
   const updateDisplacementMap = () => {
+    const w = containerRef.current?.offsetWidth || 400;
+    const h = containerRef.current?.offsetHeight || 200;
+    const key = [w, h, borderRadius, borderWidth, brightness, opacity, blur, mixBlendMode].join("|");
+    if (key === lastMapKeyRef.current) return;
+    lastMapKeyRef.current = key;
     feImageRef.current?.setAttribute("href", generateDisplacementMap());
   };
 
@@ -238,22 +252,24 @@ const GlassSurface: React.FC<GlassSurfaceProps> = ({
   useEffect(() => {
     if (!containerRef.current) return;
 
+    // Trailing debounce: a live resize fires the observer per tick, and each
+    // regeneration is a full SVG re-raster (see updateDisplacementMap) — only
+    // the settled size matters. The dedupe key above also drops the
+    // observer's initial fire (the mount effect already built that map).
+    let debounce: ReturnType<typeof setTimeout> | undefined;
     const resizeObserver = new ResizeObserver(() => {
-      setTimeout(updateDisplacementMap, 0);
+      clearTimeout(debounce);
+      debounce = setTimeout(updateDisplacementMap, 100);
     });
 
     resizeObserver.observe(containerRef.current);
 
     return () => {
+      clearTimeout(debounce);
       resizeObserver.disconnect();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  useEffect(() => {
-    setTimeout(updateDisplacementMap, 0);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [width, height]);
 
   const getContainerStyles = (): React.CSSProperties => {
     const baseStyles: React.CSSProperties = {
@@ -274,7 +290,12 @@ const GlassSurface: React.FC<GlassSurfaceProps> = ({
         background: isDarkMode
           ? `hsl(0 0% 0% / ${backgroundOpacity})`
           : `hsl(0 0% 100% / ${backgroundOpacity})`,
-        backdropFilter: `url(#${filterId}) saturate(${saturation})`,
+        // saturate(1) is an identity op but still costs a filter stage per
+        // evaluation — only append it when it actually does something.
+        backdropFilter:
+          saturation === 1
+            ? `url(#${filterId})`
+            : `url(#${filterId}) saturate(${saturation})`,
         boxShadow: isDarkMode
           ? `0 0 2px 1px color-mix(in oklch, white, transparent 65%) inset,
              0 0 10px 4px color-mix(in oklch, white, transparent 85%) inset,
@@ -434,7 +455,18 @@ const GlassSurface: React.FC<GlassSurfaceProps> = ({
 
             <feBlend in="red" in2="green" mode="screen" result="rg" />
             <feBlend in="rg" in2="blue" mode="screen" result="output" />
-            <feGaussianBlur ref={gaussianBlurRef} in="output" stdDeviation="0.7" />
+            {/* A full-region convolution pass per evaluation — only mount it
+                when a soften is actually requested. At displace 0 the last
+                feBlend is the filter output. If rim jaggies ever need
+                softening, bake blur into the displacement map instead (that
+                raster is one-time, not per-frame). */}
+            {displace > 0 && (
+              <feGaussianBlur
+                ref={gaussianBlurRef}
+                in="output"
+                stdDeviation={displace}
+              />
+            )}
           </filter>
         </defs>
       </svg>

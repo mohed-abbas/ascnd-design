@@ -134,7 +134,10 @@ export default function WhyStay() {
             brightness={50}
             opacity={0.9}
             blur={12}
-            displace={0.5}
+            // 0 drops the feGaussianBlur primitive entirely (a full-region
+            // convolution per scrolled frame for a half-pixel soften — audit
+            // O4). The map's own baked blur carries the softness.
+            displace={0}
             backgroundOpacity={0}
             saturation={1}
             distortionScale={-180}
