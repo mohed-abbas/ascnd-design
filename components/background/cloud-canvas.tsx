@@ -256,9 +256,12 @@ function ScrollAnchorRig({
 function SectionRig({
   clouds,
   cloudRefs,
+  activeClouds,
 }: {
   clouds: CloudSpec[];
   cloudRefs: React.RefObject<(Group | null)[]>;
+  /** Shared with <MorphRig>: which section clouds are on screen right now. */
+  activeClouds: React.RefObject<Set<string>>;
 }) {
   const camera = useThree((s) => s.camera);
   const width = useThree((s) => s.size.width);
@@ -310,6 +313,14 @@ function SectionRig({
         invalidate();
       };
 
+      // Report on-screen state to the shared set so <MorphRig> keeps the
+      // living morph pumping while this cloud is visible. Set add/delete is
+      // idempotent, so refresh-time re-fires are harmless.
+      const setActive = (isActive: boolean) => {
+        if (isActive) activeClouds.current.add(c.key);
+        else activeClouds.current.delete(c.key);
+      };
+
       const st = ScrollTrigger.create({
         trigger: section,
         start: "top bottom",
@@ -318,14 +329,20 @@ function SectionRig({
         invalidateOnRefresh: true,
         onUpdate: (self) => apply(self),
         onRefresh: (self) => apply(self),
+        onToggle: (self) => setActive(self.isActive),
       });
       triggers.push(st);
       apply(st); // seed (starts below when the section is still down-page)
+      setActive(st.isActive); // seed a load that restores mid-section
     });
 
-    return () => triggers.forEach((t) => t.kill());
+    const active = activeClouds.current;
+    return () => {
+      triggers.forEach((t) => t.kill());
+      clouds.forEach((c) => active.delete(c.key));
+    };
     // width/height: rest point + vwh depend on the projected viewport.
-  }, [clouds, cloudRefs, camera, width, height, invalidate]);
+  }, [clouds, cloudRefs, activeClouds, camera, width, height, invalidate]);
 
   return null;
 }
@@ -339,38 +356,47 @@ function SectionRig({
  * idles automatically when the page isn't visible. Desktop-gated upstream, and
  * reduced-motion never mounts the canvas, so the steady repaint is affordable.
  */
-function MorphRig() {
+function MorphRig({
+  activeClouds,
+}: {
+  /** Section clouds currently on screen, maintained by <SectionRig>. */
+  activeClouds: React.RefObject<Set<string>>;
+}) {
   const invalidate = useThree((s) => s.invalidate);
 
   useEffect(() => {
     gsap.registerPlugin(ScrollTrigger);
     const STEP = 1 / 30; // seconds between repaints
     let last = 0;
-    // Pause the pump once the clouds have parallaxed off-screen. All clouds are
-    // hero-anchored; the ROCK layer (scrollFactor 1, the last to leave) clears
-    // the top edge by ~1.2 vh of scroll, so 1.5 vh is a safe cutoff with margin.
+    // Pause the pump when nothing morphing is visible. The FIELD clouds (hero +
+    // rock bases) all clear the top edge by ~1.2 vh of scroll, so past 1.5 vh
+    // they're gone — but SECTION clouds (cards, why-stay) live deeper down-page,
+    // so the pump also runs whenever <SectionRig> reports any of them on screen
+    // (audit F4.1: the old hero-only cutoff froze their morph while visible).
     // A frozen morph off-screen costs nothing and is invisible; we repaint once
     // on the way back so the clouds are current when they re-enter (audit R5).
-    let onScreen = true;
-    // gsap.ticker passes elapsed time in seconds; throttle to STEP.
+    let fieldOnScreen = true;
+    // gsap.ticker passes elapsed time in seconds; throttle to STEP. `last`
+    // advances in whole STEPs (not `last = time`) so the leftover fraction of a
+    // tick carries over — a true 30 fps average instead of drifting to ~27.
     const tick = (time: number) => {
-      if (!onScreen) return;
+      if (!fieldOnScreen && activeClouds.current.size === 0) return;
       if (time - last >= STEP) {
-        last = time;
+        last = time - ((time - last) % STEP);
         invalidate();
       }
     };
     gsap.ticker.add(tick);
 
     // Trigger-less ScrollTrigger: active once scrolled past 1.5× the viewport,
-    // where the hero-anchored clouds are gone. `start` is a function so it
+    // where the hero-anchored field clouds are gone. `start` is a function so it
     // re-resolves on resize/refresh.
     const st = ScrollTrigger.create({
       start: () => window.innerHeight * 1.5,
       end: "max",
       onToggle: (self) => {
-        onScreen = !self.isActive;
-        if (onScreen) invalidate(); // repaint the skipped frame on return
+        fieldOnScreen = !self.isActive;
+        if (fieldOnScreen) invalidate(); // repaint the skipped frame on return
       },
     });
 
@@ -378,7 +404,7 @@ function MorphRig() {
       gsap.ticker.remove(tick);
       st.kill();
     };
-  }, [invalidate]);
+  }, [invalidate, activeClouds]);
 
   return null;
 }
@@ -498,6 +524,10 @@ export default function CloudCanvas({
   const fieldRef = useRef<Group | null>(null);
   const cloudRefs = useRef<(Group | null)[]>([]);
   const sectionRefs = useRef<(Group | null)[]>([]);
+  // Which section clouds are on screen — written by <SectionRig>, read by
+  // <MorphRig> to keep their living morph pumping while visible. Empty on a
+  // field-only canvas (the ROCK layer), which keeps the plain 1.5 vh rule.
+  const activeClouds = useRef<Set<string>>(new Set());
   // Bumping this remounts the <Canvas> with a fresh GL context — last resort
   // when a lost context never restores. See <ContextWatchdog>.
   const [canvasKey, setCanvasKey] = useState(0);
@@ -579,8 +609,8 @@ export default function CloudCanvas({
 
       <CloudPlacement clouds={fieldClouds} cloudRefs={cloudRefs} scrollFactor={scrollFactor} />
       <ScrollAnchorRig groupRef={fieldRef} scrollFactor={scrollFactor} />
-      <SectionRig clouds={sectionClouds} cloudRefs={sectionRefs} />
-      <MorphRig />
+      <SectionRig clouds={sectionClouds} cloudRefs={sectionRefs} activeClouds={activeClouds} />
+      <MorphRig activeClouds={activeClouds} />
       <InvalidateOnReady />
       <ContextWatchdog onUnrecoverable={remount} />
     </Canvas>
