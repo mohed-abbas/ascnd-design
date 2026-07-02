@@ -61,6 +61,26 @@ export function CheckMark(props: SVGProps<SVGSVGElement>) {
   );
 }
 
+/** Paper-plane "send" glyph (lucide send-horizontal, Figma 328:181). Stroked
+ *  with currentColor so the consumer sets its ink (the send button uses the
+ *  dark #263138 on a white chip). */
+export function SendHorizontal(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg
+      viewBox="0 0 18 18"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      xmlns="http://www.w3.org/2000/svg"
+      {...props}
+    >
+      <path d="M16.5001 8.99991C16.5001 9.07094 16.4799 9.14052 16.4419 9.20053C16.4039 9.26055 16.3496 9.30853 16.2854 9.3389L2.7854 15.7139C2.71797 15.7466 2.64227 15.7582 2.56813 15.7473C2.49399 15.7364 2.42485 15.7035 2.36969 15.6528C2.31452 15.6021 2.27589 15.5359 2.25881 15.463C2.24172 15.39 2.24698 15.3136 2.2739 15.2437L4.4054 9.52341C4.53115 9.18573 4.53115 8.81408 4.4054 8.47641L2.27315 2.75615C2.24609 2.68614 2.24077 2.60959 2.25786 2.5365C2.27495 2.46341 2.31367 2.39717 2.36896 2.3464C2.42426 2.29564 2.49357 2.26272 2.56785 2.25193C2.64213 2.24114 2.71794 2.25298 2.7854 2.28591L16.2854 8.66091C16.3496 8.69128 16.4039 8.73926 16.4419 8.79928C16.4799 8.85929 16.5001 8.92887 16.5001 8.99991ZM16.5001 8.99991H4.4999" />
+    </svg>
+  );
+}
+
 /** X / Twitter glyph (social row, node 75:309). */
 export function XSocial(props: SVGProps<SVGSVGElement>) {
   return (
