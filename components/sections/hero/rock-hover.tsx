@@ -6,7 +6,8 @@ import { INTRO_REVEAL_EVENT, introWillPlay } from "@/components/sections/intro/i
 
 const REDUCE_MOTION = "(prefers-reduced-motion: reduce)";
 const REVEAL_SIZE = 340; // diameter (px) of the soft reveal disc
-const FOLLOW = 0.18; // pointer-follow lerp factor per frame (lower = more lag)
+const FOLLOW = 0.18; // pointer-follow lerp factor per 60 Hz frame (lower = more lag)
+const BASE_FRAME_MS = 1000 / 60; // the frame length FOLLOW was tuned against
 
 /**
  * Drives the grass-rock hover reveal. Renders nothing; on mount it tracks the
@@ -46,9 +47,14 @@ export default function RockHover() {
       overlay.style.setProperty("--reveal-half", `${state.size / 2}px`);
     };
 
-    const tick = () => {
-      state.x += (target.x - state.x) * FOLLOW;
-      state.y += (target.y - state.y) * FOLLOW;
+    // Frame-rate-independent follow (audit H3): a raw `* FOLLOW` per tick
+    // converges ~2× faster at 120 Hz than at 60. Exponential-decay correction
+    // keeps the chase speed identical at any refresh rate — GSAP's ticker
+    // hands us the frame's deltaTime (ms) as the second argument.
+    const tick = (_time: number, deltaTime: number) => {
+      const k = 1 - Math.pow(1 - FOLLOW, deltaTime / BASE_FRAME_MS);
+      state.x += (target.x - state.x) * k;
+      state.y += (target.y - state.y) * k;
       apply();
     };
 
