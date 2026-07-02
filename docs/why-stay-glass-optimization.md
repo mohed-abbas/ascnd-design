@@ -97,3 +97,20 @@ Superseded by O2 if isolation lands. If O2 fails the A/B: trace whether the `why
 | 3 — only if still < 60 | O3 (single map + static rim) | side-by-side look approval before merging |
 
 Per-wave measurement scenarios (mirror the audit §1 table): idle pinned (hands off), slow scrub through the pin, fast flick through the pin, and the entrance frame — worst-frame and p95 each time.
+
+---
+
+## 5. Wave 1 + 2 — measured results (2026-07-02, dev server, software-raster Chromium @60 Hz)
+
+All Wave-1 items landed (`c1e3ba3`…`4b95a8c`; O1's gate is latched + falls back to **clear glass**, not frost — see the two decision notes in §2). Wave 2: **O2 implemented**; **O6 skipped** (no spike left to warm away); **O9 moot** (isolation excludes the fixed layers by construction).
+
+| Scenario | Audit baseline | After W1+W2 | Note |
+|---|---|---|---|
+| Pin-engage worst frame | **358 ms** | **50 ms** | the dedicated spike is gone (map dedupe + smaller chain); 50 ms = an ordinary scrub frame in this env |
+| Scrub through pin | ~40 fps avg | 42–53 fps avg (run variance) | still **entirely** filter-bound, see below |
+| Same scrub, pill hidden | — | **60 fps flat** (p95 16.7) | pin + reel + mask + Lenis cost nothing |
+| Same scrub, clear glass (no filter) | — | **60 fps flat** | the low-tier fallback is free |
+| Idle pinned | — | 60 fps, isolate on or off | no main-thread cloud coupling measurable here |
+| O2 look A/B | — | **pixel-identical** | screenshots at the same scroll position; rim refraction + chroma unchanged |
+
+**Interpretation.** The remaining cost during the scrub is *irreducible for this mechanism*: the sampled backdrop is the moving text itself, so every scrolled frame legitimately re-runs the chain — isolation can't help with that (its value is idle decoupling + smaller raster input, both confirmed free to keep). These numbers are from a **software-raster** environment; on real GPU-raster hardware the chain is lighter — verify on the target machine with the DevTools FPS meter. If it doesn't lock 60 there, the remaining paths are **O3** (single map, ~⅓ chain — may lock 60, won't reach 120) or the **WebGL pill** (guaranteed 120, exact look, full knob control — the text is static content, so refraction becomes a one-quad SDF shader over a texture atlas; see the discussion of 2026-07-02).

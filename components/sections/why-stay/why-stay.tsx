@@ -85,10 +85,22 @@ export default function WhyStay() {
       <WhyStayReveal />
 
       {/* Design block (Figma 302:1462, 876×434) centred in the viewport. It
-          carries --reel-y, inherited by the reel column. */}
+          carries --reel-y, inherited by the reel column.
+
+          `isolate` is load-bearing (docs/why-stay-glass-optimization.md O2):
+          per Filter Effects 2, `isolation: isolate` forms a BACKDROP ROOT, so
+          the pill's backdrop-filter samples ONLY this stage subtree (the reel
+          text + heading) instead of the whole page behind it. Two wins:
+          - the fixed cloud canvas + sky/grain no longer invalidate the
+            displacement chain (the clouds morph at 30fps behind this section —
+            without the root, the pill re-filtered even while idle);
+          - the sampled image is text-on-transparent, not the full composite.
+          Look is preserved because bending the flat sky was invisible anyway —
+          all visible refraction is the text, and the sky now shows through
+          unbent. */}
       <div
         data-whystay-stage
-        className="absolute left-1/2 top-1/2 h-[434px] w-[876px] max-w-full -translate-x-1/2 -translate-y-1/2"
+        className="isolate absolute left-1/2 top-1/2 h-[434px] w-[876px] max-w-full -translate-x-1/2 -translate-y-1/2"
       >
         {/* Heading (Figma 302:1460) — top of the block, centred. */}
         <h2 className="absolute left-1/2 top-0 -translate-x-1/2 whitespace-nowrap text-center font-product text-[49px] font-light leading-[1.1] tracking-[-1.47px] text-white">
