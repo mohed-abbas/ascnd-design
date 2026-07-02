@@ -490,8 +490,11 @@ function ConveyorRig({
       const cap = heavyEffectFpsCap(); // 0 = ride the display (≤60Hz), else 60
       if (cap > 0) {
         const now = performance.now() / 1000;
-        if (now - lastRender < 1 / cap) return;
-        lastRender = now;
+        const period = 1 / cap;
+        if (now - lastRender < period) return;
+        // Carry the remainder (see IntroFrameCap): snapping lastRender to `now`
+        // re-anchors the window late every paint and beats 60 down to ~50.
+        lastRender = Math.max(lastRender + period, now - period);
       }
       const entries = tileEntry.current;
       if (!entries) return;
@@ -596,15 +599,39 @@ function ScrollRig({
 /**
  * Signals the scene is ready to be revealed. Lives inside <Suspense>, so it
  * only mounts once every sibling's async resource (rock textures, Text3D font,
- * Environment HDR) has resolved; it then waits a couple of painted frames
- * before firing onReady, so <Intro> can start the entrance from the top instead
- * of mid-animation (which looked like a pop after the brief sky-only flash).
+ * Environment HDR) has resolved. It then (a) precompiles every material in the
+ * scene via gl.compileAsync — the MTM + Text3D shader burst otherwise lands
+ * in-band on the first revealed frame and stalls the entrance — and (b) waits a
+ * couple of painted frames, before firing onReady, so <Intro> starts the
+ * entrance from the top instead of mid-animation (which looked like a pop after
+ * the brief sky-only flash). compileAsync uses KHR_parallel_shader_compile
+ * where available, so the compile overlaps the loader cover instead of blocking
+ * the reveal. A 1.5s local failsafe stops a stalled driver compile from holding
+ * the welcome hostage (intro.tsx's 2.5s `ready` failsafe remains the outer net).
  */
 function SceneReady({ onReady }: { onReady?: () => void }) {
+  const gl = useThree((s) => s.gl);
+  const scene = useThree((s) => s.scene);
+  const camera = useThree((s) => s.camera);
+  const compiled = useRef(false);
   const done = useRef(false);
   const frames = useRef(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    const finish = () => {
+      if (!cancelled) compiled.current = true;
+    };
+    const failsafe = window.setTimeout(finish, 1500);
+    gl.compileAsync(scene, camera).then(finish, finish);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(failsafe);
+    };
+  }, [gl, scene, camera]);
+
   useFrame(() => {
-    if (done.current) return;
+    if (done.current || !compiled.current) return;
     frames.current += 1;
     if (frames.current >= 2) {
       done.current = true;
@@ -743,10 +770,17 @@ function IntroFrameCap() {
         invalidate();
         return;
       }
-      if (time - last >= 1 / cap) {
-        last = time;
-        invalidate();
-      }
+      const period = 1 / cap;
+      if (time - last < period) return;
+      // Advance the window by whole periods (carrying the remainder) instead of
+      // snapping `last` to the tick that passed the test. Snapping re-anchors
+      // the window to a tick that always lands a hair LATE, so on a 120Hz
+      // ticker the 16.7ms cadence degrades into a 16.7/25ms mix — a measured
+      // ~50fps presented with visible beat, not the intended 60. The clamp
+      // keeps `last` within one period of `time` so a pause (tab hidden,
+      // ticker stall) can't bank a catch-up burst.
+      last = Math.max(last + period, time - period);
+      invalidate();
     };
     gsap.ticker.add(tick);
     return () => gsap.ticker.remove(tick);
@@ -785,7 +819,14 @@ export default function IntroScene({
       // tile canvas's every-frame conveyor repaint on retina, with no visible
       // softening of the shot images at this size (docs/performance-audit.md §6).
       dpr={[1, 1.5]}
-      gl={{ antialias: true, alpha: true }}
+      // high-performance: ask for the discrete GPU on dual-GPU machines for the
+      // intro's MTM burst. Intro-canvas ONLY — the always-mounted cloud canvases
+      // stay on the default so laptops aren't pinned to the dGPU for ambience.
+      gl={{
+        antialias: true,
+        alpha: true,
+        powerPreference: "high-performance",
+      }}
       // Telephoto: far back + narrow FOV → the glyphs are viewed almost head-on
       // so the thin extrusion shows no side faces (flat glass text, not a 3D
       // block). fov 11.82° at z=40 keeps the visible height at the z=0 plane at
