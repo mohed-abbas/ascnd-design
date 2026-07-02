@@ -3,6 +3,7 @@
 import { useEffect, useLayoutEffect } from "react";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
+import { makeCappedInvalidate } from "@/lib/perf/capped-invalidate";
 import { PHRASES, REEL_STEP } from "./why-stay-data";
 
 gsap.registerPlugin(ScrollTrigger);
@@ -110,9 +111,30 @@ export default function WhyStayReveal() {
       //    page scrolls on. A sine.inOut ease keeps the reel near-still right at
       //    the lock and release, so the pin feels soft rather than snapping into
       //    and out of motion. Pin distance scales with the phrase count.
-      gsap.to(stage, {
-        "--reel-y": `${-(N - 1) * REEL_STEP}px`,
+      //
+      //    The CSS var is written through a capped, snapped writer instead of
+      //    tweening it directly (docs/why-stay-glass-optimization.md O5): every
+      //    --reel-y change moves the reel BEHIND the glass pill, forcing its
+      //    whole backdrop displacement chain to re-evaluate. Tweened directly,
+      //    that ran at scroll-event rate (120/s on a fast panel) and kept
+      //    emitting sub-pixel deltas while the scrub eased to rest. Snapping to
+      //    device pixels dedupes the invisible writes, and makeCappedInvalidate
+      //    (the cloud canvases' throttle) caps the rest at heavyEffectFpsCap()
+      //    with a trailing write, so a scrub can never park one frame stale.
+      const reel = { y: 0 };
+      let lastWritten = 0;
+      const writeReel = () => {
+        const dpr = Math.min(window.devicePixelRatio || 1, 2);
+        const snapped = Math.round(reel.y * dpr) / dpr;
+        if (snapped === lastWritten) return;
+        lastWritten = snapped;
+        stage.style.setProperty("--reel-y", `${snapped}px`);
+      };
+      const cappedWrite = makeCappedInvalidate(writeReel);
+      gsap.to(reel, {
+        y: -(N - 1) * REEL_STEP,
         ease: REEL_EASE,
+        onUpdate: cappedWrite,
         scrollTrigger: {
           trigger: section,
           start: "top top",
@@ -127,6 +149,10 @@ export default function WhyStayReveal() {
           invalidateOnRefresh: true,
         },
       });
+
+      // Drop a pending trailing write on media-query change / unmount (the
+      // gsap.set arming above owns the var's reset).
+      return () => cappedWrite.cancel();
     });
 
     return () => mm.revert();
