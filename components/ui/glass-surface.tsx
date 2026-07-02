@@ -10,7 +10,8 @@
  * to the element's live size) drives three `feDisplacementMap`s — one per R/G/B
  * channel, each offset slightly — recombined for chromatic aberration at the rim.
  * The real distortion is Chromium-only (Safari/Firefox are detected and fall back
- * to a plain frosted/tinted glass). `backdrop-filter` here is safe: the surface is
+ * to a clear glass: rim + static chromatic ring, no backdrop-filter).
+ * `backdrop-filter` here is safe: the surface is
  * a sibling of the root-mounted fixed <Background/>, not an ancestor (CLAUDE.md).
  *
  * In this project it's used as an EMPTY pill laid over the "why teams stay" reel —
@@ -426,23 +427,22 @@ const GlassSurface: React.FC<GlassSurfaceProps> = ({
                     inset 0 -1px 0 0 rgba(255, 255, 255, 0.3)`,
       };
     }
-    // Frosted-glass fallback (Firefox/Safari): the chromatic displacement
-    // filter is unavailable on these engines, so we can't refract the reel.
-    // The next-best "glass" is a genuine frost — enough blur that the big
-    // bright reel text melts into a smooth, even wash (reads as intentional)
-    // rather than the legible smears a light blur leaves behind. Saturation is
-    // kept near 1 so the blue sky isn't pushed into a vivid "blue bar", and a
-    // white body + rim highlights sell the pill edge.
+    // Clear-glass fallback (Firefox/Safari): the displacement filter renders
+    // incorrectly on these engines, so we can't refract the reel. The frost
+    // that used to live here (blur 22px) was rejected by the stakeholder —
+    // over the bright reel on the blue sky it read as a milky blue bar. So:
+    // transparent body + crisp rim + the static chromatic ring below, NO
+    // backdrop-filter at all. The framed phrase stays sharp through the pill
+    // (which is what the design frames anyway), it visually matches the
+    // Chromium tiers' family, and it costs zero per frame.
     return {
       ...baseStyles,
-      background: "rgba(255, 255, 255, 0.14)",
-      backdropFilter: "blur(22px) saturate(1.05) brightness(1.06)",
-      WebkitBackdropFilter: "blur(22px) saturate(1.05) brightness(1.06)",
-      border: "1px solid rgba(255, 255, 255, 0.5)",
-      boxShadow: `0 8px 32px 0 rgba(31, 38, 135, 0.15),
+      background: "rgba(255, 255, 255, 0.1)",
+      border: "1px solid rgba(255, 255, 255, 0.55)",
+      boxShadow: `0 8px 32px 0 rgba(31, 38, 135, 0.12),
                   inset 0 1px 1px 0 rgba(255, 255, 255, 0.75),
-                  inset 0 -1px 1px 0 rgba(255, 255, 255, 0.3),
-                  inset 0 0 30px 0 rgba(255, 255, 255, 0.14)`,
+                  inset 0 -1px 1px 0 rgba(255, 255, 255, 0.35),
+                  inset 0 0 24px 0 rgba(255, 255, 255, 0.12)`,
     };
   };
 
@@ -564,19 +564,21 @@ const GlassSurface: React.FC<GlassSurfaceProps> = ({
         </defs>
       </svg>
 
-      {/* O3 compensation: with the single-map chain the live per-channel
-          dispersion is gone, so a STATIC chromatic ring stands in for the
-          rim's colour fringe — a masked 1px gradient ring (warm lower-left →
-          cool upper-right, echoing the 3-channel variant's cast). Pure
-          composited paint: costs nothing per frame. */}
-      {displacementActive && !effectiveChromatic && (
+      {/* Static chromatic ring — stands in for the live per-channel rim
+          dispersion wherever the full chromatic chain isn't running (the
+          single-map variant, and the Gecko/Safari clear-glass fallback).
+          COOL at both ends (stakeholder call: a warm pink start read as a
+          purplish smudge on the left rim — both sides now match the cyan
+          cast of the right). Masked 1px ring; pure composited paint, costs
+          nothing per frame. */}
+      {!(displacementActive && effectiveChromatic) && (
         <div
           aria-hidden
           className="pointer-events-none absolute inset-0 rounded-[inherit]"
           style={{
             padding: 1.5,
             background:
-              "linear-gradient(125deg, rgba(255,70,130,0.5), rgba(255,255,255,0) 32% 68%, rgba(90,220,255,0.55))",
+              "linear-gradient(125deg, rgba(120,215,255,0.45), rgba(255,255,255,0) 30% 70%, rgba(90,220,255,0.55))",
             WebkitMask:
               "linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)",
             WebkitMaskComposite: "xor",
