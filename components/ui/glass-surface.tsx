@@ -15,6 +15,20 @@
  *
  * In this project it's used as an EMPTY pill laid over the "why teams stay" reel —
  * the scrolling text sits behind it and is refracted; no children are passed.
+ *
+ * ── DELIBERATE FORK (heavy-effect contract, CLAUDE.md) ─────────────────────
+ * This file diverges from the React Bits original; keep these deltas when
+ * updating from upstream (docs/why-stay-glass-optimization.md, Wave 1):
+ * - SSR-stable first render: capability sniffing (CSS.supports / engine
+ *   detection) lives in mounted state, never in the render path (audit H1).
+ * - Displacement-map generation is deduped + debounced (upstream regenerated
+ *   it 3× on mount and per resize tick) and measures layout size, not the
+ *   transformed getBoundingClientRect.
+ * - feGaussianBlur renders only when `displace > 0`; the identity
+ *   `saturate(1)` is omitted from backdrop-filter.
+ * - Reads the quality tier: tier `low` takes the frosted fallback instead of
+ *   the 3-channel displacement chain (registered in lib/perf/tiers.ts).
+ * ────────────────────────────────────────────────────────────────────────────
  */
 
 import React, { useEffect, useRef, useState, useId } from "react";
@@ -105,7 +119,12 @@ const GlassSurface: React.FC<GlassSurfaceProps> = ({
   const redGradId = `red-grad-${uniqueId}`;
   const blueGradId = `blue-grad-${uniqueId}`;
 
+  // Capability state — BOTH start false so SSR markup and the first client
+  // render take the same (static fallback) branch, then upgrade after mount.
+  // Sniffing these during render was the audit's H1 hydration mismatch: the
+  // server can't run CSS.supports, so its branch never matched the client's.
   const [svgSupported, setSvgSupported] = useState<boolean>(false);
+  const [backdropSupported, setBackdropSupported] = useState<boolean>(false);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const feImageRef = useRef<SVGFEImageElement>(null);
@@ -211,6 +230,8 @@ const GlassSurface: React.FC<GlassSurfaceProps> = ({
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time capability read after mount
     setSvgSupported(supportsSVGFilters());
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time capability read after mount
+    setBackdropSupported(CSS.supports("backdrop-filter", "blur(10px)"));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -234,11 +255,6 @@ const GlassSurface: React.FC<GlassSurfaceProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [width, height]);
 
-  const supportsBackdropFilter = () => {
-    if (typeof window === "undefined") return false;
-    return CSS.supports("backdrop-filter", "blur(10px)");
-  };
-
   const getContainerStyles = (): React.CSSProperties => {
     const baseStyles: React.CSSProperties = {
       ...style,
@@ -249,7 +265,8 @@ const GlassSurface: React.FC<GlassSurfaceProps> = ({
       "--glass-saturation": saturation,
     } as React.CSSProperties;
 
-    const backdropFilterSupported = supportsBackdropFilter();
+    // Mounted state, not a live sniff — render must stay SSR-stable (H1).
+    const backdropFilterSupported = backdropSupported;
 
     if (svgSupported) {
       return {
