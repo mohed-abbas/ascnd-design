@@ -595,7 +595,21 @@ function ScrollRig({
       onUpdate: (self) => apply(self.scroll()),
     });
     apply(window.scrollY || 0); // seed a mid-page restore
+
+    // Re-seed after every refresh. ScrollTrigger.refresh() (fired on ANY resize)
+    // reverts the scroller to 0 to take measurements, which makes the scrub
+    // onUpdate above run with scroll=0 for a frame or two — snapping the whole
+    // tile field back to position.y=0, i.e. its measured TOP-OF-PAGE origin. On a
+    // demand canvas that repaints as a flash of the necklace at the top of
+    // whatever section is on screen, and it sticks until the next scroll (the
+    // internal scroll-restore doesn't re-fire onUpdate). Re-applying the true
+    // scroll once refresh has restored the scroller overwrites that stale frame
+    // immediately. Use st.scroll(), not window.scrollY — under Lenis the native
+    // value can still read 0 for a tick right after the refresh.
+    const onRefresh = () => apply(st.scroll());
+    ScrollTrigger.addEventListener("refresh", onRefresh);
     return () => {
+      ScrollTrigger.removeEventListener("refresh", onRefresh);
       st.kill();
       capped.cancel();
     };

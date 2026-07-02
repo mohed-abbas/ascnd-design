@@ -80,6 +80,21 @@ export default function RootLayout({
           as="image"
           crossOrigin="anonymous"
         />
+        {/* Always open at the hero on a reload. The browser's default
+            `scrollRestoration: "auto"` restores the previous scroll offset on
+            refresh, which (a) drops the visitor mid-page instead of at the top
+            and (b) makes intro-state's `atHeroTop()` read a non-zero scrollY and
+            SUPPRESS the welcome. Switching to "manual" (set here during HTML
+            parse, before hydration and before <Intro> reads scrollY) makes every
+            reload load scrolled to the top — so the hero shows and the intro
+            reliably replays. The property persists on the history entry, so it
+            stays manual across subsequent refreshes. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              "if('scrollRestoration' in history)history.scrollRestoration='manual';",
+          }}
+        />
         {/* Arm the on-load reveal before first paint. This runs synchronously
             during HTML parse (the same flash-prevention trick next-themes uses),
             so the `.reveal-armed` hidden state in globals.css applies the instant
