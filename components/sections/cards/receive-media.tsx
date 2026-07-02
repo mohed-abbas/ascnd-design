@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import Image from "next/image";
 import gsap from "gsap";
+import { CheckMark } from "@/components/ui/icons";
 import { SHOT_TILES } from "./cards-data";
 
 const REDUCE_MOTION = "(prefers-reduced-motion: reduce)";
@@ -196,16 +197,8 @@ export default function ReceiveMedia() {
               boxShadow: "inset 0px -2px 1px 0px #f2f2f2, inset 0px -2px 2px 0px rgba(0,0,0,0.5)",
             }}
           >
-            <span ref={checkRef} className="inline-block shrink-0">
-              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" aria-hidden>
-                <path
-                  d="M5 12.5l4.2 4.2L19 7"
-                  stroke="#263138"
-                  strokeWidth="2.6"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
+            <span ref={checkRef} className="inline-block shrink-0 text-[#263138]">
+              <CheckMark width={17} height={17} aria-hidden />
             </span>
             <span
               ref={labelRef}

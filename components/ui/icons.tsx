@@ -41,6 +41,26 @@ export function CloseIcon(props: SVGProps<SVGSVGElement>) {
   );
 }
 
+/** Check / tick used on the cards' "delivered" and "board ready" pills
+ *  (receive-media + subscribe-media, Figma 124:254). Stroked with
+ *  currentColor so the consumer sets its ink (both use the dark #263138). */
+export function CheckMark(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      xmlns="http://www.w3.org/2000/svg"
+      {...props}
+    >
+      <path d="M5 12.5l4.2 4.2L19 7" />
+    </svg>
+  );
+}
+
 /** X / Twitter glyph (social row, node 75:309). */
 export function XSocial(props: SVGProps<SVGSVGElement>) {
   return (
