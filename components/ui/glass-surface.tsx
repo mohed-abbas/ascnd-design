@@ -32,7 +32,7 @@
  */
 
 import React, { useEffect, useRef, useState, useId } from "react";
-import { useQuality } from "@/lib/perf/use-quality";
+import { getTierName, subscribeQuality } from "@/lib/perf/quality-store";
 
 export interface GlassSurfaceProps {
   children?: React.ReactNode;
@@ -138,14 +138,51 @@ const GlassSurface: React.FC<GlassSurfaceProps> = ({
 
   // Quality tier (lib/perf) — the displacement chain is the page's heaviest
   // per-frame filter and, unlike the canvases, has NO dpr/resolution knob to
-  // turn down. So `low` swaps to the frosted fallback below (a compositor-
-  // accelerated blur — the same glass Safari/Firefox already get). This is
-  // the section's guaranteed 60fps floor. Reactive: a mid-session watchdog
-  // step-down switches the branch live. SSR-safe: the server snapshot is
-  // `high`, and the mounted-capability gates above keep the first render on
-  // the static fallback branch regardless of tier.
-  const { tier } = useQuality();
-  const displacementActive = svgSupported && tier !== "low";
+  // turn down. So `low` takes the frosted fallback below (a compositor-
+  // accelerated blur — the same glass Safari/Firefox already get).
+  //
+  // LATCHED, never live (stakeholder decision, 2026-07-02): the material must
+  // NEVER swap while the user can see it — a watchdog step-down would fire
+  // exactly during the pinned scrub, trading the liquid glass for frost in
+  // front of the user's eyes. So the gate follows the store only while the
+  // pill is far off-screen (tier boot resolves async ~300ms into the session,
+  // long before the fold is reached) and FREEZES for good as the pill
+  // approaches the viewport. A weak machine shows frost from its very first
+  // appearance (it never saw glass, so nothing downgrades); everyone else
+  // keeps the displacement for the whole session. `?tier=` A/B still works —
+  // it forces synchronously at boot, before the latch can engage.
+  const [tierFrost, setTierFrost] = useState(false);
+  useEffect(() => {
+    const el = containerRef.current;
+    const apply = () => setTierFrost(getTierName() === "low");
+    apply();
+    let unsubscribe: (() => void) | undefined = subscribeQuality(apply);
+    const stopTracking = () => {
+      unsubscribe?.();
+      unsubscribe = undefined;
+    };
+    let io: IntersectionObserver | undefined;
+    if (el && typeof IntersectionObserver !== "undefined") {
+      // Freeze half a viewport early so the branch can't flip mid-entrance.
+      io = new IntersectionObserver(
+        (entries) => {
+          if (entries.some((e) => e.isIntersecting)) {
+            stopTracking();
+            io?.disconnect();
+            io = undefined;
+          }
+        },
+        { rootMargin: "50% 0% 50% 0%" },
+      );
+      io.observe(el);
+    }
+    return () => {
+      stopTracking();
+      io?.disconnect();
+    };
+  }, []);
+
+  const displacementActive = svgSupported && !tierFrost;
 
   const generateDisplacementMap = () => {
     // Layout size, NOT getBoundingClientRect: the why-stay entrance animates

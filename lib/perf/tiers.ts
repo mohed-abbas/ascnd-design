@@ -25,10 +25,13 @@
  * | components/sections/intro/intro-scene.tsx  | mtm*, text3d* (mount snapshot),          |
  * |                                            | heavyEffectFpsCap() (IntroFrameCap),     |
  * |                                            | makeCappedInvalidate (ScrollRig)         |
- * | components/ui/glass-surface.tsx            | tier name only (live): low → frosted     |
- * |                                            | fallback instead of the SVG displacement |
- * |                                            | chain (no knob can shrink a DOM          |
- * |                                            | backdrop-filter — it's branch or full)   |
+ * | components/ui/glass-surface.tsx            | tier name, LATCHED at first viewport     |
+ * |                                            | approach: low → frosted fallback instead |
+ * |                                            | of the SVG displacement chain. Never     |
+ * |                                            | swaps while visible (stakeholder call —  |
+ * |                                            | no knob can shrink a DOM backdrop-filter,|
+ * |                                            | and a live branch flip is a visible      |
+ * |                                            | material change)                         |
  * | components/sections/why-stay/              | makeCappedInvalidate (--reel-y writes    |
  * |   why-stay-reveal.tsx                      | behind the glass pill)                   |
  *
