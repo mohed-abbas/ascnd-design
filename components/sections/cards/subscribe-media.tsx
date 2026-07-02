@@ -136,7 +136,7 @@ export default function SubscribeMedia() {
       gsap.set(label0, { autoAlpha: 1 });
       gsap.set([chars1, chars2], { yPercent: 110 });
       gsap.set(check, { scale: 0 });
-      gsap.set(cursor, { x: 0, y: 0, scale: 1, autoAlpha: 1 });
+      gsap.set(cursor, { x: 0, y: 0, scale: 1, autoAlpha: 0 });
 
       // Continuous aura sweep — cheap, only visible while the white pill is up.
       const sweep = gsap.to([ring, glow], {
@@ -158,8 +158,12 @@ export default function SubscribeMedia() {
 
       const tl = gsap.timeline({ repeat: -1, repeatDelay: 0.5, paused: true });
       tl
-        // rest
+        // rest — the pointer fades in together with the glass button. Position 0
+        // covers the first loop (the button is already visible at t=0); on later
+        // loops the cursor is already faded in from the reset below, so this is a
+        // no-op and the real shared fade happens at "reset".
         .to({}, { duration: 0.7 })
+        .to(cursor, { autoAlpha: 1, duration: 0.32, ease: "power2.out" }, 0)
         // cursor drifts onto the button
         .to(cursor, { x: CURSOR_DX, y: CURSOR_DY, duration: 0.8, ease: "power2.inOut" })
         // click-pop (pill + cursor tap together)
@@ -209,6 +213,8 @@ export default function SubscribeMedia() {
         .to(pill, { width: W0, duration: 0.36, ease: "power2.inOut" }, "reset")
         .set([chars1, chars2], { yPercent: 110 })
         .set(check, { scale: 0 })
+        // the glass button + the pointer fade back in TOGETHER (the moment the
+        // button's first state returns), parked at the pointer's start spot.
         .set(cursor, { x: 0, y: 0, scale: 1 })
         .to([label0, cursor], { autoAlpha: 1, duration: 0.32, ease: "power2.out" });
 
