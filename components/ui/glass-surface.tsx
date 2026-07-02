@@ -138,8 +138,11 @@ const GlassSurface: React.FC<GlassSurfaceProps> = ({
 
   // Quality tier (lib/perf) — the displacement chain is the page's heaviest
   // per-frame filter and, unlike the canvases, has NO dpr/resolution knob to
-  // turn down. So `low` takes the frosted fallback below (a compositor-
-  // accelerated blur — the same glass Safari/Firefox already get).
+  // turn down. So `low` takes the CLEAR-GLASS fallback below: transparent
+  // body + rim highlights, NO backdrop-filter at all — the text behind stays
+  // sharp and the pill costs zero per frame. (A frosted blur was rejected by
+  // the stakeholder: over the bright reel on the blue sky it reads as a milky
+  // blue bar, a visible downgrade from the liquid glass.)
   //
   // LATCHED, never live (stakeholder decision, 2026-07-02): the material must
   // NEVER swap while the user can see it — a watchdog step-down would fire
@@ -151,10 +154,10 @@ const GlassSurface: React.FC<GlassSurfaceProps> = ({
   // appearance (it never saw glass, so nothing downgrades); everyone else
   // keeps the displacement for the whole session. `?tier=` A/B still works —
   // it forces synchronously at boot, before the latch can engage.
-  const [tierFrost, setTierFrost] = useState(false);
+  const [tierLow, setTierLow] = useState(false);
   useEffect(() => {
     const el = containerRef.current;
-    const apply = () => setTierFrost(getTierName() === "low");
+    const apply = () => setTierLow(getTierName() === "low");
     apply();
     let unsubscribe: (() => void) | undefined = subscribeQuality(apply);
     const stopTracking = () => {
@@ -182,7 +185,7 @@ const GlassSurface: React.FC<GlassSurfaceProps> = ({
     };
   }, []);
 
-  const displacementActive = svgSupported && !tierFrost;
+  const displacementActive = svgSupported && !tierLow;
 
   const generateDisplacementMap = () => {
     // Layout size, NOT getBoundingClientRect: the why-stay entrance animates
@@ -361,6 +364,22 @@ const GlassSurface: React.FC<GlassSurfaceProps> = ({
              0px 4px 16px rgba(17, 17, 26, 0.05) inset,
              0px 8px 24px rgba(17, 17, 26, 0.05) inset,
              0px 16px 56px rgba(17, 17, 26, 0.05) inset`,
+      };
+    }
+
+    // Low tier → CLEAR glass, not frost (stakeholder call): transparent body,
+    // crisp rim, NO backdrop-filter — the reel text stays sharp through the
+    // pill (which is what the design frames anyway) and the fallback costs
+    // nothing per frame. A blur here read as a milky blue bar over the sky.
+    if (tierLow) {
+      return {
+        ...baseStyles,
+        background: "rgba(255, 255, 255, 0.1)",
+        border: "1px solid rgba(255, 255, 255, 0.55)",
+        boxShadow: `0 8px 32px 0 rgba(31, 38, 135, 0.12),
+                    inset 0 1px 1px 0 rgba(255, 255, 255, 0.75),
+                    inset 0 -1px 1px 0 rgba(255, 255, 255, 0.35),
+                    inset 0 0 24px 0 rgba(255, 255, 255, 0.12)`,
       };
     }
 

@@ -26,12 +26,12 @@
  * |                                            | heavyEffectFpsCap() (IntroFrameCap),     |
  * |                                            | makeCappedInvalidate (ScrollRig)         |
  * | components/ui/glass-surface.tsx            | tier name, LATCHED at first viewport     |
- * |                                            | approach: low → frosted fallback instead |
- * |                                            | of the SVG displacement chain. Never     |
- * |                                            | swaps while visible (stakeholder call —  |
- * |                                            | no knob can shrink a DOM backdrop-filter,|
- * |                                            | and a live branch flip is a visible      |
- * |                                            | material change)                         |
+ * |                                            | approach: low → CLEAR-glass fallback     |
+ * |                                            | (rim only, no backdrop-filter — 0/frame) |
+ * |                                            | instead of the SVG displacement chain.   |
+ * |                                            | Never swaps while visible; never frost   |
+ * |                                            | (both stakeholder calls — a blur reads   |
+ * |                                            | as a milky blue bar over the sky)        |
  * | components/sections/why-stay/              | makeCappedInvalidate (--reel-y writes    |
  * |   why-stay-reveal.tsx                      | behind the glass pill)                   |
  *
