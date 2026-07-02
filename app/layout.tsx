@@ -53,20 +53,33 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col" suppressHydrationWarning>
         {/* Warm the WebGL intro's Text3D font during HTML parse so it isn't a
             serial wait after the (lazy) intro chunk downloads — it gates the
-            scene's ready signal. React 19 hoists this preload into <head>. */}
+            scene's ready signal. React 19 hoists this preload into <head>.
+            crossOrigin must match the consumer or the preload is WASTED (audit
+            H2: "credentials mode does not match" → double download): drei's
+            useFont → THREE FileLoader fetches with mode "cors" / credentials
+            "same-origin", which is exactly what crossOrigin="anonymous" makes
+            this preload request. */}
         <link
           rel="preload"
           href="/fonts/product-sans-medium.typeface.json"
           as="fetch"
+          crossOrigin="anonymous"
         />
         {/* The bare cliff cut-outs are NOT hand-preloaded here anymore: the DOM
             <Rock> (rock.tsx) is `priority`, so next/image already emits an
             identical image preload in the SSR <head> (which also warms the cache
             the WebGL <Rocks> useTexture then hits). A manual dup just doubled the
             <link> for the same href. See docs/performance-audit.md A3. */}
-        {/* The loader's cloud sprite (intro-loader.tsx) — small, and the real
-            WebGL clouds reuse the same file, so one warm cache serves both. */}
-        <link rel="preload" href="/textures/cloud-puff.png" as="image" />
+        {/* The volumetric clouds' sprite (cloud-canvas.tsx <Clouds texture>).
+            Its ONLY consumer is THREE's ImageLoader, whose default is
+            crossOrigin="anonymous" (a CORS image request) — so the preload
+            must say so too, or it never matches (audit H2). */}
+        <link
+          rel="preload"
+          href="/textures/cloud-puff.png"
+          as="image"
+          crossOrigin="anonymous"
+        />
         {/* Arm the on-load reveal before first paint. This runs synchronously
             during HTML parse (the same flash-prevention trick next-themes uses),
             so the `.reveal-armed` hidden state in globals.css applies the instant
