@@ -1,6 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import Image from "next/image";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import {
   INTRO_REVEAL_EVENT,
@@ -105,13 +106,24 @@ function useIntroReveal() {
  * Two <Canvas> = two WebGL contexts; acceptable since the whole thing is gated
  * to eligible desktops, and each is a single batched <Clouds> draw.
  */
+// For the hydration gate below — never fires, never resubscribes.
+const noopSubscribe = () => () => {};
+
 export default function CloudLayer() {
   const eligible = useCanvasEligible();
   const revealed = useIntroReveal();
-
-  // TODO(phase 7): bake a static cloud image from the Figma design and render
-  // it here as the fallback for ineligible devices. Transparent for now.
-  if (!eligible) return null;
+  // False for SSR + the hydration render, true right after. The static
+  // fallback must NOT be decided server-side: `eligible` is unknowable there
+  // (its server snapshot is always false) and `introWillPlay()` returns false
+  // on the server, so SSR would bake the fallback images into the HTML at
+  // full opacity — putting clouds on screen under the intro loader on every
+  // capable desktop until hydration swaps them out. Render nothing until the
+  // client knows the real answer (the pre-fallback behaviour).
+  const hydrated = useSyncExternalStore(
+    noopSubscribe,
+    () => true,
+    () => false,
+  );
 
   // Soft fade + downward settle, in lock-step with the cliffs' intro entrance.
   // transform here is fine — the canvas inside is `absolute`, not a fixed
@@ -122,6 +134,50 @@ export default function CloudLayer() {
     // ~matches the rocks' 1.1s drift (rock-reveal.tsx) so they settle together.
     transition: "opacity 1100ms ease-out, transform 1100ms ease-out",
   };
+
+  if (!hydrated) return null;
+
+  // Baked static fallback for ineligible devices (mobile, reduced-motion,
+  // no-WebGL): full-frame captures of the live HERO cloud layers (3024×1964 —
+  // the 1512×982 reference frame at 2×; toDataURL readbacks of each canvas, so
+  // the alpha channel is real). Same stacking + reveal fade as the canvases.
+  // `object-position` anchors the crop on narrow screens: SKY keeps its
+  // top-right cloud, ROCK keeps the left cliff skirt. Section clouds are a
+  // desktop nicety — deliberately out of scope here.
+  if (!eligible) {
+    return (
+      <>
+        <div
+          aria-hidden
+          style={reveal}
+          className="pointer-events-none fixed inset-0 -z-10"
+        >
+          <Image
+            src="/clouds/sky-clouds-static.webp"
+            alt=""
+            fill
+            sizes="100vw"
+            loading="lazy"
+            className="object-cover object-[100%_0%]"
+          />
+        </div>
+        <div
+          aria-hidden
+          style={reveal}
+          className="pointer-events-none fixed inset-0 z-[61]"
+        >
+          <Image
+            src="/clouds/rock-clouds-static.webp"
+            alt=""
+            fill
+            sizes="100vw"
+            loading="lazy"
+            className="object-cover object-[25%_100%]"
+          />
+        </div>
+      </>
+    );
+  }
 
   return (
     <>
