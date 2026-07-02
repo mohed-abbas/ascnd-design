@@ -21,8 +21,8 @@
  * backdrop-filter here is safe — the pill is a sibling of the root-mounted fixed
  * <Background/>, not an ancestor, so it doesn't turn the sky's fixed layers into
  * a backdrop root (see CLAUDE.md, same as CardShell). The displacement is
- * Chromium-first; Safari/Firefox fall back to a plain frosted glass (GlassSurface
- * detects and degrades).
+ * Chromium-first; Safari/Firefox fall back to a clear glass — crisp rim +
+ * static chromatic ring, no frost (GlassSurface detects and degrades).
  */
 import GlassSurface from "@/components/ui/glass-surface";
 import WhyStayReveal from "./why-stay-reveal";
