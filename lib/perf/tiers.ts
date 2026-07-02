@@ -28,6 +28,14 @@ export interface QualityConfig {
   // ── Volumetric clouds (components/background/cloud-canvas.tsx) ──
   /** Upper bound of the Canvas `dpr={[1, x]}`. The soft sprite hides low dpr. */
   readonly cloudDprMax: number;
+  /**
+   * drei <Cloud> `segments` — billboards per cloud, THE fill-rate knob (audit
+   * F4.3: ~7 clouds × segments large transparent sprites through one instanced
+   * draw). Form holds up at lower counts because the sprite carries the detail.
+   * Snapshotted at canvas mount (a live change would rebuild the geometry
+   * on-screen), so a mid-session step-down applies on the next mount.
+   */
+  readonly cloudSegments: number;
 
   // ── Intro liquid glass (components/sections/intro/intro-scene.tsx) ──
   /** MeshTransmissionMaterial blur taps. */
@@ -48,6 +56,8 @@ export const TIERS: Record<TierName, QualityConfig> = {
     // 2→1.5: on a retina panel dpr 2 is 4× the fragments of dpr 1. The cloud
     // sprite is soft, so 1.5 is imperceptible but cuts each 30fps repaint ~44%.
     cloudDprMax: 1.5,
+    // 20 = the currently shipped look (was hardcoded in cloud-canvas.tsx).
+    cloudSegments: 20,
     // The glass was GPU-bound even on an M4 at 512/8/backside — the presented
     // rate fell to ~33fps during the intro (the main thread ran 120fps; the GPU
     // couldn't keep up). `backside` renders a WHOLE extra scene pass, and on
@@ -64,6 +74,7 @@ export const TIERS: Record<TierName, QualityConfig> = {
   medium: {
     tier: "medium",
     cloudDprMax: 1.5,
+    cloudSegments: 14,
     mtmSamples: 6,
     mtmResolution: 320,
     mtmBackside: false,
@@ -73,6 +84,7 @@ export const TIERS: Record<TierName, QualityConfig> = {
   low: {
     tier: "low",
     cloudDprMax: 1.25,
+    cloudSegments: 10,
     mtmSamples: 4,
     mtmResolution: 256,
     mtmBackside: false,

@@ -9,6 +9,7 @@ import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import type { CloudSpec } from "./cloud-specs";
 import { useQuality } from "@/lib/perf/use-quality";
+import { getQualityConfig } from "@/lib/perf/quality-store";
 import { makeCappedInvalidate } from "@/lib/perf/capped-invalidate";
 
 /**
@@ -62,9 +63,9 @@ import { makeCappedInvalidate } from "@/lib/perf/capped-invalidate";
 // seed and placement are per-cloud in the specs. `speed` is small + non-zero so
 // the puffs slowly morph (lively, not churning); <MorphRig> pumps the demand
 // loop at ~30fps so that morph actually advances. To re-tune the look, play in
-// /lab/clouds.
+// /lab/clouds. `segments` (the fill-rate knob) is tiered — see cloudSegments
+// in lib/perf/tiers.ts, snapshotted at mount in <CloudCanvas>.
 const CLOUD = {
-  segments: 20,
   opacity: 0.8,
   fade: 10,
   growth: 4,
@@ -549,6 +550,11 @@ export default function CloudCanvas({
   // device-pixel-ratio, so a struggling machine can drop the ceiling (high 2 →
   // low 1.25) to quarter the FBO fragment count. R3F re-applies dpr on change.
   const { cloudDprMax } = useQuality();
+  // Billboards per cloud — SNAPSHOT at mount (same pattern as the intro glass):
+  // segments drive drei's instanced geometry, so honouring a mid-session tier
+  // step-down live would rebuild the whole visible cloud field. dpr above stays
+  // live because re-applying it is cheap and invisible.
+  const [cloudSegments] = useState(() => getQualityConfig().cloudSegments);
 
   return (
     <Canvas
@@ -600,7 +606,13 @@ export default function CloudCanvas({
                 cloudRefs.current[i] = el;
               }}
             >
-              <Cloud {...CLOUD} seed={c.seed} bounds={c.bounds} volume={c.volume} />
+              <Cloud
+                {...CLOUD}
+                segments={cloudSegments}
+                seed={c.seed}
+                bounds={c.bounds}
+                volume={c.volume}
+              />
             </group>
           ))}
         </group>
@@ -614,7 +626,13 @@ export default function CloudCanvas({
               sectionRefs.current[i] = el;
             }}
           >
-            <Cloud {...CLOUD} seed={c.seed} bounds={c.bounds} volume={c.volume} />
+            <Cloud
+              {...CLOUD}
+              segments={cloudSegments}
+              seed={c.seed}
+              bounds={c.bounds}
+              volume={c.volume}
+            />
           </group>
         ))}
       </Clouds>
