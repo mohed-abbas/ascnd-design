@@ -75,6 +75,18 @@ The non-obvious structure is how the **fixed sky** sits behind **scrolling conte
 
 **No `filter` / `backdrop-filter` may appear on an *ancestor* of the fixed `Background` or `CloudLayer`** — a blurred ancestor breaks `position: fixed` descendants. This is why both are mounted at the root, not nested. The navbar/CTA `backdrop-blur` is fine because those are *siblings*, not ancestors. Cloud softness must come from the sprite's alpha, never a CSS blur on a parent. (Full rationale: `docs/cloud-rendering-research.md` §4 / §9.)
 
+### ⚠️ The heavy-effect contract (applies to vendored imports too)
+
+Any **heavy effect** — a WebGL canvas, a free-running animation loop, a per-frame SVG/CSS filter — must satisfy ALL of these before it ships, **including third-party/vendored components** (React Bits, codepen ports, etc.). Two vendored drops (`splash-cursor.tsx`, `glass-surface.tsx`) each violated several of these and became the page's dominant GPU cost (see `docs/webgl-animation-audit-2026-07-02.md` F1/F2/F7):
+
+1. **Rides the shared GSAP ticker** — no private `requestAnimationFrame` loop (LenisProvider's "one loop, no competing schedulers" mandate). Demand-mode R3F canvases (`frameloop="demand"` + `invalidate()`) also qualify.
+2. **Idles to zero** — when nothing visibly changes (pointer still, effect faded, section off-screen), it must stop repainting entirely. "Renders an unchanged frame at 120 fps" is the failure mode this exists to prevent.
+3. **Reads the quality tier** — its GPU-cost knobs (resolution, dpr, iterations, segments) come from `lib/perf/tiers.ts`, added to the consumer registry there **in the same PR** that introduces the effect. Repaint rates go through `heavyEffectFpsCap()` / `makeCappedInvalidate`.
+4. **SSR-stable first render** — no browser sniffing (`CSS.supports`, `navigator.*`) in the render path; render a stable fallback and switch branches only after mount (`useSyncExternalStore` or a mounted flag), or hydration mismatches result.
+5. **dpr ≤ 1.5** — never raw `devicePixelRatio` (deliberate site-wide cap; the soft/blurred nature of every effect here hides it).
+
+A vendored file that can't satisfy these as-is gets **forked deliberately** (short header documenting the deltas) — "don't hand-edit vendored code" loses to the architecture contract.
+
 ### Volumetric clouds (R3F)
 
 `docs/cloud-rendering-research.md` is the **authoritative architecture decision record** for the sky — read §9 before touching clouds. **Cloud colour & lighting** (why white clouds rendered grey, the ACES `NoToneMapping` fix, and the key-light-vs-flat-ambient decision) is documented in `docs/cloud-color-and-lighting.md` — read it before touching the lights or material in `cloud-canvas.tsx`. The chosen path is `@react-three/drei` `<Clouds>`/`<Cloud>` with a strict optimization mandate:

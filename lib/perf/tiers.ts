@@ -15,6 +15,32 @@
  * 120 Hz panel + a genuinely weak GPU before trusting them. The per-tier fps
  * cap is computed centrally in the store (heavyEffectFpsCap), not stored here.
  * ──────────────────────────────────────────────────────────────────────────
+ *
+ * ── CONSUMER REGISTRY ── every live tier consumer, kept current ───────────
+ * | Consumer                                   | Knobs read                               |
+ * |--------------------------------------------|------------------------------------------|
+ * | components/background/cloud-canvas.tsx     | cloudDprMax (live), cloudSegments (mount |
+ * |                                            | snapshot), makeCappedInvalidate (morph   |
+ * |                                            | pump + scroll-invalidate caps)           |
+ * | components/sections/intro/intro-scene.tsx  | mtm*, text3d* (mount snapshot),          |
+ * |                                            | heavyEffectFpsCap() (IntroFrameCap),     |
+ * |                                            | makeCappedInvalidate (ScrollRig)         |
+ *
+ * ★ RULE (audit 2026-07-02 F5.1): any NEW heavy effect — a WebGL canvas, a
+ * free-running loop, a per-frame SVG/CSS filter — must be added to this table
+ * AND given tier knobs here IN THE SAME PR that introduces it. The SplashCursor
+ * regression happened exactly because a swapped-in effect skipped this file:
+ * the table's biggest lever (cursorRtScale) pointed at deleted code while the
+ * new cursor ran tier-blind at full res. See also the heavy-effect contract in
+ * CLAUDE.md.
+ *
+ * ── KNOWN BLIND SPOT (audit F5.2) ── the frame-time watchdog reads MAIN-
+ * THREAD rAF deltas only. A GPU-bound present-rate drop (the intro glass's
+ * documented failure mode: rAF reads 120 fps while the panel presents ~33)
+ * is invisible to it. GPU protection therefore comes solely from the INITIAL
+ * tier pick (gpu-tier.ts). The DevTools FPS meter is the only ground truth
+ * for presented fps — never verify with rAF sampling alone.
+ * ──────────────────────────────────────────────────────────────────────────
  */
 
 export type TierName = "high" | "medium" | "low";
