@@ -26,8 +26,13 @@
  *   transformed getBoundingClientRect.
  * - feGaussianBlur renders only when `displace > 0`; the identity
  *   `saturate(1)` is omitted from backdrop-filter.
- * - Reads the quality tier: tier `low` takes the frosted fallback instead of
- *   the 3-channel displacement chain (registered in lib/perf/tiers.ts).
+ * - `chromatic={false}` (report O3) collapses the chain to ONE
+ *   feDisplacementMap (~⅓ the filter cost): no per-channel split, the
+ *   chromatic rim becomes a static gradient ring instead of live dispersion.
+ * - Reads the quality tier (registered in lib/perf/tiers.ts): tier `low`
+ *   forces the single-map variant — real distortion + static chromatic ring,
+ *   so weak machines keep a look close to high/medium instead of losing the
+ *   effect (measured ~58fps in software raster — the weak-GPU worst case).
  * ────────────────────────────────────────────────────────────────────────────
  */
 
@@ -52,6 +57,14 @@ export interface GlassSurfaceProps {
   blueOffset?: number;
   xChannel?: "R" | "G" | "B";
   yChannel?: "R" | "G" | "B";
+  /**
+   * true (default) = the original 3-channel chain: one feDisplacementMap per
+   * R/G/B at slightly different scales, screen-blended → live chromatic
+   * dispersion that moves with the refracted content. false = ONE
+   * feDisplacementMap at the mean scale (~⅓ the per-frame filter cost) plus a
+   * static chromatic gradient ring on the pill edge (report O3).
+   */
+  chromatic?: boolean;
   mixBlendMode?:
     | "normal"
     | "multiply"
@@ -111,6 +124,7 @@ const GlassSurface: React.FC<GlassSurfaceProps> = ({
   blueOffset = 20,
   xChannel = "R",
   yChannel = "G",
+  chromatic = true,
   mixBlendMode = "difference",
   className = "",
   style = {},
@@ -132,17 +146,19 @@ const GlassSurface: React.FC<GlassSurfaceProps> = ({
   const redChannelRef = useRef<SVGFEDisplacementMapElement>(null);
   const greenChannelRef = useRef<SVGFEDisplacementMapElement>(null);
   const blueChannelRef = useRef<SVGFEDisplacementMapElement>(null);
+  const singleChannelRef = useRef<SVGFEDisplacementMapElement>(null);
   const gaussianBlurRef = useRef<SVGFEGaussianBlurElement>(null);
 
   const isDarkMode = useDarkMode();
 
   // Quality tier (lib/perf) — the displacement chain is the page's heaviest
-  // per-frame filter and, unlike the canvases, has NO dpr/resolution knob to
-  // turn down. So `low` takes the CLEAR-GLASS fallback below: transparent
-  // body + rim highlights, NO backdrop-filter at all — the text behind stays
-  // sharp and the pill costs zero per frame. (A frosted blur was rejected by
-  // the stakeholder: over the bright reel on the blue sky it reads as a milky
-  // blue bar, a visible downgrade from the liquid glass.)
+  // per-frame filter and has no dpr/resolution knob, but it DOES have a
+  // cheaper variant: tier `low` forces `chromatic` off, collapsing the chain
+  // to one feDisplacementMap + a static chromatic ring (~⅓ the cost, measured
+  // ~58fps even in software raster). Weak machines keep real distortion and a
+  // chromatic accent — close to the high/medium look — instead of losing the
+  // effect. (Earlier frost and clear-glass fallbacks were both rejected by
+  // the stakeholder as visible downgrades.)
   //
   // LATCHED, never live (stakeholder decision, 2026-07-02): the material must
   // NEVER swap while the user can see it — a watchdog step-down would fire
@@ -185,7 +201,9 @@ const GlassSurface: React.FC<GlassSurfaceProps> = ({
     };
   }, []);
 
-  const displacementActive = svgSupported && !tierLow;
+  // Tier low forces the cheap single-map variant; the prop picks the default.
+  const effectiveChromatic = chromatic && !tierLow;
+  const displacementActive = svgSupported;
 
   const generateDisplacementMap = () => {
     // Layout size, NOT getBoundingClientRect: the why-stay entrance animates
@@ -261,11 +279,21 @@ const GlassSurface: React.FC<GlassSurfaceProps> = ({
 
   useEffect(() => {
     updateDisplacementMap();
-    [
-      { ref: redChannelRef, offset: redOffset },
-      { ref: greenChannelRef, offset: greenOffset },
-      { ref: blueChannelRef, offset: blueOffset },
-    ].forEach(({ ref, offset }) => {
+    const channels = effectiveChromatic
+      ? [
+          { ref: redChannelRef, offset: redOffset },
+          { ref: greenChannelRef, offset: greenOffset },
+          { ref: blueChannelRef, offset: blueOffset },
+        ]
+      : [
+          // Single map at the mean of the three channel scales, so the bend
+          // geometry matches the chromatic variant's perceptual centre.
+          {
+            ref: singleChannelRef,
+            offset: (redOffset + greenOffset + blueOffset) / 3,
+          },
+        ];
+    channels.forEach(({ ref, offset }) => {
       if (ref.current) {
         ref.current.setAttribute("scale", (distortionScale + offset).toString());
         ref.current.setAttribute("xChannelSelector", xChannel);
@@ -290,6 +318,7 @@ const GlassSurface: React.FC<GlassSurfaceProps> = ({
     blueOffset,
     xChannel,
     yChannel,
+    effectiveChromatic,
     mixBlendMode,
   ]);
 
@@ -364,22 +393,6 @@ const GlassSurface: React.FC<GlassSurfaceProps> = ({
              0px 4px 16px rgba(17, 17, 26, 0.05) inset,
              0px 8px 24px rgba(17, 17, 26, 0.05) inset,
              0px 16px 56px rgba(17, 17, 26, 0.05) inset`,
-      };
-    }
-
-    // Low tier → CLEAR glass, not frost (stakeholder call): transparent body,
-    // crisp rim, NO backdrop-filter — the reel text stays sharp through the
-    // pill (which is what the design frames anyway) and the fallback costs
-    // nothing per frame. A blur here read as a milky blue bar over the sky.
-    if (tierLow) {
-      return {
-        ...baseStyles,
-        background: "rgba(255, 255, 255, 0.1)",
-        border: "1px solid rgba(255, 255, 255, 0.55)",
-        boxShadow: `0 8px 32px 0 rgba(31, 38, 135, 0.12),
-                    inset 0 1px 1px 0 rgba(255, 255, 255, 0.75),
-                    inset 0 -1px 1px 0 rgba(255, 255, 255, 0.35),
-                    inset 0 0 24px 0 rgba(255, 255, 255, 0.12)`,
       };
     }
 
@@ -469,59 +482,72 @@ const GlassSurface: React.FC<GlassSurfaceProps> = ({
               result="map"
             />
 
-            <feDisplacementMap
-              ref={redChannelRef}
-              in="SourceGraphic"
-              in2="map"
-              id="redchannel"
-              result="dispRed"
-            />
-            <feColorMatrix
-              in="dispRed"
-              type="matrix"
-              values="1 0 0 0 0
-                      0 0 0 0 0
-                      0 0 0 0 0
-                      0 0 0 1 0"
-              result="red"
-            />
+            {effectiveChromatic ? (
+              <>
+                <feDisplacementMap
+                  ref={redChannelRef}
+                  in="SourceGraphic"
+                  in2="map"
+                  id="redchannel"
+                  result="dispRed"
+                />
+                <feColorMatrix
+                  in="dispRed"
+                  type="matrix"
+                  values="1 0 0 0 0
+                          0 0 0 0 0
+                          0 0 0 0 0
+                          0 0 0 1 0"
+                  result="red"
+                />
 
-            <feDisplacementMap
-              ref={greenChannelRef}
-              in="SourceGraphic"
-              in2="map"
-              id="greenchannel"
-              result="dispGreen"
-            />
-            <feColorMatrix
-              in="dispGreen"
-              type="matrix"
-              values="0 0 0 0 0
-                      0 1 0 0 0
-                      0 0 0 0 0
-                      0 0 0 1 0"
-              result="green"
-            />
+                <feDisplacementMap
+                  ref={greenChannelRef}
+                  in="SourceGraphic"
+                  in2="map"
+                  id="greenchannel"
+                  result="dispGreen"
+                />
+                <feColorMatrix
+                  in="dispGreen"
+                  type="matrix"
+                  values="0 0 0 0 0
+                          0 1 0 0 0
+                          0 0 0 0 0
+                          0 0 0 1 0"
+                  result="green"
+                />
 
-            <feDisplacementMap
-              ref={blueChannelRef}
-              in="SourceGraphic"
-              in2="map"
-              id="bluechannel"
-              result="dispBlue"
-            />
-            <feColorMatrix
-              in="dispBlue"
-              type="matrix"
-              values="0 0 0 0 0
-                      0 0 0 0 0
-                      0 0 1 0 0
-                      0 0 0 1 0"
-              result="blue"
-            />
+                <feDisplacementMap
+                  ref={blueChannelRef}
+                  in="SourceGraphic"
+                  in2="map"
+                  id="bluechannel"
+                  result="dispBlue"
+                />
+                <feColorMatrix
+                  in="dispBlue"
+                  type="matrix"
+                  values="0 0 0 0 0
+                          0 0 0 0 0
+                          0 0 1 0 0
+                          0 0 0 1 0"
+                  result="blue"
+                />
 
-            <feBlend in="red" in2="green" mode="screen" result="rg" />
-            <feBlend in="rg" in2="blue" mode="screen" result="output" />
+                <feBlend in="red" in2="green" mode="screen" result="rg" />
+                <feBlend in="rg" in2="blue" mode="screen" result="output" />
+              </>
+            ) : (
+              /* O3: one displacement, no channel split — the whole per-frame
+                 chain is feImage + this + (optional) blur. */
+              <feDisplacementMap
+                ref={singleChannelRef}
+                in="SourceGraphic"
+                in2="map"
+                result="output"
+              />
+            )}
             {/* A full-region convolution pass per evaluation — only mount it
                 when a soften is actually requested. At displace 0 the last
                 feBlend is the filter output. If rim jaggies ever need
@@ -538,6 +564,26 @@ const GlassSurface: React.FC<GlassSurfaceProps> = ({
         </defs>
       </svg>
 
+      {/* O3 compensation: with the single-map chain the live per-channel
+          dispersion is gone, so a STATIC chromatic ring stands in for the
+          rim's colour fringe — a masked 1px gradient ring (warm lower-left →
+          cool upper-right, echoing the 3-channel variant's cast). Pure
+          composited paint: costs nothing per frame. */}
+      {displacementActive && !effectiveChromatic && (
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 rounded-[inherit]"
+          style={{
+            padding: 1.5,
+            background:
+              "linear-gradient(125deg, rgba(255,70,130,0.5), rgba(255,255,255,0) 32% 68%, rgba(90,220,255,0.55))",
+            WebkitMask:
+              "linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)",
+            WebkitMaskComposite: "xor",
+            maskComposite: "exclude",
+          }}
+        />
+      )}
       <div className="relative z-10 flex h-full w-full items-center justify-center rounded-[inherit] p-2">
         {children}
       </div>

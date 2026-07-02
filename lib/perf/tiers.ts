@@ -26,11 +26,13 @@
  * |                                            | heavyEffectFpsCap() (IntroFrameCap),     |
  * |                                            | makeCappedInvalidate (ScrollRig)         |
  * | components/ui/glass-surface.tsx            | tier name, LATCHED at first viewport     |
- * |                                            | approach: low → CLEAR-glass fallback     |
- * |                                            | (rim only, no backdrop-filter — 0/frame) |
- * |                                            | instead of the SVG displacement chain.   |
- * |                                            | Never swaps while visible; never frost   |
- * |                                            | (both stakeholder calls — a blur reads   |
+ * |                                            | approach: low → single-map displacement  |
+ * |                                            | (1 feDisplacementMap + static chromatic  |
+ * |                                            | ring, ~⅓ the 3-channel chain's cost)     |
+ * |                                            | instead of the full chromatic chain.     |
+ * |                                            | Never swaps while visible; never frost/  |
+ * |                                            | clear (stakeholder calls — low must stay |
+ * |                                            | visually close to high, and a blur reads |
  * |                                            | as a milky blue bar over the sky)        |
  * | components/sections/why-stay/              | makeCappedInvalidate (--reel-y writes    |
  * |   why-stay-reveal.tsx                      | behind the glass pill)                   |

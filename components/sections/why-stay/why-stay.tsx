@@ -156,6 +156,11 @@ export default function WhyStay() {
             redOffset={0}
             greenOffset={10}
             blueOffset={20}
+            // Full 3-channel chromatic chain on high/medium; tier `low`
+            // forces GlassSurface's single-map variant internally (same
+            // distortion + static chromatic ring at ~⅓ the filter cost), so
+            // weak machines stay visually close instead of losing the glass.
+            chromatic
             className="max-w-full"
           />
         </div>
