@@ -13,8 +13,15 @@ export const CARD_COPY = {
   receive: "work back in a few business days on average. revise until it's right.",
 } as const;
 
-/** Placeholder shown in every request-input row (Card2, Figma 140:13791). */
-export const REQUEST_PLACEHOLDER = "request anything...";
+/** The request board rows (Card2, Figma 140:13791). The first is the ACTIVE
+ *  row — it expands and types out the brief — the rest are the queue below. */
+export const ACTIVE_REQUEST = { task: "new landing page", tag: "UI/UX" } as const;
+export const REQUEST_QUEUE = [
+  { task: "saas marketing site", tag: "Design" },
+  { task: "front-end build", tag: "Dev" },
+  { task: "brand identity kit", tag: "Brand" },
+  { task: "pitch deck design", tag: "Design" },
+] as const;
 
 export type ShotTile = {
   src: string;

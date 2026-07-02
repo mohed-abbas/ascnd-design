@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import gsap from "gsap";
-import { REQUEST_PLACEHOLDER } from "./cards-data";
+import { ACTIVE_REQUEST, REQUEST_QUEUE } from "./cards-data";
 
 const REDUCE_MOTION = "(prefers-reduced-motion: reduce)";
 
@@ -17,18 +17,16 @@ const CARD_H = 205; // expanded brief-card height
 // The typed brief (Figma 220:181) and the tag that cycles on the active row.
 const BRIEF =
   "hey, need a landing page for our seed round launch. brand's mostly done, i'll drop the figma. should feel fast and a bit premium, think linear not corporate. hero, social proof, pricing, faq. can we get a first look by fri";
-const ACTIVE_TAGS = ["UI/UX", "Design", "Wireframe", "UI/UX", "UI/UX"];
-const QUEUE_TAGS = ["Design", "Wireframe", "UI/UX", "UI/UX"]; // the static rows below
 
-/** A collapsed "request anything…" pill row (the queue below the active one). */
-function QueueRow({ tag }: { tag: string }) {
+/** A collapsed request pill row (the queue below the active one). */
+function QueueRow({ task, tag }: { task: string; tag: string }) {
   return (
     <div
       className="relative shrink-0 overflow-hidden rounded-[37px] border border-solid border-white/50 bg-white/10"
       style={{ height: ROW_H }}
     >
       <span className="absolute left-[26px] top-1/2 -translate-y-1/2 whitespace-nowrap font-product text-[16px] leading-none text-white">
-        {REQUEST_PLACEHOLDER}
+        {task}
       </span>
       <span className="absolute right-[11px] top-1/2 -translate-y-1/2 whitespace-nowrap rounded-[31px] bg-white px-[9.578px] py-[4.789px] text-[10px] leading-[1.5] text-[#263138]">
         {tag}
@@ -124,8 +122,6 @@ export default function RequestMedia() {
     if (window.matchMedia(REDUCE_MOTION).matches) return;
 
     const tools = [tool0.current, tool1.current, tool2.current].filter(Boolean) as HTMLElement[];
-    const activeTagEls = gsap.utils.toArray<HTMLElement>(active.querySelectorAll("[data-active-tag]"));
-    let pass = 0;
 
     const ctx = gsap.context(() => {
       gsap.set(active, { height: ROW_H, borderRadius: 37, y: 0, autoAlpha: 1 });
@@ -164,21 +160,15 @@ export default function RequestMedia() {
         .to(collapsed, { autoAlpha: 0, duration: 0.3, ease: "power1.out" }, "<")
         .to(expanded, { autoAlpha: 1, duration: 0.45, ease: "power1.out" }, "<0.25")
         // type the brief under the caret
-        .fromTo(typed, { n: 0 }, { n: BRIEF.length, duration: 2.4, ease: "none", onUpdate: paint }, ">-0.05")
+        .fromTo(typed, { n: 0 }, { n: BRIEF.length, duration: 3.6, ease: "none", onUpdate: paint }, ">-0.05")
         // tools pop in
         .to(tools, { autoAlpha: 1, scale: 1, duration: 0.3, ease: "back.out(2)", stagger: 0.08 }, ">-0.4")
         // hold the finished request
         .to({}, { duration: 1.0 })
-        // compact back down into the "request anything…" pill (queue glides up),
-        // crossfading the brief out and the placeholder in as it shrinks — stays
-        // in place the whole time so it never leaves an empty gap. Tag cycles so
-        // the pill returns as the next request.
+        // compact back down into the collapsed "new landing page" pill (queue
+        // glides up), crossfading the brief out and the label in as it shrinks —
+        // stays in place the whole time so it never leaves an empty gap.
         .addLabel("compact")
-        .add(() => {
-          pass += 1;
-          const tag = ACTIVE_TAGS[pass % ACTIVE_TAGS.length];
-          activeTagEls.forEach((el) => (el.textContent = tag));
-        })
         .to(active, { height: ROW_H, borderRadius: 37, duration: 0.95, ease: "power2.inOut" }, "compact")
         .to(tools, { autoAlpha: 0, duration: 0.3, ease: "power1.out" }, "compact")
         .to(expanded, { autoAlpha: 0, duration: 0.45, ease: "power1.out" }, "compact")
@@ -224,16 +214,13 @@ export default function RequestMedia() {
             className="relative w-full shrink-0 overflow-hidden border border-solid border-white/50 bg-white/10"
             style={{ height: ROW_H, borderRadius: 37 }}
           >
-            {/* collapsed: "request anything…" */}
+            {/* collapsed: the active request label */}
             <div ref={collapsedRef} className="absolute inset-0">
               <span className="absolute left-[26px] top-1/2 -translate-y-1/2 whitespace-nowrap font-product text-[16px] leading-none text-white">
-                {REQUEST_PLACEHOLDER}
+                {ACTIVE_REQUEST.task}
               </span>
-              <span
-                data-active-tag
-                className="absolute right-[11px] top-1/2 -translate-y-1/2 whitespace-nowrap rounded-[31px] bg-white px-[9.578px] py-[4.789px] text-[10px] leading-[1.5] text-[#263138]"
-              >
-                UI/UX
+              <span className="absolute right-[11px] top-1/2 -translate-y-1/2 whitespace-nowrap rounded-[31px] bg-white px-[9.578px] py-[4.789px] text-[10px] leading-[1.5] text-[#263138]">
+                {ACTIVE_REQUEST.tag}
               </span>
             </div>
 
@@ -243,11 +230,8 @@ export default function RequestMedia() {
                 <span className="whitespace-nowrap font-product text-[20px] leading-none text-white">
                   New Landing Page
                 </span>
-                <span
-                  data-active-tag
-                  className="whitespace-nowrap rounded-[31px] bg-white px-[9.578px] py-[4.789px] text-[10px] leading-[1.5] text-[#263138]"
-                >
-                  UI/UX
+                <span className="whitespace-nowrap rounded-[31px] bg-white px-[9.578px] py-[4.789px] text-[10px] leading-[1.5] text-[#263138]">
+                  {ACTIVE_REQUEST.tag}
                 </span>
               </div>
 
@@ -274,8 +258,8 @@ export default function RequestMedia() {
           </div>
 
           {/* Static queue below. */}
-          {QUEUE_TAGS.map((tag, i) => (
-            <QueueRow key={i} tag={tag} />
+          {REQUEST_QUEUE.map((row) => (
+            <QueueRow key={row.task} task={row.task} tag={row.tag} />
           ))}
         </div>
       </div>
