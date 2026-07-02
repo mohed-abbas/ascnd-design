@@ -135,12 +135,11 @@ const GlassSurface: React.FC<GlassSurfaceProps> = ({
   const redGradId = `red-grad-${uniqueId}`;
   const blueGradId = `blue-grad-${uniqueId}`;
 
-  // Capability state — BOTH start false so SSR markup and the first client
-  // render take the same (static fallback) branch, then upgrade after mount.
-  // Sniffing these during render was the audit's H1 hydration mismatch: the
-  // server can't run CSS.supports, so its branch never matched the client's.
+  // Capability state — starts false so SSR markup and the first client render
+  // take the same (clear glass) branch, then upgrades after mount. Sniffing
+  // during render was the audit's H1 hydration mismatch: the server can't run
+  // engine detection, so its branch never matched the client's.
   const [svgSupported, setSvgSupported] = useState<boolean>(false);
-  const [backdropSupported, setBackdropSupported] = useState<boolean>(false);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const feImageRef = useRef<SVGFEImageElement>(null);
@@ -326,7 +325,6 @@ const GlassSurface: React.FC<GlassSurfaceProps> = ({
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time capability read after mount
     setSvgSupported(supportsSVGFilters());
-    setBackdropSupported(CSS.supports("backdrop-filter", "blur(10px)"));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -362,9 +360,6 @@ const GlassSurface: React.FC<GlassSurfaceProps> = ({
       "--glass-saturation": saturation,
     } as React.CSSProperties;
 
-    // Mounted state, not a live sniff — render must stay SSR-stable (H1).
-    const backdropFilterSupported = backdropSupported;
-
     if (displacementActive) {
       return {
         ...baseStyles,
@@ -397,44 +392,16 @@ const GlassSurface: React.FC<GlassSurfaceProps> = ({
       };
     }
 
-    if (isDarkMode) {
-      if (!backdropFilterSupported) {
-        return {
-          ...baseStyles,
-          background: "rgba(0, 0, 0, 0.4)",
-          border: "1px solid rgba(255, 255, 255, 0.2)",
-          boxShadow: `inset 0 1px 0 0 rgba(255, 255, 255, 0.2),
-                      inset 0 -1px 0 0 rgba(255, 255, 255, 0.1)`,
-        };
-      }
-      return {
-        ...baseStyles,
-        background: "rgba(255, 255, 255, 0.1)",
-        backdropFilter: "blur(12px) saturate(1.8) brightness(1.2)",
-        WebkitBackdropFilter: "blur(12px) saturate(1.8) brightness(1.2)",
-        border: "1px solid rgba(255, 255, 255, 0.2)",
-        boxShadow: `inset 0 1px 0 0 rgba(255, 255, 255, 0.2),
-                    inset 0 -1px 0 0 rgba(255, 255, 255, 0.1)`,
-      };
-    }
-
-    if (!backdropFilterSupported) {
-      return {
-        ...baseStyles,
-        background: "rgba(255, 255, 255, 0.4)",
-        border: "1px solid rgba(255, 255, 255, 0.3)",
-        boxShadow: `inset 0 1px 0 0 rgba(255, 255, 255, 0.5),
-                    inset 0 -1px 0 0 rgba(255, 255, 255, 0.3)`,
-      };
-    }
-    // Clear-glass fallback (Firefox/Safari): the displacement filter renders
-    // incorrectly on these engines, so we can't refract the reel. The frost
-    // that used to live here (blur 22px) was rejected by the stakeholder —
-    // over the bright reel on the blue sky it read as a milky blue bar. So:
-    // transparent body + crisp rim + the static chromatic ring below, NO
-    // backdrop-filter at all. The framed phrase stays sharp through the pill
-    // (which is what the design frames anyway), it visually matches the
-    // Chromium tiers' family, and it costs zero per frame.
+    // EVERY non-displacement path is the same clear glass — Gecko/Safari
+    // (the displacement filter renders incorrectly there), the SSR/pre-mount
+    // frame, ancient no-backdrop-filter browsers, dark-mode OSes. The
+    // vendored fallback ladder (dark/light frosts, blur 12–22px) is GONE:
+    // the stakeholder rejected frost in every form — over the bright reel on
+    // the blue sky it reads as a milky blue bar. Clear glass = transparent
+    // body + crisp rim + the static chromatic ring below, NO backdrop-filter
+    // anywhere. The framed phrase stays sharp through the pill (which is what
+    // the design frames anyway), it matches the Chromium tiers' family, and
+    // it costs zero per frame on any engine.
     return {
       ...baseStyles,
       background: "rgba(255, 255, 255, 0.1)",
