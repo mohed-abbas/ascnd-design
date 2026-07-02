@@ -231,7 +231,20 @@ function ScrollAnchorRig({
     // Seed the position for a load that restores mid-page (scrub fires lazily).
     apply(window.scrollY || 0);
 
+    // Re-seed after every refresh. ScrollTrigger.refresh() (fired on ANY resize)
+    // reverts the scroller to 0 to measure, which runs the scrub onUpdate above
+    // with scroll=0 and snaps this whole field group back to position.y=0 — its
+    // hero anchor — so on a demand canvas the field clouds flash back onto the
+    // hero for a frame or two, whatever the actual scroll, until the next scroll
+    // corrects it. Re-applying the true scroll once the refresh has restored the
+    // scroller overwrites that stale frame. st.scroll() (not window.scrollY,
+    // which can read 0 for a tick under Lenis) reflects the restored position.
+    // (SectionRig doesn't need this — it already re-seeds via onRefresh.)
+    const onRefresh = () => apply(st.scroll());
+    ScrollTrigger.addEventListener("refresh", onRefresh);
+
     return () => {
+      ScrollTrigger.removeEventListener("refresh", onRefresh);
       st.kill();
       capped.cancel();
     };
