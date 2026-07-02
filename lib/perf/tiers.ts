@@ -25,6 +25,12 @@
  * | components/sections/intro/intro-scene.tsx  | mtm*, text3d* (mount snapshot),          |
  * |                                            | heavyEffectFpsCap() (IntroFrameCap),     |
  * |                                            | makeCappedInvalidate (ScrollRig)         |
+ * | components/ui/glass-surface.tsx            | tier name only (live): low → frosted     |
+ * |                                            | fallback instead of the SVG displacement |
+ * |                                            | chain (no knob can shrink a DOM          |
+ * |                                            | backdrop-filter — it's branch or full)   |
+ * | components/sections/why-stay/              | makeCappedInvalidate (--reel-y writes    |
+ * |   why-stay-reveal.tsx                      | behind the glass pill)                   |
  *
  * ★ RULE (audit 2026-07-02 F5.1): any NEW heavy effect — a WebGL canvas, a
  * free-running loop, a per-frame SVG/CSS filter — must be added to this table

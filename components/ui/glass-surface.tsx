@@ -32,6 +32,7 @@
  */
 
 import React, { useEffect, useRef, useState, useId } from "react";
+import { useQuality } from "@/lib/perf/use-quality";
 
 export interface GlassSurfaceProps {
   children?: React.ReactNode;
@@ -134,6 +135,17 @@ const GlassSurface: React.FC<GlassSurfaceProps> = ({
   const gaussianBlurRef = useRef<SVGFEGaussianBlurElement>(null);
 
   const isDarkMode = useDarkMode();
+
+  // Quality tier (lib/perf) — the displacement chain is the page's heaviest
+  // per-frame filter and, unlike the canvases, has NO dpr/resolution knob to
+  // turn down. So `low` swaps to the frosted fallback below (a compositor-
+  // accelerated blur — the same glass Safari/Firefox already get). This is
+  // the section's guaranteed 60fps floor. Reactive: a mid-session watchdog
+  // step-down switches the branch live. SSR-safe: the server snapshot is
+  // `high`, and the mounted-capability gates above keep the first render on
+  // the static fallback branch regardless of tier.
+  const { tier } = useQuality();
+  const displacementActive = svgSupported && tier !== "low";
 
   const generateDisplacementMap = () => {
     // Layout size, NOT getBoundingClientRect: the why-stay entrance animates
@@ -244,7 +256,6 @@ const GlassSurface: React.FC<GlassSurfaceProps> = ({
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time capability read after mount
     setSvgSupported(supportsSVGFilters());
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time capability read after mount
     setBackdropSupported(CSS.supports("backdrop-filter", "blur(10px)"));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -284,7 +295,7 @@ const GlassSurface: React.FC<GlassSurfaceProps> = ({
     // Mounted state, not a live sniff — render must stay SSR-stable (H1).
     const backdropFilterSupported = backdropSupported;
 
-    if (svgSupported) {
+    if (displacementActive) {
       return {
         ...baseStyles,
         background: isDarkMode
