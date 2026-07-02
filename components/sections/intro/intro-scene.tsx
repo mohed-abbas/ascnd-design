@@ -15,6 +15,7 @@ import type { Group, Mesh } from "three";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { getQualityConfig, heavyEffectFpsCap } from "@/lib/perf/quality-store";
+import { makeCappedInvalidate } from "@/lib/perf/capped-invalidate";
 
 // Warm the local assets ASAP so the scene's ready-gate isn't waiting on a
 // cold fetch (the rock cut-outs; the Environment HDR loads in its own Suspense
@@ -577,11 +578,15 @@ function ScrollRig({
   useEffect(() => {
     gsap.registerPlugin(ScrollTrigger);
     const worldPerPx = 8.284 / height;
+    // Cap scroll-driven repaints (same as the clouds' rigs): position is still
+    // written per update, but paints past the heavy-effect cap are skipped with
+    // a trailing paint so the last update of a scrub always lands.
+    const capped = makeCappedInvalidate(invalidate);
     const apply = (scroll: number) => {
       const g = fieldRef.current;
       if (!g) return;
       g.position.y = scroll * worldPerPx;
-      invalidate();
+      capped();
     };
     const st = ScrollTrigger.create({
       start: 0,
@@ -590,7 +595,10 @@ function ScrollRig({
       onUpdate: (self) => apply(self.scroll()),
     });
     apply(window.scrollY || 0); // seed a mid-page restore
-    return () => st.kill();
+    return () => {
+      st.kill();
+      capped.cancel();
+    };
   }, [height, invalidate, fieldRef]);
 
   return null;

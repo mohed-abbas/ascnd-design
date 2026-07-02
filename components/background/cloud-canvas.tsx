@@ -9,6 +9,7 @@ import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import type { CloudSpec } from "./cloud-specs";
 import { useQuality } from "@/lib/perf/use-quality";
+import { makeCappedInvalidate } from "@/lib/perf/capped-invalidate";
 
 /**
  * Volumetric cloud field (Three.js / R3F + drei <Clouds>).
@@ -207,12 +208,16 @@ function ScrollAnchorRig({
   useEffect(() => {
     gsap.registerPlugin(ScrollTrigger);
     const worldPerPx = viewportWorldHeight(camera) / window.innerHeight;
+    // Scroll updates arrive at up to panel rate (120 Hz); repaints past the
+    // heavy-effect cap buy nothing visible, so throttle with a trailing paint
+    // (the group position is still written per update — only paints are capped).
+    const capped = makeCappedInvalidate(invalidate);
 
     const apply = (scroll: number) => {
       const g = groupRef.current;
       if (!g) return;
       g.position.y = scroll * worldPerPx * scrollFactor;
-      invalidate();
+      capped();
     };
 
     const st = ScrollTrigger.create({
@@ -225,7 +230,10 @@ function ScrollAnchorRig({
     // Seed the position for a load that restores mid-page (scrub fires lazily).
     apply(window.scrollY || 0);
 
-    return () => st.kill();
+    return () => {
+      st.kill();
+      capped.cancel();
+    };
     // width/height: recompute worldPerPx when the viewport (and thus the world
     // height at REF_DIST) changes.
   }, [groupRef, camera, width, height, invalidate, scrollFactor]);
@@ -273,6 +281,9 @@ function SectionRig({
     const vwh = viewportWorldHeight(camera);
     const rest = new THREE.Vector3();
     const triggers: ScrollTrigger[] = [];
+    // One shared cap across all section clouds — they repaint the same canvas,
+    // so a single trailing paint covers every cloud's last update.
+    const capped = makeCappedInvalidate(invalidate);
 
     clouds.forEach((c, i) => {
       const bind = c.section;
@@ -310,7 +321,7 @@ function SectionRig({
           d = 0; // hold at rest (spans the pin, if any)
         }
         g.position.set(restX, restY + d * travel, restZ);
-        invalidate();
+        capped();
       };
 
       // Report on-screen state to the shared set so <MorphRig> keeps the
@@ -339,6 +350,7 @@ function SectionRig({
     const active = activeClouds.current;
     return () => {
       triggers.forEach((t) => t.kill());
+      capped.cancel();
       clouds.forEach((c) => active.delete(c.key));
     };
     // width/height: rest point + vwh depend on the projected viewport.
