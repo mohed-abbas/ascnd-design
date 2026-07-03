@@ -158,14 +158,15 @@ export default function SubscribeMedia() {
 
       const tl = gsap.timeline({ repeat: -1, repeatDelay: 0.5, paused: true });
       tl
-        // rest — the pointer fades in together with the glass button. Position 0
-        // covers the first loop (the button is already visible at t=0); on later
-        // loops the cursor is already faded in from the reset below, so this is a
-        // no-op and the real shared fade happens at "reset".
-        .to({}, { duration: 0.7 })
-        .to(cursor, { autoAlpha: 1, duration: 0.32, ease: "power2.out" }, 0)
-        // cursor drifts onto the button
-        .to(cursor, { x: CURSOR_DX, y: CURSOR_DY, duration: 0.8, ease: "power2.inOut" })
+        // rest — the glass button sits alone; the pointer is hidden for ~100ms.
+        .to({}, { duration: 0.1 })
+        // then the pointer fades IN and drifts onto the button together (same
+        // beat) — exactly like the request card's send pointer. It stays hidden
+        // before this on the first play (the initial set) AND every loop (the
+        // reset below parks it hidden), so it never shows as a static dot.
+        .addLabel("approach")
+        .to(cursor, { autoAlpha: 1, duration: 0.32, ease: "power2.out" }, "approach")
+        .to(cursor, { x: CURSOR_DX, y: CURSOR_DY, duration: 0.8, ease: "power2.inOut" }, "approach")
         // click-pop (pill + cursor tap together)
         .to(pill, { scale: 0.94, duration: 0.09, ease: "power2.in" })
         .to(cursor, { scale: 0.82, duration: 0.09, ease: "power2.in" }, "<")
@@ -213,10 +214,11 @@ export default function SubscribeMedia() {
         .to(pill, { width: W0, duration: 0.36, ease: "power2.inOut" }, "reset")
         .set([chars1, chars2], { yPercent: 110 })
         .set(check, { scale: 0 })
-        // the glass button + the pointer fade back in TOGETHER (the moment the
-        // button's first state returns), parked at the pointer's start spot.
-        .set(cursor, { x: 0, y: 0, scale: 1 })
-        .to([label0, cursor], { autoAlpha: 1, duration: 0.32, ease: "power2.out" });
+        // only the glass button fades back in here; the pointer stays HIDDEN,
+        // parked at its start spot (autoAlpha 0), so on the next loop it fades in
+        // again exactly as it begins to move — never sitting still and visible.
+        .set(cursor, { x: 0, y: 0, scale: 1, autoAlpha: 0 })
+        .to(label0, { autoAlpha: 1, duration: 0.32, ease: "power2.out" });
 
       // Only run while the card is on screen.
       const io = new IntersectionObserver(
@@ -347,8 +349,15 @@ export default function SubscribeMedia() {
         </div>
       </div>
 
-      {/* Pointer cursor — rests below-right of the button, then drifts onto it. */}
-      <div ref={cursorRef} className="absolute left-[292.5px] top-[229.5px] flex size-[30.619px] items-center justify-center">
+      {/* Pointer cursor — rests below-right of the button, then drifts onto it.
+          Starts hidden (opacity 0) on first paint so it can't flash before GSAP
+          takes over autoAlpha in the effect — same as the request card. */}
+      <div
+        ref={cursorRef}
+        aria-hidden
+        className="absolute left-[292.5px] top-[229.5px] flex size-[30.619px] items-center justify-center"
+        style={{ opacity: 0 }}
+      >
         <Image
           src="/cards/cursor.svg"
           alt=""
