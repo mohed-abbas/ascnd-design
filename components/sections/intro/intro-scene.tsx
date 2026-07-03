@@ -977,6 +977,13 @@ export default function IntroScene({
 
   return (
     <Canvas
+      // pointer-events:none — the necklace is a PASSIVE visual (no picking, no
+      // drag), but this persistent canvas is fixed inset-0 at z-[60], so by
+      // default R3F's container (pointerEvents:'auto') would sit over the whole
+      // hero and swallow every hover/click meant for the content beneath it (the
+      // CTA buttons, etc.). The wrapper is already pointer-events-none; this makes
+      // the R3F subtree match so events fall through.
+      style={{ pointerEvents: "none" }}
       // Always "demand": the persistent canvas is pumped by whoever needs frames
       // — the tile conveyor/scroll rigs post-intro, and <IntroFrameCap> during
       // the welcome. Demand (vs the old "always" during intro) lets us CAP the
