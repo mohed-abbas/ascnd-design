@@ -17,7 +17,11 @@ import {
   introWillPlay,
 } from "./intro-state";
 import { CAMERA_Z, ROCK_Z, TILE_Z } from "./intro-scene";
-import { SHOTS } from "@/components/sections/design-shots/shots-spec";
+import {
+  SHOT_BASE,
+  SHOT_FRAME_RADIUS,
+  SHOTS,
+} from "@/components/sections/design-shots/shots-spec";
 import type {
   ConveyorArc,
   GlassAnim,
@@ -299,7 +303,10 @@ export default function Intro() {
 
     const tiles: TileLayout[] = SHOTS.map((shot) => ({
       src: shot.src,
-      radiusRatio: shot.radius / shot.size,
+      // The shot shares the frame's corner radius (rounds to match the glass
+      // border), so it's a constant fraction of the BASE box, not the per-tile
+      // near-square `shot.radius`.
+      radiusRatio: SHOT_FRAME_RADIUS / SHOT_BASE,
       arc: shot.arc,
     }));
     const tileNecklace: TilePose[] = SHOTS.map((shot) => slotPose[shot.arc]);

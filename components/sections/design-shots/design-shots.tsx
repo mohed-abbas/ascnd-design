@@ -1,11 +1,5 @@
 import Image from "next/image";
-import {
-  SHOT_BASE,
-  SHOT_FRAME_RADIUS,
-  SHOT_MAT_RATIO,
-  SHOT_RADIUS_RATIO,
-  SHOTS,
-} from "./shots-spec";
+import { SHOT_BASE, SHOT_FRAME_RADIUS, SHOT_MAT_RATIO, SHOTS } from "./shots-spec";
 
 // Glass mat metrics, authored at the BASE box (the rotor's transform scales the
 // whole tile — border, glow and radius included — down to each slot's size, so
@@ -13,12 +7,11 @@ import {
 // The shot keeps its full slot size; the frame wraps AROUND it as an outer border
 // (extended outward by the mat), so the shot never shrinks.
 const MAT_PAD = SHOT_MAT_RATIO * SHOT_BASE; // px the frame extends beyond the shot
-const IMAGE_RADIUS = SHOT_RADIUS_RATIO * SHOT_BASE; // shot corner radius (Figma 3.829 @ 261) — kept near-square
-// The outer frame is DELIBERATELY rounder than the shot (not concentric): a
-// clearly larger corner so the mat reads as its own rounded border wrapping a
-// near-square screenshot, rather than a uniform-width outline that looks like the
-// shot's own edge. Authored at BASE; scales down with the rotor transform.
+// The shot shares the frame's corner radius, so the screenshot rounds to match
+// the glass border instead of staying near-square. Both authored at BASE; the
+// rotor transform scales them down together.
 const FRAME_RADIUS = SHOT_FRAME_RADIUS;
+const IMAGE_RADIUS = SHOT_FRAME_RADIUS;
 // Inset white sheen — the navbar "menu" glass signature, scaled to the tile: the
 // navbar's 28.3px glow is 2.44% of its width, so at BASE that's ~6.4px, which
 // fills the mat ring so the whole frame reads as lit glass.

@@ -23,15 +23,15 @@ export const SHOT_BASE = 261;
 // 1.858/76 = 2.445%), so they're expressed as a FRACTION of the tile's edge and
 // applied by both renderers (the DOM collage + the WebGL necklace).
 //   • MAT_RATIO   — mat width (padding between the frame edge and the shot).
-//   • RADIUS_RATIO— corner radius (3.829/261); the per-tile `radius` px below
-//     derive from it, so the DOM `borderRadius` and the WebGL rounded-alpha match.
+//   • RADIUS_RATIO— the Figma-native shot corner (3.829/261). Retained for
+//     reference; the shot now shares the frame's corner (SHOT_FRAME_RADIUS)
+//     rather than this near-square value — see below.
 export const SHOT_MAT_RATIO = 0.0245;
 export const SHOT_RADIUS_RATIO = 0.0147;
-// The OUTER glass frame's corner radius, in px at the BASE box. Deliberately
-// rounder than the shot's own near-square corner (SHOT_RADIUS_RATIO) — NOT
-// concentric — so the mat reads as its own rounded border around the screenshot
-// instead of a uniform-width outline of the shot's edge. Authored at BASE and
-// scaled down with the tile by both renderers.
+// The glass frame's corner radius, in px at the BASE box, used by BOTH the outer
+// frame AND the shot inside it, so the screenshot's corners round to match the
+// frame instead of staying near-square. Authored at BASE and scaled down with
+// the tile by both renderers (DOM `borderRadius` + WebGL rounded-alpha/window).
 export const SHOT_FRAME_RADIUS = 14;
 
 /**

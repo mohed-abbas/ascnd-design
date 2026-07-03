@@ -314,7 +314,10 @@ function Rocks({
 // plane reads as a rounded card. Radius is a fraction of the edge, so it scales
 // with the plane (corners stay in ratio as the tile grows into its slot).
 function makeRoundedAlpha(radiusRatio: number): THREE.Texture {
-  const S = 256;
+  // 512 (not 256): the shot now rounds to the full frame radius, ~3.7× the old
+  // near-square corner, so the arc must be sampled finely enough to stay smooth
+  // when the tile is magnified into the big centre slot.
+  const S = 512;
   const r = Math.min(0.5, radiusRatio) * S;
   const canvas = document.createElement("canvas");
   canvas.width = S;
@@ -374,7 +377,9 @@ function makeGlassFrame(
   windowInsetRatio: number,
   windowRadiusRatio: number,
 ): THREE.Texture {
-  const S = 256;
+  // 512 to match makeRoundedAlpha — the frame's rounded outer edge and window
+  // corner scale up into the centre slot and would otherwise stair-step.
+  const S = 512;
   const canvas = document.createElement("canvas");
   canvas.width = S;
   canvas.height = S;
@@ -451,8 +456,9 @@ function Tiles({
   );
   // The liquid-glass mat frame texture per tile. The frame quad is scaled up by
   // FRAME_SCALE, so every ratio is against that larger quad: the outer corner is
-  // the (rounder) SHOT_FRAME_RADIUS, the window sits inset by the mat, and the
-  // window corner matches the shot's own near-square radius.
+  // SHOT_FRAME_RADIUS, the window sits inset by the mat, and the window corner
+  // matches the shot's radius — which now equals the frame's, so the shot rounds
+  // to match the glass border.
   const frameEdge = SHOT_BASE * FRAME_SCALE;
   const frames = useMemo(
     () =>
