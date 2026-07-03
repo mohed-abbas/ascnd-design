@@ -99,3 +99,25 @@ export function introWillPlay(): boolean {
   if (cached === undefined) cached = computeShouldPlay();
   return cached;
 }
+
+/**
+ * Has the intro already fired its reveal this page load? Tracked module-side (a
+ * single passive once-listener) so a component that MOUNTS after the dock — e.g.
+ * the custom cursor when a mouse is plugged in mid-session, since its gate mounts
+ * live on pointer/breakpoint changes — can tell the welcome is already over and
+ * skip its intro gate instead of waiting for an event that will never refire.
+ */
+let revealed = false;
+if (typeof window !== "undefined") {
+  window.addEventListener(
+    INTRO_REVEAL_EVENT,
+    () => {
+      revealed = true;
+    },
+    { once: true },
+  );
+}
+
+export function introHasRevealed(): boolean {
+  return revealed;
+}

@@ -2,7 +2,9 @@
 <g id="Frame">
 <!-- Solid white pointer: only the outer silhouette is drawn (the inner cut-out
      subpath was removed), so the arrow fills white instead of rendering as a
-     hollow outline. Sole consumer is subscribe-media.tsx. -->
+     hollow outline. Consumers: subscribe-media.tsx, request-media.tsx (load this
+     file). components/cursor/cursor-visual.tsx inlines a COPY of this path — keep
+     the two in sync if the art changes. -->
 <path id="Vector" fill-rule="evenodd" clip-rule="evenodd" d="M4.56517 12.785C2.64847 12.0169 2.69214 9.28859 4.63244 8.58221L18.6295 3.48652C20.4255 2.83266 22.1673 4.57443 21.5134 6.37048L16.4177 20.3675C15.7114 22.3078 12.9831 22.3514 12.215 20.4347L10.1458 15.2714C10.0695 15.0811 9.91877 14.9304 9.72856 14.8542L4.56517 12.785Z" fill="var(--fill-0, white)"/>
 </g>
 </svg>
