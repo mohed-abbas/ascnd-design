@@ -16,9 +16,9 @@ const REDUCE_MOTION = "(prefers-reduced-motion: reduce)";
 
 /**
  * Cards section heading (Figma 302:1446) — "ground to launch in days" with the
- * Instrument Serif "launch" accent, Product Sans Light. It rolls up character by
- * character (SplitText chars + mask, the same mechanic as the tagline/subscribe
- * card) when the section scrolls into view.
+ * Instrument Serif "launch" accent, Product Sans Light. It blur-reveals word by
+ * word (SplitText words: each word rises a touch, fades in, and clears from a
+ * soft blur to crisp) when the section scrolls into view.
  *
  * JS-/motion-gated: SSR, no-JS and reduced-motion render the finished heading
  * (there's no hidden state in the markup) — we only hide + park the glyphs once
@@ -44,16 +44,19 @@ export default function CardsHeading() {
     const build = () => {
       if (cancelled) return;
       ctx = gsap.context(() => {
-        split = new SplitText(el, { type: "chars", mask: "chars" });
-        gsap.set(el, { autoAlpha: 1 }); // container shown; glyphs parked/masked
+        split = new SplitText(el, { type: "words" });
+        gsap.set(el, { autoAlpha: 1 }); // container shown; words parked below/blurred
         gsap.fromTo(
-          split.chars,
-          { yPercent: 110 },
+          split.words,
+          { yPercent: 40, autoAlpha: 0, filter: "blur(8px)" },
           {
             yPercent: 0,
+            autoAlpha: 1,
+            filter: "blur(0px)",
             duration: 0.7,
             ease: "power3.out",
-            stagger: 0.03,
+            stagger: 0.06,
+            clearProps: "filter", // drop the inline filter once crisp
             scrollTrigger: { trigger: el, start: "top 85%", once: true },
           },
         );

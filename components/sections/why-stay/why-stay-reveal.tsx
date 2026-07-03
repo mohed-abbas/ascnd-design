@@ -21,16 +21,19 @@ const SCRUB = 0.8; // scroll-follow smoothing; higher = more glide/inertia
 const REEL_EASE = "sine.inOut"; // reel eases in/out so it's near-still at the pin edges
 
 // ── Timeline proportions (scrubbed → only the ratios matter) ────────────────
-const HEAD_DUR = 0.6; // per-character roll-up duration
-const HEAD_STAGGER = 0.05; // gap between heading characters
+const HEAD_DUR = 0.6; // per-word blur-reveal duration
+const HEAD_STAGGER = 0.1; // gap between heading words
+const HEAD_RISE = 40; // yPercent each word starts below its resting line
+const HEAD_BLUR_FROM = "blur(8px)"; // soft start blur, clears to crisp
+const HEAD_BLUR_TO = "blur(0px)";
 const PILL_DUR = 0.7; // pill fade-in
 const ROLL_EASE = "power3.out"; // heading roll-up ease
 
 /**
  * "why teams stay" pinned orchestrator. Renders nothing. On mount it builds two
  * scroll-scrubbed drivers over the section:
- *   1. ENTRANCE (not pinned) — as the section rises into view the heading rolls
- *      up per character and the glass pill fades in, finishing exactly as the
+ *   1. ENTRANCE (not pinned) — as the section rises into view the heading blur-
+ *      reveals word by word and the glass pill fades in, finishing exactly as the
  *      section top reaches the viewport top.
  *   2. PIN — the section then locks to the viewport (`pin: true`) and continued
  *      scrolling scrubs the reel SMOOTHLY and linearly through every phrase (one
@@ -61,7 +64,7 @@ export default function WhyStayReveal() {
 
     const stage = section.querySelector<HTMLElement>("[data-whystay-stage]");
     const pill = section.querySelector<HTMLElement>("[data-whystay-pill]");
-    const chars = gsap.utils.toArray<HTMLElement>("[data-whschar]");
+    const words = gsap.utils.toArray<HTMLElement>("[data-whsword]");
     if (!stage) return;
 
     const N = PHRASES.length;
@@ -76,13 +79,18 @@ export default function WhyStayReveal() {
 
     mm.add("(prefers-reduced-motion: no-preference)", () => {
       // Arm the hidden start before paint: reel at the first phrase, heading
-      // glyphs below their clips, pill invisible.
+      // words dropped + faded + blurred, pill invisible.
       gsap.set(stage, { "--reel-y": "0px" });
-      if (chars.length) gsap.set(chars, { yPercent: 110 });
+      if (words.length)
+        gsap.set(words, {
+          yPercent: HEAD_RISE,
+          autoAlpha: 0,
+          filter: HEAD_BLUR_FROM,
+        });
       if (pill) gsap.set(pill, { autoAlpha: 0, scale: 0.96 });
 
       // 1) Entrance (not pinned) — the glass pill fades/scales in while the
-      //    heading rolls up, tied to the section's approach so it's fully formed
+      //    heading blur-reveals, tied to the section's approach so it's fully formed
       //    exactly as the section top reaches the viewport top.
       const enterTl = gsap.timeline({
         scrollTrigger: {
@@ -99,10 +107,17 @@ export default function WhyStayReveal() {
           { autoAlpha: 1, scale: 1, duration: PILL_DUR, ease: "power2.out" },
           0,
         );
-      if (chars.length)
+      if (words.length)
         enterTl.to(
-          chars,
-          { yPercent: 0, duration: HEAD_DUR, ease: ROLL_EASE, stagger: HEAD_STAGGER },
+          words,
+          {
+            yPercent: 0,
+            autoAlpha: 1,
+            filter: HEAD_BLUR_TO,
+            duration: HEAD_DUR,
+            ease: ROLL_EASE,
+            stagger: HEAD_STAGGER,
+          },
           0,
         );
 

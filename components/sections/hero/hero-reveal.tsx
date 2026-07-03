@@ -17,9 +17,18 @@ const REDUCE_MOTION = "(prefers-reduced-motion: reduce)";
 const STAGGER = 0.12; // gap between blocks in the cascade
 const DURATION = 0.7;
 const EASE = "expo.out";
-// The per-unit roll-up ease (headline chars, sub-paragraph words, CTAs) — the
+// The per-unit roll-up ease (headline words, sub-paragraph words, CTAs) — the
 // same smooth settle as the tagline roll-up.
 const ROLL_EASE = "power3.out";
+// Word reveal: each word rises a little, fades in, and clears from a soft blur
+// to crisp — a blur reveal, word by word (replacing the old per-character roll).
+// No overflow mask here (a hard clip would shear the blur halo); the rise is
+// small and the fade + un-blur carry the entrance instead.
+const WORD_RISE = 40; // yPercent each word starts below its resting line
+const WORD_STAGGER = 0.06; // gap between headline words
+const BODY_STAGGER = 0.03; // gap between sub-paragraph words (there are more)
+const BLUR_FROM = "blur(8px)";
+const BLUR_TO = "blur(0px)";
 
 /**
  * On-load reveal orchestrator. Renders nothing; on mount it builds a single
@@ -29,8 +38,8 @@ const ROLL_EASE = "power3.out";
  *   [data-reveal]        masked slide-up (lives in an overflow:hidden wrapper)
  *   [data-reveal-fade]   fade + small slide (chrome / the mask-image logos row)
  *   [data-reveal-soft]   opacity only (the navbar, whose translate must survive)
- *   [data-reveal-split]  the headline — SplitText rolls it up per character
- *   [data-reveal-words]  the sub-paragraph — SplitText rolls it up per word
+ *   [data-reveal-split]  the headline — SplitText blur-reveals it word by word
+ *   [data-reveal-words]  the sub-paragraph — same per-word blur reveal
  *   [data-reveal-cta]    a button clip — the inner control rolls up, then the
  *                        clip is lifted so hover/focus isn't shaved
  * Cascade order comes from each element's `data-reveal-order`.
@@ -72,30 +81,39 @@ export default function HeroReveal() {
       // that the yPercent tween never clears, freezing the block. Pinning y:0
       // in `from` makes GSAP own the full transform, so it resolves to identity.
 
-      // Headline → per-character roll-up via SplitText (chars + mask): each
-      // glyph rises out of its own clip, staggered, like the tagline.
+      // Headline → per-word blur reveal via SplitText (words, no mask): each
+      // word rises a touch, fades in, and clears from a soft blur to crisp,
+      // staggered word by word.
       const headline = root.querySelector<HTMLElement>("[data-reveal-split]");
       if (headline) {
-        const s = new SplitText(headline, { type: "chars", mask: "chars" });
+        const s = new SplitText(headline, { type: "words" });
         splits.push(s);
         gsap.set(headline, { opacity: 1 }); // opacity is unit-safe to set
         entries.push({
           order: Number(headline.dataset.revealOrder ?? 0),
           add: (tl, at) =>
             tl.fromTo(
-              s.chars,
-              { yPercent: 110, y: 0 },
-              { yPercent: 0, duration: DURATION, ease: ROLL_EASE, stagger: 0.02 },
+              s.words,
+              { yPercent: WORD_RISE, autoAlpha: 0, filter: BLUR_FROM },
+              {
+                yPercent: 0,
+                autoAlpha: 1,
+                filter: BLUR_TO,
+                duration: DURATION,
+                ease: ROLL_EASE,
+                stagger: WORD_STAGGER,
+                clearProps: "filter", // drop the inline filter once crisp
+              },
               at,
             ),
         });
       }
 
-      // Sub-paragraph → per-word roll-up via SplitText (words + mask): each word
-      // rises out of its clip, staggered — cleaner than per-char for a sentence.
+      // Sub-paragraph → the same per-word blur reveal, a touch tighter (more
+      // words), so it reads as one continuation of the headline's cascade.
       const bodyText = root.querySelector<HTMLElement>("[data-reveal-words]");
       if (bodyText) {
-        const s = new SplitText(bodyText, { type: "words", mask: "words" });
+        const s = new SplitText(bodyText, { type: "words" });
         splits.push(s);
         gsap.set(bodyText, { opacity: 1 });
         entries.push({
@@ -103,8 +121,16 @@ export default function HeroReveal() {
           add: (tl, at) =>
             tl.fromTo(
               s.words,
-              { yPercent: 110, y: 0 },
-              { yPercent: 0, duration: DURATION, ease: ROLL_EASE, stagger: 0.03 },
+              { yPercent: WORD_RISE, autoAlpha: 0, filter: BLUR_FROM },
+              {
+                yPercent: 0,
+                autoAlpha: 1,
+                filter: BLUR_TO,
+                duration: DURATION,
+                ease: ROLL_EASE,
+                stagger: BODY_STAGGER,
+                clearProps: "filter",
+              },
               at,
             ),
         });

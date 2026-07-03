@@ -6,7 +6,7 @@
 export default function HeroText() {
   return (
     <div className="font-product flex flex-col items-center gap-[23px] text-center text-white">
-      {/* Reveal #3 — headline rolls up per character (SplitText chars + mask). */}
+      {/* Reveal #3 — headline blur-reveals word by word (SplitText words). */}
       <h1
         data-reveal-split
         data-reveal-order={3}
@@ -16,7 +16,7 @@ export default function HeroText() {
         <span className="font-instrument tracking-[-0.5px]">hiring</span>
       </h1>
 
-      {/* Reveal #4 — sub-paragraph rolls up per word (SplitText words + mask). */}
+      {/* Reveal #4 — sub-paragraph blur-reveals word by word (SplitText words). */}
       <p
         data-reveal-words
         data-reveal-order={4}

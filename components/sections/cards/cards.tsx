@@ -1,5 +1,6 @@
 import CardShell from "./card-shell";
 import CardsHeading from "./cards-heading";
+import CardTitlesReveal from "./cards-titles-reveal";
 import ReceiveMedia from "./receive-media";
 import RequestMedia from "./request-media";
 import SubscribeMedia from "./subscribe-media";
@@ -19,11 +20,18 @@ export default function Cards() {
   return (
     <section data-cards className="relative min-h-dvh w-full overflow-hidden">
       {/* Section heading (Figma 302:1446): "ground to launch in days" — floats
-          303px above the card-row centre. Client component: it rolls up per
-          character on scroll-in (see cards-heading.tsx). */}
+          303px above the card-row centre. Client component: it blur-reveals word
+          by word on scroll-in (see cards-heading.tsx). */}
       <CardsHeading />
 
-      <div className="absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 gap-[20px]">
+      {/* Client driver: blur-reveals each card title as the row scrolls in
+          (see cards-titles-reveal.tsx). Renders nothing. */}
+      <CardTitlesReveal />
+
+      <div
+        data-cards-row
+        className="absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 gap-[20px]"
+      >
         <CardShell title="subscribe" subtitle={CARD_COPY.subscribe}>
           <SubscribeMedia />
         </CardShell>

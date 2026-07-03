@@ -49,40 +49,39 @@ const PILL_W = 876;
 const PILL_H = 133;
 const PILL_RADIUS = 103;
 
-/** The heading split into per-character clip → mover units (same roll-up mechanic
- *  as the tagline). Spaces are inert spacers; a visually-hidden copy carries the
- *  real reading text so the split markup stays accessible. */
-function HeadingChars() {
+/** The heading split into per-word movers for the blur reveal (each word rises,
+ *  fades in, and clears from a soft blur to crisp — the same mechanic as the hero
+ *  and cards headings). No overflow clip: a hard mask would shear the blur halo.
+ *  Spaces are inert spacers; a visually-hidden copy carries the real reading text
+ *  so the split markup stays accessible. */
+function HeadingWords() {
   let k = 0;
   return HEADING.flatMap((seg) =>
-    seg.text.split("").map((ch) => {
-      const key = k++;
-      if (ch === " ") {
+    seg.text
+      .split(/(\s+)/)
+      .filter((token) => token.length > 0)
+      .map((token) => {
+        const key = k++;
+        if (/^\s+$/.test(token)) {
+          return (
+            <span key={key} aria-hidden className="inline-block whitespace-pre">
+              {token}
+            </span>
+          );
+        }
         return (
-          <span key={key} aria-hidden className="inline-block whitespace-pre">
-            {" "}
-          </span>
-        );
-      }
-      return (
-        <span
-          key={key}
-          aria-hidden
-          className="inline-block overflow-hidden align-bottom"
-          style={{ marginBottom: "-0.2em" }}
-        >
           <span
-            data-whschar
-            className={`relative inline-block will-change-transform ${
+            key={key}
+            data-whsword
+            aria-hidden
+            className={`inline-block will-change-transform ${
               seg.serif ? "font-instrument" : ""
             }`}
-            style={{ paddingBottom: "0.2em" }}
           >
-            {ch}
+            {token}
           </span>
-        </span>
-      );
-    }),
+        );
+      }),
   );
 }
 
@@ -114,7 +113,7 @@ export default function WhyStay() {
         {/* Heading (Figma 302:1460) — top of the block, centred. */}
         <h2 className="absolute left-1/2 top-0 -translate-x-1/2 whitespace-nowrap text-center font-product text-[49px] font-light leading-[1.1] tracking-[-1.47px] text-white">
           <span className="sr-only">why teams stay</span>
-          <HeadingChars />
+          <HeadingWords />
         </h2>
 
         {/* The reel — bright phrases scrolling behind the glass. Masked to fade

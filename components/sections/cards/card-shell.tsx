@@ -31,7 +31,10 @@ export default function CardShell({
     <article className="relative h-[438px] w-[440px] shrink-0 overflow-clip rounded-[20px] border-[1.5px] border-solid border-white/30 bg-gradient-to-b from-black/10 to-black/5 backdrop-blur-[2px]">
       {children}
 
-      <h3 className="absolute left-[31px] top-[319.5px] font-product text-[31px] font-normal leading-[1.1] tracking-[-0.03em] text-white">
+      <h3
+        data-card-title
+        className="absolute left-[31px] top-[319.5px] font-product text-[31px] font-normal leading-[1.1] tracking-[-0.03em] text-white"
+      >
         {title}
       </h3>
       <p className="absolute left-[30px] top-[363.5px] w-[310px] font-light text-[16px] leading-[1.1] text-white">
