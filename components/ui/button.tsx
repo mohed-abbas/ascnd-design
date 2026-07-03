@@ -39,12 +39,17 @@ import type {
  */
 export type ButtonVariant = "solid" | "clear";
 
-// The card aura gradient — gold → green → gold (subscribe/request/receive-media).
-const AURA = "linear-gradient(90deg, #ffe8b7, #bbfc73, #ffe8b7)";
+// The aura gradient — the card gold → green (subscribe/request/receive-media).
+// A CONIC gradient (not the cards' linear one) so the colour ORBITS the rim: the
+// angle is driven by --aura-angle (degrees, set per-frame by the rotation tween
+// below), and the endpoints match (#ffe8b7 → #ffe8b7 across 360°) so a full
+// revolution has no seam. Fallback 0 keeps the SSR/first paint valid before JS.
+const AURA =
+  "conic-gradient(from calc(var(--aura-angle, 0) * 1deg), #ffe8b7, #bbfc73, #ffe8b7)";
 
-// Sweep = one full -200% background-position loop. The cards run 2.4s; the hero
-// button is "a bit more prominently moving", so it's faster.
-const SWEEP_DURATION = 1.4;
+// Seconds per full revolution of the aura around the rim (continuous). Slower
+// than a wipe reads as a smooth orbit; tune to taste.
+const SWEEP_DURATION = 2.6;
 // Glow strength on hover — the cards settle at 0.6; nudged up for prominence.
 const GLOW_OPACITY = 0.75;
 
@@ -105,16 +110,22 @@ export default function Button({
       "(prefers-reduced-motion: reduce)"
     ).matches;
 
-    gsap.set([glow, ring], { autoAlpha: 0, backgroundPosition: "0% 0" });
+    gsap.set([glow, ring], { autoAlpha: 0 });
 
-    // Continuous aura sweep — paused until hover, so nothing animates at rest
-    // (idles to zero). Rides GSAP's shared ticker (LenisProvider), no private rAF.
-    const sweep = gsap.to([glow, ring], {
-      backgroundPosition: "-200% 0",
+    // Continuous aura orbit — rotate the conic gradient's angle around the rim by
+    // driving --aura-angle 0→360 (inherited by both glow + ring off the root), so
+    // the colour travels around the perimeter. Paused until hover, so nothing
+    // animates at rest (idles to zero). Rides GSAP's shared ticker (LenisProvider),
+    // no private rAF. A proxy object + onUpdate keeps GSAP off CSS-var unit
+    // guessing — it just writes the plain number each frame.
+    const angle = { v: 0 };
+    const sweep = gsap.to(angle, {
+      v: 360,
       duration: SWEEP_DURATION,
       ease: "none",
       repeat: -1,
       paused: true,
+      onUpdate: () => root.style.setProperty("--aura-angle", String(angle.v)),
     });
 
     const enter = () => {
@@ -152,21 +163,38 @@ export default function Button({
   const v = VARIANT[variant];
   const rootCls = `${SHAPE} ${v.root}${className ? ` ${className}` : ""}`;
 
+  // The glow halo differs by variant because the fill's opacity differs:
+  //   • solid — opaque white fill occludes the glow, so a filled blurred blob
+  //     (-inset-[3px]) only escapes as a soft halo around the edges. Ideal.
+  //   • clear — the fill is bg-white/10 (near see-through), so a filled blob
+  //     would shine straight through the glass and flood the whole interior.
+  //     Instead the glow is MASK-CLIPPED to the perimeter (same ring technique as
+  //     the ring layer, a touch wider + blurred), so it reads as a soft glowing
+  //     RING hugging the edge, never a filled centre.
+  const glowClear = variant === "clear";
+  const glowCls = `pointer-events-none absolute ${
+    glowClear ? "inset-0 rounded-[32px]" : "-inset-[3px] rounded-[35px]"
+  }`;
+  const glowStyle: React.CSSProperties = {
+    background: AURA,
+    opacity: 0,
+    ...(glowClear
+      ? {
+          padding: "5px",
+          WebkitMask:
+            "linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0)",
+          WebkitMaskComposite: "xor",
+          maskComposite: "exclude",
+          filter: "blur(6px)",
+        }
+      : { filter: "blur(9px)" }),
+  };
+
   // glow → fill → ring → label (matches the card layering).
   const aura = (
     <>
-      {/* blurred glow halo, behind the fill */}
-      <span
-        ref={glowRef}
-        aria-hidden
-        className="pointer-events-none absolute -inset-[3px] rounded-[35px]"
-        style={{
-          background: AURA,
-          backgroundSize: "200% 100%",
-          filter: "blur(9px)",
-          opacity: 0,
-        }}
-      />
+      {/* blurred glow — filled halo (solid) or a perimeter ring (clear) */}
+      <span ref={glowRef} aria-hidden className={glowCls} style={glowStyle} />
       {/* the variant surface (fill) */}
       <span
         aria-hidden
@@ -180,7 +208,6 @@ export default function Button({
         style={{
           padding: "3px",
           background: AURA,
-          backgroundSize: "200% 100%",
           WebkitMask:
             "linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0)",
           WebkitMaskComposite: "xor",
