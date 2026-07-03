@@ -62,9 +62,9 @@ html[data-custom-cursor="on"] * {
    - [data-reveal-split] the headline; hidden until SplitText has wrapped it,
                          after which the timeline rolls each masked char up.
    - [data-reveal-words] the sub-paragraph; same, but rolled up per word.
-   - [data-reveal-cta]   a button clip — armed-only overflow:hidden with the
-                         inner control parked below, so it rolls up out of the
-                         clip; the timeline lifts the clip once it settles. */
+   - [data-reveal-cta]   a button — the inner control starts at opacity:0 and
+                         simply fades in (no clip / no slide, so the hover glow
+                         and focus ring are never shaved). */
 [data-reveal],
 [data-reveal-fade] {
   will-change: transform;
@@ -88,12 +88,9 @@ html[data-custom-cursor="on"] * {
   opacity: 0;
 }
 
-.reveal-armed [data-reveal-cta] {
-  overflow: hidden;
-}
 .reveal-armed [data-reveal-cta] > * {
-  transform: translateY(110%);
-  will-change: transform;
+  opacity: 0;
+  will-change: opacity;
 }
 
 /* Rocks — the two cliffs park for their on-load "drift" entrance: faded + a few
@@ -224,10 +221,6 @@ html[data-custom-cursor="on"] * {
   .reveal-armed [data-shot] {
     opacity: 1;
     transform: none;
-  }
-  /* Roll-up clips: drop the clip so the resting buttons aren't shaved. */
-  .reveal-armed [data-reveal-cta] {
-    overflow: visible;
   }
   /* Opacity-only: never touch transform (the navbar's own translate centers it). */
   .reveal-armed [data-reveal-soft] {

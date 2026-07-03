@@ -40,8 +40,8 @@ const BLUR_TO = "blur(0px)";
  *   [data-reveal-soft]   opacity only (the navbar, whose translate must survive)
  *   [data-reveal-split]  the headline — SplitText blur-reveals it word by word
  *   [data-reveal-words]  the sub-paragraph — same per-word blur reveal
- *   [data-reveal-cta]    a button clip — the inner control rolls up, then the
- *                        clip is lifted so hover/focus isn't shaved
+ *   [data-reveal-cta]    a button — the inner control fades in (opacity only,
+ *                        so hover scale / glow / focus ring aren't shaved)
  * Cascade order comes from each element's `data-reveal-order`.
  *
  * The hidden start state is CSS (`.reveal-armed` in globals.css, armed by the
@@ -172,9 +172,10 @@ export default function HeroReveal() {
         });
       });
 
-      // CTAs → roll up too. Each button sits in an armed-only overflow clip
-      // (globals.css); we roll the inner <a> up out of it, then lift the clip
-      // the instant it settles so hover scale / focus rings aren't shaved.
+      // CTAs → fade in (no slide, no clip). The inner control starts at
+      // opacity:0 (globals.css) and fades up, staggered per button. A plain
+      // opacity tween leaves the transform untouched, so the hover scale / glow
+      // and focus ring are never shaved.
       const ctaWraps = Array.from(
         root.querySelectorAll<HTMLElement>("[data-reveal-cta]"),
       );
@@ -187,13 +188,12 @@ export default function HeroReveal() {
           add: (tl, at) =>
             tl.fromTo(
               btns,
-              { yPercent: 110, y: 0 },
+              { opacity: 0 },
               {
-                yPercent: 0,
+                opacity: 1,
                 duration: DURATION,
-                ease: ROLL_EASE,
+                ease: EASE,
                 stagger: 0.08,
-                onComplete: () => gsap.set(ctaWraps, { overflow: "visible" }),
               },
               at,
             ),
