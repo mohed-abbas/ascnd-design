@@ -16,6 +16,11 @@ import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { getQualityConfig, heavyEffectFpsCap } from "@/lib/perf/quality-store";
 import { makeCappedInvalidate } from "@/lib/perf/capped-invalidate";
+import {
+  SHOT_BASE,
+  SHOT_FRAME_RADIUS,
+  SHOT_MAT_RATIO,
+} from "@/components/sections/design-shots/shots-spec";
 
 // Warm the local assets ASAP so the scene's ready-gate isn't waiting on a
 // cold fetch (the rock cut-outs; the Environment HDR loads in its own Suspense
@@ -24,7 +29,7 @@ useTexture.preload("/rocks/left-rock.avif");
 useTexture.preload("/rocks/right-rock.avif");
 // The introV2 "shot" tiles (the necklace beads-to-be) refract through the glass,
 // so they live in the scene too — warm them alongside the rocks.
-for (const n of [2, 3, 4, 5, 6, 7, 8]) useTexture.preload(`/shots/shot${n}.png`);
+for (const n of [2, 3, 4, 5, 6, 7, 8, 9]) useTexture.preload(`/shots/shot${n}.png`);
 
 /**
  * The welcome-intro WebGL stage. Reuses the proven /lab/glass setup — PERSPECTIVE
@@ -335,6 +340,92 @@ function makeRoundedAlpha(radiusRatio: number): THREE.Texture {
   return tex;
 }
 
+// Rounded-rect path helper for the glass-frame canvas below.
+function roundRectPath(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  r: number,
+) {
+  const rr = Math.min(r, w / 2, h / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + rr, y);
+  ctx.arcTo(x + w, y, x + w, y + h, rr);
+  ctx.arcTo(x + w, y + h, x, y + h, rr);
+  ctx.arcTo(x, y + h, x, y, rr);
+  ctx.arcTo(x, y, x + w, y, rr);
+  ctx.closePath();
+}
+
+// The WebGL twin of the DOM tile's liquid-glass mat (design-shots.tsx / the
+// navbar "menu" glass): a rounded frame drawn on transparent — a faint white
+// mat ring, a soft inner sheen, and a crisp white edge — with a transparent
+// WINDOW punched out for the shot. It renders on a quad LARGER than the shot
+// (scaled up by the mat), so the frame wraps the shot as an OUTER border with
+// the mat ring sitting outside the shot's edge (matching the DOM). Both ratios
+// are of the FRAME quad's edge: `outerRadiusRatio` = the (rounder) outer corner,
+// `windowInsetRatio` = how far in from the frame edge the shot window sits, and
+// `windowRadiusRatio` = the window's corner (= the shot's near-square corner, so
+// the frame is deliberately NOT concentric with it).
+function makeGlassFrame(
+  outerRadiusRatio: number,
+  windowInsetRatio: number,
+  windowRadiusRatio: number,
+): THREE.Texture {
+  const S = 256;
+  const canvas = document.createElement("canvas");
+  canvas.width = S;
+  canvas.height = S;
+  const ctx = canvas.getContext("2d");
+  if (ctx) {
+    const rOut = Math.min(0.5, outerRadiusRatio) * S;
+    const inset = windowInsetRatio * S;
+    const rIn = Math.max(0, windowRadiusRatio * S); // = the shot's own corner
+    const border = Math.max(1, (1 / SHOT_BASE) * S); // ≈1px at BASE, scales down
+
+    // Mat fill across the whole rounded rect (white/10, like the DOM bg).
+    roundRectPath(ctx, 0.5, 0.5, S - 1, S - 1, rOut);
+    ctx.fillStyle = "rgba(255,255,255,0.12)";
+    ctx.fill();
+
+    // Inner sheen — a soft white glow hugging the inside of the outer edge (the
+    // navbar's inset white shadow). Clipped to the frame so it stays inside.
+    ctx.save();
+    roundRectPath(ctx, 0.5, 0.5, S - 1, S - 1, rOut);
+    ctx.clip();
+    ctx.shadowColor = "rgba(255,255,255,0.55)";
+    ctx.shadowBlur = inset * 1.3;
+    roundRectPath(ctx, -3, -3, S + 6, S + 6, rOut);
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = "rgba(255,255,255,0.9)";
+    ctx.stroke();
+    ctx.restore();
+
+    // Crisp outer edge (white/45, like border-white/30-45).
+    roundRectPath(ctx, border / 2, border / 2, S - border, S - border, rOut);
+    ctx.lineWidth = border;
+    ctx.strokeStyle = "rgba(255,255,255,0.45)";
+    ctx.stroke();
+
+    // Punch the transparent window the shot shows through (its edge = the shot).
+    ctx.globalCompositeOperation = "destination-out";
+    roundRectPath(ctx, inset, inset, S - 2 * inset, S - 2 * inset, rIn);
+    ctx.fillStyle = "#000";
+    ctx.fill();
+    ctx.globalCompositeOperation = "source-over";
+  }
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.needsUpdate = true;
+  return tex;
+}
+
+// The frame quad is bigger than the shot by the mat on every side. F is that
+// scale-up factor; the frame texture's radius/window ratios are expressed
+// against this larger quad (so they line up with the shot at its edge).
+const FRAME_SCALE = 1 + 2 * SHOT_MAT_RATIO;
+
 /**
  * The introV2 shot tiles — textured planes behind the glass (so it refracts
  * them), the WebGL twin of the hero's design-shots collage. Each is a unit quad
@@ -358,8 +449,26 @@ function Tiles({
     () => tiles.map((t) => makeRoundedAlpha(t.radiusRatio)),
     [tiles],
   );
+  // The liquid-glass mat frame texture per tile. The frame quad is scaled up by
+  // FRAME_SCALE, so every ratio is against that larger quad: the outer corner is
+  // the (rounder) SHOT_FRAME_RADIUS, the window sits inset by the mat, and the
+  // window corner matches the shot's own near-square radius.
+  const frameEdge = SHOT_BASE * FRAME_SCALE;
+  const frames = useMemo(
+    () =>
+      tiles.map((t) =>
+        makeGlassFrame(
+          SHOT_FRAME_RADIUS / frameEdge,
+          SHOT_MAT_RATIO / FRAME_SCALE,
+          t.radiusRatio / FRAME_SCALE,
+        ),
+      ),
+    [tiles, frameEdge],
+  );
   const mats = useRef<(THREE.MeshBasicMaterial | null)[]>([]);
   const meshes = useRef<(THREE.Mesh | null)[]>([]);
+  const frameMats = useRef<(THREE.MeshBasicMaterial | null)[]>([]);
+  const frameMeshes = useRef<(THREE.Mesh | null)[]>([]);
 
   // Centre-crop each texture to a square (object-cover) and tag it sRGB so the
   // shot colours read true under NoToneMapping.
@@ -381,7 +490,9 @@ function Tiles({
   }, [maps]);
 
   // Per-tile local pose (fly-in / conveyor). The page-scroll offset is applied
-  // ONCE to the whole field group (see <ScrollRig>), so it's not added here.
+  // ONCE to the whole field group (see <ScrollRig>), so it's not added here. The
+  // frame quad tracks the shot exactly (same pose), sitting a hair closer to the
+  // camera so it draws over the shot's edge.
   useFrame(() => {
     const entries = tileEntry.current;
     if (!entries) return;
@@ -395,31 +506,60 @@ function Tiles({
         mesh.position.set(e.x, e.y, TILE_Z);
         mesh.scale.set(e.scale, e.scale, 1);
       }
+      const fMat = frameMats.current[i];
+      if (fMat) fMat.opacity = e.opacity;
+      const fMesh = frameMeshes.current[i];
+      if (fMesh) {
+        // Bigger than the shot by the mat on every side (outer border).
+        fMesh.position.set(e.x, e.y, TILE_Z + 0.01);
+        fMesh.scale.set(e.scale * FRAME_SCALE, e.scale * FRAME_SCALE, 1);
+      }
     });
   });
 
   return (
     <group ref={fieldRef}>
-      {tiles.map((t, i) => (
-        <mesh
-          key={i}
-          ref={(m) => {
-            meshes.current[i] = m;
-          }}
-          position={[0, 0, TILE_Z]}
-        >
-          <planeGeometry args={[1, 1]} />
-          <meshBasicMaterial
+      {tiles.map((_, i) => (
+        <group key={i}>
+          {/* The shot (full-size, rounded). */}
+          <mesh
             ref={(m) => {
-              mats.current[i] = m;
+              meshes.current[i] = m;
             }}
-            map={maps[i] as THREE.Texture}
-            alphaMap={alphas[i]}
-            transparent
-            toneMapped={false}
-            opacity={0}
-          />
-        </mesh>
+            position={[0, 0, TILE_Z]}
+          >
+            <planeGeometry args={[1, 1]} />
+            <meshBasicMaterial
+              ref={(m) => {
+                mats.current[i] = m;
+              }}
+              map={maps[i] as THREE.Texture}
+              alphaMap={alphas[i]}
+              transparent
+              toneMapped={false}
+              opacity={0}
+            />
+          </mesh>
+          {/* The liquid-glass mat frame, drawn just in front. */}
+          <mesh
+            ref={(m) => {
+              frameMeshes.current[i] = m;
+            }}
+            position={[0, 0, TILE_Z + 0.01]}
+          >
+            <planeGeometry args={[1, 1]} />
+            <meshBasicMaterial
+              ref={(m) => {
+                frameMats.current[i] = m;
+              }}
+              map={frames[i]}
+              transparent
+              toneMapped={false}
+              depthWrite={false}
+              opacity={0}
+            />
+          </mesh>
+        </group>
       ))}
     </group>
   );

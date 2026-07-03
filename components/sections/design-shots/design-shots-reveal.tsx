@@ -57,9 +57,9 @@ function crClosed(arr: number[], t: number): number {
  * is always travelling the hidden off-screen return (far-R → over the top →
  * far-L) while all seven visible slots stay filled. No gap, no ghost: a tile
  * fades out just past far-R as it leaves the frame and fades back in just
- * before far-L. The eighth tile (the in-transit one) reuses the center image,
- * parked half a loop from its twin so they're never both prominent. Mirror/
- * radius stay with each tile (no flip). The hidden start state is CSS
+ * before far-L. The eighth tile (the in-transit one) is its own unique shot, so
+ * no image ever repeats on the conveyor. Mirror/radius stay with each tile (no
+ * flip). The hidden start state is CSS
  * (`.reveal-armed [data-shot]`); no-JS / reduced-motion leave the tiles in
  * their resting arc. Like rock-reveal.tsx it has no font dependency.
  */
