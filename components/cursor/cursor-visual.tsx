@@ -49,7 +49,7 @@ const TIP_Y = -4.25;
 // The trailing lag: seconds the arrow takes to ease to the pointer. Small enough
 // to read as a soft follow, not a laggy trail — tune to taste. power3 gives a
 // quick start + gentle settle.
-const FOLLOW = 0.3;
+const FOLLOW = 0.2;
 const FOLLOW_EASE = "power3";
 
 export default function CursorVisual() {
