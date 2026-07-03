@@ -30,15 +30,16 @@
  * - `chromatic={false}` (report O3) collapses the chain to ONE
  *   feDisplacementMap (~⅓ the filter cost): no per-channel split, the
  *   chromatic rim becomes a static gradient ring instead of live dispersion.
- * - Reads the quality tier (registered in lib/perf/tiers.ts): tier `low`
- *   forces the single-map variant — real distortion + static chromatic ring,
- *   so weak machines keep a look close to high/medium instead of losing the
- *   effect (measured ~58fps in software raster — the weak-GPU worst case).
+ *   The sole consumer (the why-teams-stay pill) passes `chromatic={false}` on
+ *   every tier for max, uniform fps (docs/why-stay-glass-optimization.md
+ *   Decision 6). The 3-channel branch below is retained for genericity — this
+ *   component no longer reads the quality tier itself (it once forced the
+ *   single-map variant on tier `low`; that gate is gone now the caller opts in
+ *   directly).
  * ────────────────────────────────────────────────────────────────────────────
  */
 
 import React, { useEffect, useRef, useState, useId } from "react";
-import { getTierName, subscribeQuality } from "@/lib/perf/quality-store";
 
 export interface GlassSurfaceProps {
   children?: React.ReactNode;
@@ -151,58 +152,14 @@ const GlassSurface: React.FC<GlassSurfaceProps> = ({
 
   const isDarkMode = useDarkMode();
 
-  // Quality tier (lib/perf) — the displacement chain is the page's heaviest
-  // per-frame filter and has no dpr/resolution knob, but it DOES have a
-  // cheaper variant: tier `low` forces `chromatic` off, collapsing the chain
-  // to one feDisplacementMap + a static chromatic ring (~⅓ the cost, measured
-  // ~58fps even in software raster). Weak machines keep real distortion and a
-  // chromatic accent — close to the high/medium look — instead of losing the
-  // effect. (Earlier frost and clear-glass fallbacks were both rejected by
-  // the stakeholder as visible downgrades.)
-  //
-  // LATCHED, never live (stakeholder decision, 2026-07-02): the material must
-  // NEVER swap while the user can see it — a watchdog step-down would fire
-  // exactly during the pinned scrub, trading the liquid glass for frost in
-  // front of the user's eyes. So the gate follows the store only while the
-  // pill is far off-screen (tier boot resolves async ~300ms into the session,
-  // long before the fold is reached) and FREEZES for good as the pill
-  // approaches the viewport. A weak machine shows frost from its very first
-  // appearance (it never saw glass, so nothing downgrades); everyone else
-  // keeps the displacement for the whole session. `?tier=` A/B still works —
-  // it forces synchronously at boot, before the latch can engage.
-  const [tierLow, setTierLow] = useState(false);
-  useEffect(() => {
-    const el = containerRef.current;
-    const apply = () => setTierLow(getTierName() === "low");
-    apply();
-    let unsubscribe: (() => void) | undefined = subscribeQuality(apply);
-    const stopTracking = () => {
-      unsubscribe?.();
-      unsubscribe = undefined;
-    };
-    let io: IntersectionObserver | undefined;
-    if (el && typeof IntersectionObserver !== "undefined") {
-      // Freeze half a viewport early so the branch can't flip mid-entrance.
-      io = new IntersectionObserver(
-        (entries) => {
-          if (entries.some((e) => e.isIntersecting)) {
-            stopTracking();
-            io?.disconnect();
-            io = undefined;
-          }
-        },
-        { rootMargin: "50% 0% 50% 0%" },
-      );
-      io.observe(el);
-    }
-    return () => {
-      stopTracking();
-      io?.disconnect();
-    };
-  }, []);
-
-  // Tier low forces the cheap single-map variant; the prop picks the default.
-  const effectiveChromatic = chromatic && !tierLow;
+  // The `chromatic` prop alone selects the chain: true = 3-channel per-channel
+  // dispersion, false = ONE feDisplacementMap + a static chromatic ring
+  // (~⅓ the per-frame filter cost). The sole consumer passes `chromatic={false}`
+  // on every tier (docs/why-stay-glass-optimization.md Decision 6), so this
+  // component no longer reads the quality tier itself — the caller opts into the
+  // cheaper variant directly. (Historically tier `low` forced single-map via a
+  // viewport-latched store read; that gate is gone.)
+  const effectiveChromatic = chromatic;
   const displacementActive = svgSupported;
 
   const generateDisplacementMap = () => {
