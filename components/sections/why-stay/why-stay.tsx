@@ -15,14 +15,23 @@
  * assembled and the first phrase centred, with no pin.
  *
  * The glass is <GlassSurface/> (components/ui) — a transparent pill whose
- * `backdrop-filter` runs a chromatic per-channel SVG displacement, so the bright
- * reel text painted BEHIND it bends and disperses like real liquid glass. It's
- * empty (no children); the wrapper carries the position + the reveal's fade/scale.
- * backdrop-filter here is safe — the pill is a sibling of the root-mounted fixed
- * <Background/>, not an ancestor, so it doesn't turn the sky's fixed layers into
- * a backdrop root (see CLAUDE.md, same as CardShell). The displacement is
- * Chromium-first; Safari/Firefox fall back to a clear glass — crisp rim +
- * static chromatic ring, no frost (GlassSurface detects and degrades).
+ * `backdrop-filter` runs a SINGLE-map SVG displacement, so the bright reel text
+ * painted BEHIND it bends like real liquid glass. It's empty (no children); the
+ * wrapper carries the position + the reveal's fade/scale. backdrop-filter here is
+ * safe — the pill is a sibling of the root-mounted fixed <Background/>, not an
+ * ancestor, so it doesn't turn the sky's fixed layers into a backdrop root (see
+ * CLAUDE.md, same as CardShell). The displacement is Chromium-first;
+ * Safari/Firefox fall back to a clear glass — crisp rim + static chromatic ring,
+ * no frost (GlassSurface detects and degrades).
+ *
+ * PERF (2026-07-03): the pill runs `chromatic={false}` on EVERY tier — one
+ * feDisplacementMap + a static chromatic ring, ~⅓ the filter cost of the old
+ * 3-channel chain. The 3-channel dispersion re-evaluated every scrolled frame
+ * (the sampled backdrop is the moving reel text), which kept the pinned scrub
+ * off max fps even on capable machines. Uniform single-map trades live rim
+ * dispersion for a static ring so the scrub costs the same minimal chain
+ * everywhere (docs/why-stay-glass-optimization.md Decision 6). Previously the
+ * single-map path was tier `low` only.
  */
 import GlassSurface from "@/components/ui/glass-surface";
 import WhyStayReveal from "./why-stay-reveal";
@@ -131,8 +140,8 @@ export default function WhyStay() {
         </div>
 
         {/* Clear liquid-glass pill (Figma 302:1457) — <GlassSurface/> refracts the
-            reel text behind it (chromatic per-channel displacement). Empty (no
-            children); the wrapper carries the position + reveal hooks. */}
+            reel text behind it (single-map displacement + static chromatic ring).
+            Empty (no children); the wrapper carries the position + reveal hooks. */}
         <div
           data-whystay-pill
           aria-hidden
@@ -156,11 +165,13 @@ export default function WhyStay() {
             redOffset={0}
             greenOffset={10}
             blueOffset={20}
-            // Full 3-channel chromatic chain on high/medium; tier `low`
-            // forces GlassSurface's single-map variant internally (same
-            // distortion + static chromatic ring at ~⅓ the filter cost), so
-            // weak machines stay visually close instead of losing the glass.
-            chromatic
+            // Single-map variant on EVERY tier (was: 3-channel on high/medium,
+            // single-map on low). One feDisplacementMap + a static chromatic
+            // ring at ~⅓ the filter cost — retires the per-frame chromatic
+            // chain that kept the pinned scrub off max fps on all hardware.
+            // Look trade accepted: live rim dispersion → static ring, already
+            // validated as close to the old high look (Decision 6).
+            chromatic={false}
             className="max-w-full"
           />
         </div>
