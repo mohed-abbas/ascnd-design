@@ -1,18 +1,18 @@
 # Custom cursor
 
-A white disc that follows the pointer and, on hover over an interactive element,
-grows and turns into a small liquid-glass lens — the same `<GlassSurface/>`
-displacement refraction used by the "why teams stay" pill.
+A plain white disc that follows the pointer. No hover effect, no glass — kept
+deliberately trivial so it can never become a GPU cost.
 
 > Replaces the fluid-simulation cursor (React Bits `SplashCursor`) and, before
 > it, the curl-noise `cursor-trail` — both removed for being the page's dominant
-> GPU cost (`docs/cursor-trail.md`, kept for history). This one is DOM + CSS +
-> one reused SVG filter, with no per-frame loop.
+> GPU cost (`docs/cursor-trail.md`, kept for history). An intermediate version
+> added a glass-lens hover morph (reusing `<GlassSurface/>`); that was dropped in
+> favour of the bare disc so there is zero per-frame filter work.
 
 **Code:** `components/cursor/`
 
 - `cursor.tsx` — the device gate + mount decision (mirrors `cloud-layer.tsx`).
-- `cursor-visual.tsx` — the follow + hover morph + the two visual layers.
+- `cursor-visual.tsx` — the white disc + the pointer follow.
 - Mounted at the root in `app/layout.tsx`, last child inside `<LenisProvider>`.
 
 ## Gating (`cursor.tsx`)
@@ -22,89 +22,36 @@ snapshot `false`, so SSR renders nothing — the native cursor stays — and it
 re-evaluates after hydration, no mismatch, reacting live to a mouse being
 plugged in or a devtools device toggle):
 
-- `hover: hover` **and** `pointer: fine` — a hover-morphing cursor is meaningful
-  only on a real mouse; touch / coarse / no-hover devices get the native cursor.
+- `hover: hover` **and** `pointer: fine` — a custom cursor is meaningful only on
+  a real mouse; touch / coarse / no-hover devices get the native cursor.
 - Screen wider than 768px.
 
-Reduced-motion and low GPU tier do **not** gate here — the cursor still shows,
-it just stays a plain white disc (see below).
-
-## Behaviour matrix
+## Behaviour
 
 | Context | Cursor |
 |---|---|
-| Chromium, capable tier, normal motion | white disc → hover: grows + **displacement glass** |
-| Firefox / Safari, capable tier, normal motion | white disc → hover: grows + **clear glass** (rim + static chromatic ring, no displacement) |
-| Low GPU tier (any browser) | **white disc only** — no morph |
-| `prefers-reduced-motion` (any) | **white disc only** — no morph |
-| touch / coarse / no-hover / ≤768px / SSR | **no custom cursor** (native stays) |
+| Real-mouse desktop (any browser / tier) | white disc follows the pointer |
+| touch / coarse / no-hover / ≤768px / SSR | no custom cursor (native stays) |
 
-The Firefox/Safari clear-glass degradation is inherited for free from
-`<GlassSurface/>`, which detects Gecko/WebKit (they render the `feImage` +
-`feDisplacementMap` backdrop combo incorrectly) and drops displacement. Low tier
-and reduced-motion don't render the glass layer at all — the plain disc follows.
+The disc fades in on the first `pointermove` (its position is unknown until
+then) and hides when the pointer leaves the window / the tab blurs, so it can't
+get stuck in a corner.
 
-### Why the tier is latched (not live)
+## Why it can't leak
 
-The frame-watchdog (`lib/perf/frame-watchdog.ts`) is armed **only after the
-intro docks** (`quality-controller.tsx`) and steps the tier down under sustained
-load — the GPU-heavy intro can demote even a **capable** machine to `low`. A
-live gate would then unmount the glass for the rest of the session: the cursor
-shows glass for the first second, then permanently drops to the white disc
-(the originally-reported "hover does nothing"). So `cursor-visual.tsx` captures
-the tier **once**, at the initial gpu-tier pick (which always resolves before
-the watchdog can fire), and ignores later step-downs — mirroring GlassSurface's
-latch. A genuinely weak machine (initial pick `low`) still starts as the white
-disc. The hover-only 44px lens is negligible GPU cost, so keeping it through a
-demotion is safe.
-
-## The performance design (why this one doesn't leak)
-
-The heavy-effect contract (CLAUDE.md) — the cursor satisfies all five:
-
-1. **No private rAF loop.** The follow is **event-driven**: each `pointermove`
-   writes ONE composited transform (`gsap.quickSetter` → `translate3d`). Pointer
-   still → no events → **zero work**. The only animation is the discrete hover
-   morph, a short GSAP timeline on the *shared* ticker that completes and stops.
-2. **Idles to zero.** At rest the glass layer is `visibility:hidden`
-   (autoAlpha 0), so its `backdrop-filter` is never evaluated — displacement runs
-   only while a hover morph is visible, over a ~44px region.
-3. **Reads the tier.** `low` (and reduced-motion) drop to the plain disc; the
-   glass is `<GlassSurface/>` (its own tier gate). Registered in
-   `lib/perf/tiers.ts` in the same PR (the same-PR rule the SplashCursor
-   regression violated). The decision is **latched to the initial gpu-tier
-   pick** and frozen against the frame-watchdog — see below.
-4. **SSR-stable.** Only mounted client-side by the gate; never renders on the
-   server.
-5. **dpr ≤ 1.5 (spirit).** No canvas; the tiny lens makes device-res backdrop
-   raster negligible; no raw `devicePixelRatio`.
-
-## Hover detection
-
-Resolved by **hit-testing the layer stack** on `pointermove`
-(`document.elementsFromPoint` → first element matching `a, button,
-[role=button], input, textarea, select, label, summary, [data-cursor="glass"]`,
-skipping any `[data-cursor="none"]` subtree), **not** `event.target`.
-
-Why not delegated `pointerover`/`pointerout`: this page stacks full-viewport
-WebGL canvases with `pointer-events:auto` (the intro/hero R3F canvas needs them
-for rock-hover) OVER the DOM, so every `pointerover` targets the canvas and the
-CTAs beneath it are never seen. `elementsFromPoint` returns every layer at the
-point — including the DOM under the canvas — so the CTA is found (it sits a few
-layers below the canvas in the returned stack). The cursor's own disc is
-`pointer-events:none` and non-interactive, so it's skipped.
-
-The hit-test runs only while glass is enabled and only on move (zero idle cost);
-`data-cursor="glass"` opts extra targets in, `data-cursor="none"` opts out.
+The follow is **event-driven**: each `pointermove` writes ONE composited
+transform (`gsap.quickSetter` → `translate3d`). Pointer still → no events →
+**zero work**. There is no rAF loop, no per-frame filter, and no canvas — so
+none of the cloud/glass tier machinery applies, and the cursor reads no quality
+tier. All listeners are removed and tweens killed on unmount.
 
 ## The fixed-element constraint
 
-Like `<Background/>` / `<CloudLayer/>`, the cursor is `position: fixed` and (in
-its glass state) carries a `backdrop-filter`, so it **must not** sit under any
-`filter` / `backdrop-filter` ancestor — a blurred ancestor breaks `position:
-fixed` descendants (CLAUDE.md). That's why it's mounted at the root, as a
-sibling of the fixed sky layers. Being the last child means it paints on top, so
-its lens samples everything behind it.
+Like `<Background/>` / `<CloudLayer/>`, the cursor is `position: fixed` and
+`pointer-events: none`, mounted at the root so it never intercepts clicks. (It
+carries no `backdrop-filter` anymore, so the blurred-ancestor constraint that
+governs the fixed sky layers no longer bites it — but the root mount is kept for
+consistency.)
 
 ## Hiding the native cursor
 
@@ -115,8 +62,5 @@ its lens samples everything behind it.
 
 ## Tuning
 
-In `cursor-visual.tsx`: `DOT` / `LENS` diameters, the morph timeline
-(scale/opacity/ease/duration), and the `<GlassSurface/>` props. `distortionScale`
-is scaled down from the why-stay pill's `-180` to `-55` for the small lens (a
-large scale shreds a tiny rim instead of bulging it) — tune against the pill's
-look on the target machine with the DevTools FPS meter as ground truth.
+In `cursor-visual.tsx`: the `DOT` diameter, the disc's `box-shadow`, and the
+fade-in/out durations.

@@ -36,14 +36,6 @@
  * |                                            | as a milky blue bar over the sky)        |
  * | components/sections/why-stay/              | makeCappedInvalidate (--reel-y writes    |
  * |   why-stay-reveal.tsx                      | behind the glass pill)                   |
- * | components/cursor/cursor-visual.tsx        | tier name, LATCHED at the initial pick:  |
- * |                                            | low → plain white-disc cursor, no glass  |
- * |                                            | morph. Frozen against watchdog step-down |
- * |                                            | (like glass-surface) so a mid-session    |
- * |                                            | demotion can't vanish the cursor glass.  |
- * |                                            | The lens reuses <GlassSurface> (its own  |
- * |                                            | tier gate + Firefox/Safari clear glass); |
- * |                                            | the follow is event-driven (no rAF/cap). |
  *
  * ★ RULE (audit 2026-07-02 F5.1): any NEW heavy effect — a WebGL canvas, a
  * free-running loop, a per-frame SVG/CSS filter — must be added to this table
