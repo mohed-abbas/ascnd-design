@@ -237,3 +237,18 @@ The make-or-break detail: clouds need **soft, semi-transparent edges** — exact
 8. Verify (lint, build, browser, perf), commit, push.
 
 **Note:** §1–§8 are retained verbatim as the decision history — the analysis that led to "layered images as default" still stands; this section records the informed override and the conditions attached to it.
+
+---
+
+## 10. Scroll axis — `perspectiveScroll` toggle (2026-07-04)
+
+The static camera looks down ~31° (`[0,11,18]` → origin). The field rigs translate clouds along **world-Y** on scroll, but under that tilt world-Y has a component along the view axis — so a rising cloud also moves **toward the lens and swells**. That swell is now an opt-in, not a given.
+
+Per-cloud flag `perspectiveScroll` (`cloud-specs.ts`) selects the travel axis:
+
+- **unset → FLAT (default):** travel along the **camera-up axis** (`matrixWorld` column 1), which is perpendicular to the view direction → pure screen-vertical motion at **constant size**. Calibrated by `viewportUpSpan()` (the full world length of the viewport's vertical edge at `REF_DIST`, both endpoints equidistant from the camera).
+- **`true` → PERSPECTIVE:** travel along **world-Y** (the original behaviour) → rises **and swells**. Calibrated by `viewportWorldHeight()` (world-Y span) as before.
+
+Implementation (`cloud-canvas.tsx`): field clouds are split into two wrapper groups (perspective / flat), each with its own `<ScrollAnchorRig>` + `<CloudPlacement>` parameterized by `perspective`. `anchorVh` is baked along the matching axis so a cloud still reaches its rest spot at the right scroll. The perspective path is byte-for-byte the prior code, so existing clouds are unchanged. Current assignment: hero `top-right` + `rock-left`/`rock-right` are `perspectiveScroll: true` (kept swelling); the section-anchored sky clouds (`cards-br`, `whystay-br`) are flat.
+
+**Scope:** both paths honour the flag. Field clouds (`ScrollAnchorRig`) and section-bound clouds (`SectionRig`, dormant until a `section` cloud is added) pick their slide/travel axis from `perspectiveScroll` the same way, so the two behave consistently whenever section clouds return.

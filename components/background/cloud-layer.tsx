@@ -189,7 +189,7 @@ export default function CloudLayer() {
         style={reveal}
         className="pointer-events-none fixed inset-0 -z-10"
       >
-        <CloudCanvas clouds={SKY_CLOUDS} scrollFactor={0.6} />
+        <CloudCanvas clouds={SKY_CLOUDS} scrollFactor={1} />
       </div>
       {/* Foreground clouds — in front of the rocks so they hug the cliff base.
           z-[61] sits ABOVE the welcome intro's WebGL canvas (z-[60], intro.tsx)

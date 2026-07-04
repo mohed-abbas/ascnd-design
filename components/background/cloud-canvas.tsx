@@ -148,6 +148,30 @@ function viewportWorldHeight(camera: THREE.Camera) {
 }
 
 /**
+ * Full world-space length of the viewport's vertical edge at REF_DIST — the
+ * scroll→world factor for FLAT (perspective-off) clouds. Both edge points sit
+ * exactly REF_DIST from the camera, so translating a cloud along the camera-up
+ * axis between them moves it up the screen at CONSTANT distance-to-camera (no
+ * swell) — unlike viewportWorldHeight()'s world-Y span, which the ~31° tilt
+ * turns into a depth (size) change.
+ */
+function viewportUpSpan(camera: THREE.Camera) {
+  placeOnRay(camera, 0, 1, REF_DIST, _vTop);
+  placeOnRay(camera, 0, -1, REF_DIST, _vBot);
+  return _vTop.distanceTo(_vBot);
+}
+
+/**
+ * The camera's up-axis in world space (matrixWorld column 1). This is the FLAT
+ * scroll axis: perpendicular to the view direction, so travelling along it is
+ * pure screen-vertical motion with no depth (size) change. The camera is static,
+ * so this is constant — computed once per rig/placement, never per frame.
+ */
+function cameraUp(camera: THREE.Camera) {
+  return new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 1).normalize();
+}
+
+/**
  * Anchors each cloud to its target screen position. For each CloudSpec it
  * unprojects the NDC through the camera to a ray, walks `dist` down that ray,
  * and writes the world point to the cloud's group — so the cloud sits at that
@@ -161,10 +185,17 @@ function CloudPlacement({
   clouds,
   cloudRefs,
   scrollFactor,
+  perspective,
 }: {
   clouds: CloudSpec[];
   cloudRefs: React.RefObject<(Group | null)[]>;
   scrollFactor: number;
+  /**
+   * Match the cloud's <ScrollAnchorRig>: offset the anchorVh baseline along
+   * world-Y (true) or the camera-up axis (false), so the cloud still arrives at
+   * its rest spot at the right scroll whichever axis it travels on.
+   */
+  perspective: boolean;
 }) {
   const camera = useThree((s) => s.camera);
   const width = useThree((s) => s.size.width);
@@ -172,16 +203,27 @@ function CloudPlacement({
   const invalidate = useThree((s) => s.invalidate);
 
   useEffect(() => {
+    // anchorVh is baked along the SAME axis the cloud scrolls on: world-Y for
+    // perspective clouds, camera-up (with its own edge-length calibration) for
+    // flat ones. All current field clouds use anchorVh 0..3.
     const vwh = viewportWorldHeight(camera);
+    const upSpan = viewportUpSpan(camera);
+    const camUp = cameraUp(camera);
     const v = new THREE.Vector3();
     clouds.forEach((c, i) => {
       const g = cloudRefs.current[i];
       if (!g) return;
       placeOnRay(camera, c.ndc[0], c.ndc[1], c.dist, v);
-      g.position.set(v.x, v.y - (c.anchorVh ?? 0) * vwh * scrollFactor, v.z);
+      const anchor = (c.anchorVh ?? 0) * scrollFactor;
+      if (perspective) {
+        g.position.set(v.x, v.y - anchor * vwh, v.z);
+      } else {
+        const off = anchor * upSpan;
+        g.position.set(v.x - camUp.x * off, v.y - camUp.y * off, v.z - camUp.z * off);
+      }
     });
     invalidate();
-  }, [clouds, camera, width, height, invalidate, cloudRefs, scrollFactor]);
+  }, [clouds, camera, width, height, invalidate, cloudRefs, scrollFactor, perspective]);
 
   return null;
 }
@@ -197,9 +239,17 @@ function CloudPlacement({
 function ScrollAnchorRig({
   groupRef,
   scrollFactor,
+  perspective,
 }: {
   groupRef: React.RefObject<Group | null>;
   scrollFactor: number;
+  /**
+   * true → travel along world-Y (the ~31° tilt makes clouds swell toward the
+   * camera as they rise — the perspective look). false → travel along the
+   * camera-up axis, so clouds move up the screen at CONSTANT size (flat). Set
+   * per cloud via `perspectiveScroll` in cloud-specs.ts.
+   */
+  perspective: boolean;
 }) {
   const camera = useThree((s) => s.camera);
   const width = useThree((s) => s.size.width);
@@ -208,7 +258,13 @@ function ScrollAnchorRig({
 
   useEffect(() => {
     gsap.registerPlugin(ScrollTrigger);
-    const worldPerPx = viewportWorldHeight(camera) / window.innerHeight;
+    // Each mode has its own scroll→world calibration — the world-Y span for
+    // perspective, the full camera-up edge length for flat — so both travel one
+    // screen-viewport per scrolled viewport. camUp is only used by the flat path.
+    const worldPerPx =
+      (perspective ? viewportWorldHeight(camera) : viewportUpSpan(camera)) /
+      window.innerHeight;
+    const camUp = perspective ? null : cameraUp(camera);
     // Scroll updates arrive at up to panel rate (120 Hz); repaints past the
     // heavy-effect cap buy nothing visible, so throttle with a trailing paint
     // (the group position is still written per update — only paints are capped).
@@ -217,7 +273,12 @@ function ScrollAnchorRig({
     const apply = (scroll: number) => {
       const g = groupRef.current;
       if (!g) return;
-      g.position.y = scroll * worldPerPx * scrollFactor;
+      const d = scroll * worldPerPx * scrollFactor;
+      if (perspective) {
+        g.position.set(0, d, 0);
+      } else {
+        g.position.set(camUp!.x * d, camUp!.y * d, camUp!.z * d);
+      }
       capped();
     };
 
@@ -250,7 +311,7 @@ function ScrollAnchorRig({
     };
     // width/height: recompute worldPerPx when the viewport (and thus the world
     // height at REF_DIST) changes.
-  }, [groupRef, camera, width, height, invalidate, scrollFactor]);
+  }, [groupRef, camera, width, height, invalidate, scrollFactor, perspective]);
 
   return null;
 }
@@ -274,6 +335,11 @@ function ScrollAnchorRig({
  * the crossing, which the hold simply absorbs — the cloud still slides in/out over
  * the same distance while the section enters/leaves, and stays put while it's
  * docked. Demand mode, so each update invalidate()s a repaint.
+ *
+ * The slide axis honours each cloud's `perspectiveScroll` (cloud-specs.ts): flat
+ * clouds (default) slide along the camera-up axis at constant size; perspective
+ * clouds slide along world-Y and swell toward the lens — same toggle the field
+ * rig uses, so section and field clouds behave consistently.
  */
 function SectionRig({
   clouds,
@@ -292,7 +358,11 @@ function SectionRig({
 
   useEffect(() => {
     gsap.registerPlugin(ScrollTrigger);
+    // Both slide axes: world-Y span (perspective — swells) and camera-up edge
+    // length (flat — constant size). Per-cloud `perspectiveScroll` picks which.
     const vwh = viewportWorldHeight(camera);
+    const upSpan = viewportUpSpan(camera);
+    const camUp = cameraUp(camera);
     const rest = new THREE.Vector3();
     const triggers: ScrollTrigger[] = [];
     // One shared cap across all section clouds — they repaint the same canvas,
@@ -312,7 +382,10 @@ function SectionRig({
       const restY = rest.y;
       const restZ = rest.z;
 
-      const travel = (bind.travel ?? 1) * vwh; // world units slid in/out
+      // Flat clouds slide along the camera-up axis (calibrated by upSpan);
+      // perspective clouds slide along world-Y (vwh) and swell as they go.
+      const persp = !!c.perspectiveScroll;
+      const travel = (bind.travel ?? 1) * (persp ? vwh : upSpan); // world units slid in/out
       const slidePx = (bind.slide ?? 0.7) * window.innerHeight; // fixed slide distance
 
       // smoothstep for soft starts/stops at the hold boundaries.
@@ -334,7 +407,16 @@ function SectionRig({
         } else {
           d = 0; // hold at rest (spans the pin, if any)
         }
-        g.position.set(restX, restY + d * travel, restZ);
+        const off = d * travel;
+        if (persp) {
+          g.position.set(restX, restY + off, restZ);
+        } else {
+          g.position.set(
+            restX + camUp.x * off,
+            restY + camUp.y * off,
+            restZ + camUp.z * off,
+          );
+        }
         capped();
       };
 
@@ -546,9 +628,18 @@ export default function CloudCanvas({
   // <SectionRig>. Split so each set gets the right rig and its own ref list.
   const fieldClouds = clouds.filter((c) => !c.section);
   const sectionClouds = clouds.filter((c) => c.section);
+  // Field clouds split again by SCROLL AXIS (perspectiveScroll): perspective
+  // clouds travel along world-Y and swell toward the camera; flat clouds travel
+  // along the camera-up axis at constant size. Each axis gets its own wrapper
+  // group + rig, so the perspective path stays identical to before and the flat
+  // path is a clean parallel. Groups with no clouds render nothing and get no rig.
+  const perspFieldClouds = fieldClouds.filter((c) => c.perspectiveScroll);
+  const flatFieldClouds = fieldClouds.filter((c) => !c.perspectiveScroll);
 
-  const fieldRef = useRef<Group | null>(null);
-  const cloudRefs = useRef<(Group | null)[]>([]);
+  const perspFieldRef = useRef<Group | null>(null);
+  const flatFieldRef = useRef<Group | null>(null);
+  const perspRefs = useRef<(Group | null)[]>([]);
+  const flatRefs = useRef<(Group | null)[]>([]);
   const sectionRefs = useRef<(Group | null)[]>([]);
   // Which section clouds are on screen — written by <SectionRig>, read by
   // <MorphRig> to keep their living morph pumping while visible. Empty on a
@@ -568,6 +659,19 @@ export default function CloudCanvas({
   // step-down live would rebuild the whole visible cloud field. dpr above stays
   // live because re-applying it is cheap and invisible.
   const [cloudSegments] = useState(() => getQualityConfig().cloudSegments);
+
+  // One <Cloud> body for every group — only the seed/bounds/volume differ. The
+  // owning <group>'s ref callback stays inline per map (the lint rule needs the
+  // ref write in a callback it can see, not passed through a helper).
+  const cloudBody = (c: CloudSpec) => (
+    <Cloud
+      {...CLOUD}
+      segments={cloudSegments}
+      seed={c.seed}
+      bounds={c.bounds}
+      volume={c.volume}
+    />
+  );
 
   return (
     <Canvas
@@ -608,29 +712,38 @@ export default function CloudCanvas({
         range={RANGE}
         frustumCulled={false}
       >
-        {/* Field clouds: <ScrollAnchorRig> translates this whole group on scroll
-            so they move with the page; each sits at its own screen-anchored
-            position inside it (set by <CloudPlacement>). */}
-        <group ref={fieldRef}>
-          {fieldClouds.map((c, i) => (
+        {/* Perspective field clouds: <ScrollAnchorRig> translates this whole
+            group along world-Y on scroll (swell); each sits at its own screen-
+            anchored position inside it (set by <CloudPlacement>). */}
+        <group ref={perspFieldRef}>
+          {perspFieldClouds.map((c, i) => (
             <group
               key={c.key}
               ref={(el) => {
-                cloudRefs.current[i] = el;
+                perspRefs.current[i] = el;
               }}
             >
-              <Cloud
-                {...CLOUD}
-                segments={cloudSegments}
-                seed={c.seed}
-                bounds={c.bounds}
-                volume={c.volume}
-              />
+              {cloudBody(c)}
             </group>
           ))}
         </group>
 
-        {/* Section clouds: OUTSIDE the field group (no page parallax); driven by
+        {/* Flat field clouds: same idea, but the group is translated along the
+            camera-up axis so they move up the screen at constant size. */}
+        <group ref={flatFieldRef}>
+          {flatFieldClouds.map((c, i) => (
+            <group
+              key={c.key}
+              ref={(el) => {
+                flatRefs.current[i] = el;
+              }}
+            >
+              {cloudBody(c)}
+            </group>
+          ))}
+        </group>
+
+        {/* Section clouds: OUTSIDE the field groups (no page parallax); driven by
             their section's crossing via <SectionRig> (slide in → hold → slide out). */}
         {sectionClouds.map((c, i) => (
           <group
@@ -639,19 +752,23 @@ export default function CloudCanvas({
               sectionRefs.current[i] = el;
             }}
           >
-            <Cloud
-              {...CLOUD}
-              segments={cloudSegments}
-              seed={c.seed}
-              bounds={c.bounds}
-              volume={c.volume}
-            />
+            {cloudBody(c)}
           </group>
         ))}
       </Clouds>
 
-      <CloudPlacement clouds={fieldClouds} cloudRefs={cloudRefs} scrollFactor={scrollFactor} />
-      <ScrollAnchorRig groupRef={fieldRef} scrollFactor={scrollFactor} />
+      {perspFieldClouds.length > 0 && (
+        <>
+          <CloudPlacement clouds={perspFieldClouds} cloudRefs={perspRefs} scrollFactor={scrollFactor} perspective />
+          <ScrollAnchorRig groupRef={perspFieldRef} scrollFactor={scrollFactor} perspective />
+        </>
+      )}
+      {flatFieldClouds.length > 0 && (
+        <>
+          <CloudPlacement clouds={flatFieldClouds} cloudRefs={flatRefs} scrollFactor={scrollFactor} perspective={false} />
+          <ScrollAnchorRig groupRef={flatFieldRef} scrollFactor={scrollFactor} perspective={false} />
+        </>
+      )}
       <SectionRig clouds={sectionClouds} cloudRefs={sectionRefs} activeClouds={activeClouds} />
       <MorphRig activeClouds={activeClouds} />
       <InvalidateOnReady />

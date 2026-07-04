@@ -41,6 +41,17 @@ export type CloudSpec = {
    * parallaxing continuously. Mutually exclusive with `anchorVh`. See <SectionRig>.
    */
   section?: SectionBind;
+  /**
+   * Scroll-motion axis. Unset (default) → FLAT: the cloud travels along the
+   * camera's up-axis, so it moves straight up the screen at CONSTANT size.
+   * `true` → PERSPECTIVE: travels along world-Y, which under the tilted camera
+   * pulls it toward the lens as it rises, so it SWELLS on the way out (the
+   * original look). Governs both the scroll parallax of FIELD clouds (anchorVh,
+   * via <ScrollAnchorRig>/<CloudPlacement>) and the slide of SECTION clouds
+   * (via <SectionRig>) — flat clouds slide along camera-up, perspective ones
+   * along world-Y.
+   */
+  perspectiveScroll?: boolean;
 };
 
 export type SectionBind = {
@@ -57,31 +68,44 @@ export type SectionBind = {
 };
 
 export const SKY_CLOUDS: CloudSpec[] = [
-  { key: "top-right", ndc: [0.78, 0.72], dist: 22, seed: 4, bounds: [4, 1.2, 1], volume: 4, anchorVh: 0 },
+  { key: "top-right", ndc: [0.78, 0.72], dist: 22, seed: 4, bounds: [4, 1.2, 1], volume: 4, anchorVh: 0, perspectiveScroll: true },
   // Cards section ("ground to launch in days") — one sky cloud low on the right,
   // same size as the hero top-right. It slides in with the card row, holds at the
   // bottom-right while the section is on screen, then slides out.
+  { key: "bottom-left", ndc: [-0.78, -0.9], dist: 22, seed: 4, bounds: [4, 1.2, 1], volume: 4, anchorVh: 1, perspectiveScroll: false },
   {
     key: "cards-br",
-    ndc: [0.78, -0.7],
+    ndc: [0.78, -1],
     dist: 22,
     seed: 11,
-    bounds: [4, 1.2, 1],
-    volume: 4,
-    section: { trigger: "[data-cards]" },
+    bounds: [7, 1.4, 1],
+    volume: 6,
+    anchorVh: 2,
+    perspectiveScroll: false,
   },
   // Why-stay section ("why teams stay") — a BIGGER cloud on the left. The section
   // PINS, so its scroll crossing is long; the cloud holds left of the glass reel
   // for that whole span, then slides out.
   {
-    key: "whystay-left",
-    ndc: [-0.78, 0.1],
-    dist: 22,
-    seed: 21,
-    bounds: [5.5, 1.8, 1],
-    volume: 6,
-    section: { trigger: "[data-whystay]" },
+    key: "whystay-br",
+    ndc: [-0.78, -0.72],
+    dist: 50,
+    seed: 11,
+    bounds: [8, 2.4, 1],
+    volume: 8,
+    anchorVh: 4,
+    perspectiveScroll: false,
   },
+  {
+    key: "whystay-br-2",
+    ndc: [0.78, -0.72],
+    dist: 22,
+    seed: 11,
+    bounds: [4, 1.2, 1],
+    volume: 6,
+    anchorVh: 4,
+    perspectiveScroll: false,
+  }
 ];
 
 // Rock-base banks — a WIDE, SHALLOW strip that just skirts the foot of each
@@ -91,6 +115,6 @@ export const SKY_CLOUDS: CloudSpec[] = [
 // the strip (dense across, short up). Sat just past -1 so it rides the very
 // bottom edge. Keeping it low + thin preserves the site's open, fluid feel.
 export const ROCK_CLOUDS: CloudSpec[] = [
-  { key: "rock-left", ndc: [-0.88, -1.02], dist: 22, seed: 7, bounds: [6.5, 0.45, 1], volume: 8, anchorVh: 0 },
-  { key: "rock-right", ndc: [0.88, -1.02], dist: 22, seed: 3, bounds: [6.5, 0.45, 1], volume: 8, anchorVh: 0 },
+  { key: "rock-left", ndc: [-0.88, -1.02], dist: 22, seed: 7, bounds: [6.5, 0.45, 1], volume: 8, anchorVh: 0, perspectiveScroll: true },
+  { key: "rock-right", ndc: [0.88, -1.02], dist: 22, seed: 3, bounds: [6.5, 0.45, 1], volume: 8, anchorVh: 0, perspectiveScroll: true },
 ];
