@@ -72,7 +72,15 @@ const CLOUD = {
   speed: 0.25,
   color: "white",
 } as const;
-const RANGE = 100;
+// Max cloud SEGMENTS rendered per <Clouds> batch. drei draws
+// count = min(limit, range, totalSegments) sprites, where each <Cloud> expands
+// into `segments` billboards (cloudSegments: 20 on the high tier). So this is a
+// hard ceiling on the CLOUD COUNT: range/segments = 400/20 = 20 high-tier clouds
+// per canvas. It was 100 (= only 5 high-tier clouds — a 6th silently dropped its
+// segments). Kept equal to `limit` below so the buffer, not this, is the ceiling.
+// Raising it is free until the segments actually exist — cost tracks the clouds
+// you place (on-screen overdraw), not this cap. Bump `limit` too if you exceed 20.
+const RANGE = 400;
 
 // Cloud placements (NDC/dist/size) live in cloud-specs.ts — see CloudSpec.
 

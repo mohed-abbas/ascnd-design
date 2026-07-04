@@ -87,25 +87,36 @@ export const SKY_CLOUDS: CloudSpec[] = [
   // PINS, so its scroll crossing is long; the cloud holds left of the glass reel
   // for that whole span, then slides out.
   {
-    key: "whystay-br",
+    key: "whystay-bl",
     ndc: [-0.78, -0.72],
-    dist: 50,
+    dist: 24,
     seed: 11,
-    bounds: [8, 2.4, 1],
+    bounds: [6, 2.4, 1],
+    volume: 8,
+    anchorVh: 3,
+    perspectiveScroll: false,
+  },
+  {
+    key: "whystay-br",
+    ndc: [0.78, -0.72],
+     dist: 50,
+    seed: 11,
+    bounds: [8, 4, 1],
+    volume: 10,
+    anchorVh: 3.5,
+    perspectiveScroll: false,
+  },
+  {
+    key: "whystay-bl-2",
+    ndc: [-0.78, -0.72],
+     dist: 24,
+    seed: 11,
+    bounds: [4, 1.5, 1],
     volume: 8,
     anchorVh: 4,
     perspectiveScroll: false,
   },
-  {
-    key: "whystay-br-2",
-    ndc: [0.78, -0.72],
-    dist: 22,
-    seed: 11,
-    bounds: [4, 1.2, 1],
-    volume: 6,
-    anchorVh: 4,
-    perspectiveScroll: false,
-  }
+
 ];
 
 // Rock-base banks — a WIDE, SHALLOW strip that just skirts the foot of each
