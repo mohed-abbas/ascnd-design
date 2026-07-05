@@ -25,6 +25,15 @@ export const INTRO_REVEAL_EVENT = "ascnd:intro-reveal";
 export const INTRO_START_EVENT = "ascnd:intro-start";
 
 /**
+ * Fired by <Intro> the moment its WebGL scene has GENUINELY painted
+ * (SceneReady: chunk downloaded, textures resolved, shaders compiled, frames
+ * drawn). <IntroLoader> listens so its cover can hold — bar parked near-full —
+ * until the welcome can actually be seen, instead of fading out on a fixed
+ * clock over a scene that is still downloading (the slow-network bare-sky gap).
+ */
+export const INTRO_SCENE_READY_EVENT = "ascnd:intro-scene-ready";
+
+/**
  * Fired by <IntroLoader> when its welcome animation has fully played and faded
  * out — the cue for <Intro> to start its master timeline. This INVERTS the old
  * order: the loader now LEADS (plays its ~4.5s show while the WebGL scene warms
@@ -120,4 +129,29 @@ if (typeof window !== "undefined") {
 
 export function introHasRevealed(): boolean {
   return revealed;
+}
+
+/**
+ * Did the intro's master timeline actually START (INTRO_START fired)? Distinct
+ * from introWillPlay() — the INTENT decided at load. The intro can intend to
+ * play and then never start: the SKIP_BUDGET bail on slow networks, or the
+ * can't-place-the-glass bail. Consumers that hand a job to the WELCOME must
+ * check this at reveal time, not the intent: hero-reveal skips the navbar
+ * wordmark only when the glass really docks onto it (the timeline owns that
+ * crossfade) — on a skipped intro the wordmark must join the DOM cascade, or
+ * nothing would ever reveal it.
+ */
+let started = false;
+if (typeof window !== "undefined") {
+  window.addEventListener(
+    INTRO_START_EVENT,
+    () => {
+      started = true;
+    },
+    { once: true },
+  );
+}
+
+export function introHasStarted(): boolean {
+  return started;
 }

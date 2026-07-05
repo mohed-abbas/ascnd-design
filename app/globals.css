@@ -291,7 +291,12 @@ html[data-custom-cursor="on"] * {
 
 /* Determinate hairline progress (Figma Loader, node 263:227): a faint full-width
    track with a white fill that grows left→right across the welcome (scaleX, so
-   it stays on the compositor), then the whole cover fades (the JS handoff). */
+   it stays on the compositor), then the whole cover fades (the JS handoff).
+   The CSS entrance deliberately parks at 85% — the last 15% belongs to reality:
+   JS adds `.loader-fill-done` only once the WebGL scene has GENUINELY painted
+   (INTRO_SCENE_READY), so on a slow connection the bar holds near-full
+   ("almost there") instead of sitting at a finished 100% over a scene that is
+   still downloading. */
 .loader-track {
   position: relative;
   flex-shrink: 0;
@@ -318,6 +323,19 @@ html[data-custom-cursor="on"] * {
 }
 
 @keyframes loader-fill {
+  to {
+    transform: scaleX(0.85);
+  }
+}
+
+/* Scene ready — snap the remaining 15%. The keyframe has no `from`, so it
+   animates from the fill's CURRENT computed scale: mid-entrance on fast
+   connections (no jump back to 85%), the parked 85% on slow ones. */
+.loader-fill-done {
+  animation: loader-fill-complete 0.22s cubic-bezier(0.3, 0, 0.2, 1) both;
+}
+
+@keyframes loader-fill-complete {
   to {
     transform: scaleX(1);
   }

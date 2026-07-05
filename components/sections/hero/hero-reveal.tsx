@@ -3,7 +3,11 @@
 import { useEffect, useLayoutEffect } from "react";
 import gsap from "gsap";
 import { SplitText } from "gsap/SplitText";
-import { INTRO_REVEAL_EVENT, introWillPlay } from "@/components/sections/intro/intro-state";
+import {
+  INTRO_REVEAL_EVENT,
+  introHasStarted,
+  introWillPlay,
+} from "@/components/sections/intro/intro-state";
 
 gsap.registerPlugin(SplitText);
 
@@ -141,7 +145,13 @@ export default function HeroReveal() {
       // the glass fade-out, so the wordmark must stay hidden here (no slide-up,
       // never shown through the transmissive glass). Skip it entirely; the
       // masked slide-up still runs for returning sessions.
-      const introHandoff = introWillPlay();
+      // introHasStarted(), not introWillPlay(): the intent can be "play" and the
+      // intro still never start (SKIP_BUDGET on a slow network, or the
+      // can't-place-the-glass bail). In those paths the glass never docks, so
+      // nothing else would ever reveal the wordmark — it must join this cascade.
+      // Evaluated inside build(), which runs at reveal time, so the outcome is
+      // known by now: INTRO_START always precedes INTRO_REVEAL in a live welcome.
+      const introHandoff = introWillPlay() && introHasStarted();
 
       // Masked blocks — slide up from below their overflow:hidden wrapper.
       root.querySelectorAll<HTMLElement>("[data-reveal]").forEach((el) => {
@@ -239,12 +249,24 @@ export default function HeroReveal() {
     // "ascnd" docks — <Intro> fires INTRO_REVEAL_EVENT ~⅔ through the dock, and
     // the cascade then rises in as the glass hands off to the real wordmark.
     // Otherwise (returning session / reduced-motion / no-intro) reveal at once.
+    // Backstop: REVEAL is guaranteed by <Intro> in every live path (dock, skip,
+    // bail), but if the intro CRASHED before arming any of those, nothing else
+    // would ever unpark the hero — so never wait longer than the whole intro
+    // pipeline could possibly take (loader hold-cap 8s + welcome ~5s).
     let stopWaiting: (() => void) | undefined;
     if (introWillPlay()) {
-      const onReveal = () => start();
+      let revealed = false;
+      const onReveal = () => {
+        if (revealed) return; // event + backstop can both land — start() once
+        revealed = true;
+        start();
+      };
       window.addEventListener(INTRO_REVEAL_EVENT, onReveal, { once: true });
-      stopWaiting = () =>
+      const backstop = window.setTimeout(onReveal, 14000);
+      stopWaiting = () => {
         window.removeEventListener(INTRO_REVEAL_EVENT, onReveal);
+        window.clearTimeout(backstop);
+      };
     } else {
       start();
     }

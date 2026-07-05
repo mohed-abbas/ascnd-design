@@ -13,6 +13,7 @@ import gsap from "gsap";
 import {
   INTRO_GO_EVENT,
   INTRO_REVEAL_EVENT,
+  INTRO_SCENE_READY_EVENT,
   INTRO_START_EVENT,
   introWillPlay,
 } from "./intro-state";
@@ -619,7 +620,12 @@ export default function Intro() {
         conveyor={conveyor}
         glassSize={plan.glassSize}
         restY={plan.welcome.y}
-        onReady={() => setReady(true)}
+        onReady={() => {
+          setReady(true);
+          // Tell the loader the scene is genuinely paintable so its cover can
+          // hand off (it holds — bar parked near-full — until this or the skip).
+          window.dispatchEvent(new Event(INTRO_SCENE_READY_EVENT));
+        }}
       />
     </div>
   );
