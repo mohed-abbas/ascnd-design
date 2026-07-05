@@ -13,8 +13,11 @@ const REDUCE_MOTION = "(prefers-reduced-motion: reduce)";
 const FADE = "linear-gradient(to bottom, black 78%, transparent 96%)";
 
 // Same gold→green aura as the subscribe end-button (get_design_context flattens
-// it to a flat #ffe8b7). Symmetric so the shimmer's position loop is seamless.
-const AURA = "linear-gradient(90deg, #ffe8b7, #bbfc73, #ffe8b7)";
+// it to a flat #ffe8b7). The siri-style rainbow from demo.html, driven as a CONIC
+// gradient by --aura-angle so the colour ORBITS the rim (matching the hero CTAs);
+// endpoints match (#5ea8ff → #5ea8ff) so a full revolution has no seam.
+const AURA =
+  "conic-gradient(from calc(var(--aura-angle, 0) * 1deg), #5ea8ff, #a06bff, #ff6ec7, #ff9d5c, #ffe36e, #5ef2c8, #5ea8ff)";
 
 const DELIVERED = "delivered";
 
@@ -78,10 +81,17 @@ export default function ReceiveMedia() {
       // tiles start assembled (their markup home) — no initial offset, so SSR
       // and no-JS both show the finished collage.
 
-      const sweep = gsap.to(
-        [shimmer.querySelector("[data-aura-ring]"), shimmer.querySelector("[data-aura-glow]")],
-        { backgroundPosition: "-200% 0", duration: 2.4, ease: "none", repeat: -1, paused: true }
-      );
+      // Aura orbit — the rainbow travels the rim by driving --aura-angle 0→360 on
+      // the shimmer wrapper (inherited by glow + ring). Rides the shared ticker.
+      const angle = { v: 0 };
+      const sweep = gsap.to(angle, {
+        v: 360,
+        duration: 2.6,
+        ease: "none",
+        repeat: -1,
+        paused: true,
+        onUpdate: () => shimmer.style.setProperty("--aura-angle", String(angle.v)),
+      });
 
       const tl = gsap.timeline({ repeat: -1, repeatDelay: 0.5, paused: true });
       tl
@@ -173,7 +183,7 @@ export default function ReceiveMedia() {
               data-aura-glow
               aria-hidden
               className="pointer-events-none absolute -inset-[3px] -z-10 rounded-[34px]"
-              style={{ background: AURA, backgroundSize: "200% 100%", filter: "blur(9px)", opacity: 0.6 }}
+              style={{ background: AURA, filter: "blur(9px)", opacity: 0.6 }}
             />
             <div
               data-aura-ring
@@ -182,7 +192,6 @@ export default function ReceiveMedia() {
               style={{
                 padding: "3px",
                 background: AURA,
-                backgroundSize: "200% 100%",
                 WebkitMask: "linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0)",
                 WebkitMaskComposite: "xor",
                 maskComposite: "exclude",

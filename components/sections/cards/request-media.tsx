@@ -21,8 +21,11 @@ const BRIEF =
   "hey, need a landing page for our seed round launch. brand's mostly done, i'll drop the figma. should feel fast and a bit premium, think linear not corporate. hero, social proof, pricing, faq. can we get a first look by fri";
 
 // Same gold→green aura as the subscribe/receive pills (get_design_context
-// flattens it to a flat #ffe8b7). Symmetric so the sweep loops seamlessly.
-const AURA = "linear-gradient(90deg, #ffe8b7, #bbfc73, #ffe8b7)";
+// flattens it to a flat #ffe8b7). The siri-style rainbow from demo.html, driven
+// as a CONIC gradient by --aura-angle so the colour ORBITS the rim (matching the
+// hero CTAs); endpoints match (#5ea8ff → #5ea8ff) so a revolution has no seam.
+const AURA =
+  "conic-gradient(from calc(var(--aura-angle, 0) * 1deg), #5ea8ff, #a06bff, #ff6ec7, #ff9d5c, #ffe36e, #5ef2c8, #5ea8ff)";
 
 // Cursor rest offset (down-right of the send button) it drifts up from, applied
 // as a GSAP transform so the wrapper keeps owning the base landing position.
@@ -190,13 +193,18 @@ export default function RequestMedia() {
         paused: true,
       });
 
-      // Continuous aura sweep + loader spin — only visible after the click.
-      const sweep = gsap.to([sendRing, sendGlow], {
-        backgroundPosition: "-200% 0",
-        duration: 2.4,
+      // Continuous aura orbit + loader spin — only visible after the click. The
+      // rainbow orbits the rim by driving --aura-angle 0→360 on the send chip
+      // (inherited by glow + ring). Rides the shared GSAP ticker (no private rAF).
+      const angle = { v: 0 };
+      const sweep = gsap.to(angle, {
+        v: 360,
+        duration: 2.6,
         ease: "none",
         repeat: -1,
         paused: true,
+        onUpdate: () =>
+          sendBtn.style.setProperty("--aura-angle", String(angle.v)),
       });
       const spin = gsap.to(sendSpinner, {
         rotation: 360,
@@ -365,7 +373,7 @@ export default function RequestMedia() {
                 <span
                   ref={sendGlowRef}
                   className="pointer-events-none absolute -inset-[3px] rounded-full"
-                  style={{ background: AURA, backgroundSize: "200% 100%", filter: "blur(9px)", opacity: 0 }}
+                  style={{ background: AURA, filter: "blur(9px)", opacity: 0 }}
                 />
                 {/* white chip + swappable content */}
                 <span
@@ -396,7 +404,6 @@ export default function RequestMedia() {
                   style={{
                     padding: "3px",
                     background: AURA,
-                    backgroundSize: "200% 100%",
                     WebkitMask: "linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0)",
                     WebkitMaskComposite: "xor",
                     maskComposite: "exclude",

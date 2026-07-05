@@ -7,10 +7,12 @@ import { CheckMark } from "@/components/ui/icons";
 
 const REDUCE_MOTION = "(prefers-reduced-motion: reduce)";
 
-// The aura stroke sampled off the Figma end-state (get_design_context flattens
-// it to a flat #ffe8b7): a warm gold → lime-green sweep. Symmetric so the
-// shimmer's background-position loop is seamless (both ends are gold).
-const AURA = "linear-gradient(90deg, #ffe8b7, #bbfc73, #ffe8b7)";
+// The aura stroke — the siri-style rainbow from demo.html (the "creating your
+// board" ring). A CONIC gradient driven by --aura-angle so the colour ORBITS the
+// rim (matching the hero CTAs); endpoints match (#5ea8ff → #5ea8ff across 360°)
+// so a full revolution has no seam. Fallback 0 keeps SSR/first paint valid.
+const AURA =
+  "conic-gradient(from calc(var(--aura-angle, 0) * 1deg), #5ea8ff, #a06bff, #ff6ec7, #ff9d5c, #ffe36e, #5ef2c8, #5ea8ff)";
 
 // Cursor travel: from its rest spot (left-292.5 / top-229.5, see the wrapper)
 // up-and-left onto the button. Deltas are applied as a GSAP transform, so the
@@ -138,13 +140,18 @@ export default function SubscribeMedia() {
       gsap.set(check, { scale: 0 });
       gsap.set(cursor, { x: 0, y: 0, scale: 1, autoAlpha: 0 });
 
-      // Continuous aura sweep — cheap, only visible while the white pill is up.
-      const sweep = gsap.to([ring, glow], {
-        backgroundPosition: "-200% 0",
-        duration: 2.4,
+      // Continuous aura orbit — rotate the conic gradient's angle around the rim
+      // by driving --aura-angle 0→360 on the pill (inherited by glow + ring), so
+      // the rainbow travels the perimeter. Cheap, only visible while the white
+      // pill is up. Rides the shared GSAP ticker (no private rAF).
+      const angle = { v: 0 };
+      const sweep = gsap.to(angle, {
+        v: 360,
+        duration: 2.6,
         ease: "none",
         repeat: -1,
         paused: true,
+        onUpdate: () => pill.style.setProperty("--aura-angle", String(angle.v)),
       });
 
       // Spinner ring rotation — only visible while "creating your board" is up.
@@ -258,7 +265,7 @@ export default function SubscribeMedia() {
             data-aura-glow
             aria-hidden
             className="pointer-events-none absolute -inset-[3px] rounded-[46px]"
-            style={{ background: AURA, backgroundSize: "200% 100%", filter: "blur(9px)", opacity: 0 }}
+            style={{ background: AURA, filter: "blur(9px)", opacity: 0 }}
           />
 
           {/* the pill fill — GSAP tweens its backgroundColor/border/boxShadow
@@ -278,7 +285,6 @@ export default function SubscribeMedia() {
             style={{
               padding: "3px",
               background: AURA,
-              backgroundSize: "200% 100%",
               WebkitMask: "linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0)",
               WebkitMaskComposite: "xor",
               maskComposite: "exclude",
