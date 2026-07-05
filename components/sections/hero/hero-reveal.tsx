@@ -4,6 +4,7 @@ import { useEffect, useLayoutEffect } from "react";
 import gsap from "gsap";
 import { SplitText } from "gsap/SplitText";
 import {
+  INTRO_LAST_RESORT_MS,
   INTRO_REVEAL_EVENT,
   introHasStarted,
   introWillPlay,
@@ -249,10 +250,11 @@ export default function HeroReveal() {
     // "ascnd" docks — <Intro> fires INTRO_REVEAL_EVENT ~⅔ through the dock, and
     // the cascade then rises in as the glass hands off to the real wordmark.
     // Otherwise (returning session / reduced-motion / no-intro) reveal at once.
-    // Backstop: REVEAL is guaranteed by <Intro> in every live path (dock, skip,
-    // bail), but if the intro CRASHED before arming any of those, nothing else
-    // would ever unpark the hero — so never wait longer than the whole intro
-    // pipeline could possibly take (loader hold-cap 8s + welcome ~5s).
+    // Backstop: REVEAL is guaranteed by <Intro> in every live path (dock, bail,
+    // last-resort), but if the intro CRASHED before arming any of those,
+    // nothing else would ever unpark the hero. Sits ABOVE the last-resort
+    // budget + welcome length so it can never fire under a live welcome that
+    // is legitimately still waiting for its scene on a slow connection.
     let stopWaiting: (() => void) | undefined;
     if (introWillPlay()) {
       let revealed = false;
@@ -262,7 +264,7 @@ export default function HeroReveal() {
         start();
       };
       window.addEventListener(INTRO_REVEAL_EVENT, onReveal, { once: true });
-      const backstop = window.setTimeout(onReveal, 14000);
+      const backstop = window.setTimeout(onReveal, INTRO_LAST_RESORT_MS + 10000);
       stopWaiting = () => {
         window.removeEventListener(INTRO_REVEAL_EVENT, onReveal);
         window.clearTimeout(backstop);

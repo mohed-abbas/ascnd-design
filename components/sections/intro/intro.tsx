@@ -11,7 +11,9 @@ import {
 } from "react";
 import gsap from "gsap";
 import {
+  INTRO_CHUNK_READY_EVENT,
   INTRO_GO_EVENT,
+  INTRO_LAST_RESORT_MS,
   INTRO_REVEAL_EVENT,
   INTRO_SCENE_READY_EVENT,
   INTRO_START_EVENT,
@@ -68,14 +70,6 @@ const TILE_SCATTER_VSCALE = 0.55;
 const TILE_FLIGHT = 1.5;
 
 const IntroScene = dynamic(() => import("./intro-scene"), { ssr: false });
-
-// How long the welcome may wait for the WebGL scene to genuinely paint
-// (SceneReady) before giving up and skipping to the plain DOM hero reveal.
-// The loader's cover runs ~3s, so a scene that's a beat late still gets its
-// welcome; past this, holding visitors on a bare sky costs more than the
-// intro is worth. Must stay BELOW design-shots-reveal's no-event backstop
-// (10s), which assumes the skip decision has already been made by then.
-const SKIP_BUDGET_MS = 6000;
 
 const useIso = typeof window !== "undefined" ? useLayoutEffect : useEffect;
 
@@ -179,9 +173,14 @@ export default function Intro() {
   // intro will play, so its download overlaps the DOM measure instead of only
   // starting when <IntroScene> first renders. Shares the module cache with the
   // dynamic() import below, so the lazy mount then resolves from cache. Gated on
-  // shouldPlay so returning/reduced-motion visitors never pay for it.
+  // shouldPlay so returning/reduced-motion visitors never pay for it. Resolution
+  // is announced (INTRO_CHUNK_READY) — the loader's progress bar advances on it,
+  // since on a slow connection this download is most of the wait.
   useEffect(() => {
-    if (shouldPlay) void import("./intro-scene");
+    if (!shouldPlay) return;
+    void import("./intro-scene").then(() => {
+      window.dispatchEvent(new Event(INTRO_CHUNK_READY_EVENT));
+    });
   }, [shouldPlay]);
 
   // Measure the hero once we're going to play, and build the plan.
@@ -356,38 +355,44 @@ export default function Intro() {
     });
   }, [play]);
 
-  // Skip budget: `ready` is only ever set by the scene actually painting
-  // (SceneReady's onReady). If that hasn't happened within the budget — a slow
-  // network still downloading the three.js chunk/textures, or a wedged GPU —
-  // SKIP the welcome instead of playing the timeline blind. (The old 2.5s
-  // failsafe force-set `ready`: the timeline then ran with no canvas mounted,
-  // fired INTRO_START — which suppressed design-shots' DOM-conveyor fallback —
-  // and stranded slow-network visitors on a hero with no collage and no
-  // clouds.) Bailing takes the same graceful path as "can't place the glass"
-  // above: fire the reveal so the DOM hero cascades in normally, and
-  // design-shots-reveal blooms its DOM conveyor instead of the WebGL one.
+  // Last-resort bail: the welcome is NEVER skipped for being slow — the loader
+  // holds its cover (bar creeping on real milestones) until the scene paints,
+  // however long the network takes. `ready` is only ever set by the scene
+  // actually painting (SceneReady's onReady) — the timeline can't run blind
+  // (the old 2.5s force-`ready` failsafe did exactly that: it played the
+  // welcome invisibly, suppressed design-shots' DOM fallback via INTRO_START,
+  // and stranded slow visitors on a hero with no collage). If the scene STILL
+  // hasn't painted at INTRO_LAST_RESORT_MS the load is considered wedged
+  // (driver hang, chunk 404, offline mid-load) and we bail down the same
+  // graceful path as "can't place the glass": fire the reveal so the DOM hero
+  // cascades in, and design-shots-reveal blooms its DOM conveyor.
   useEffect(() => {
     if (!play || !plan || ready) return;
     const t = window.setTimeout(() => {
       window.dispatchEvent(new Event(INTRO_REVEAL_EVENT));
       setDismissed(true);
-    }, SKIP_BUDGET_MS);
+    }, INTRO_LAST_RESORT_MS);
     return () => window.clearTimeout(t);
   }, [play, plan, ready]);
 
-  // Wait for the loader's INTRO_GO before running the timeline. Failsafe: if the
-  // loader never signals (e.g. it didn't mount), release after its full budget
-  // so the welcome can't deadlock the locked, hidden intro.
+  // Wait for the loader's INTRO_GO before running the timeline. Failsafe: if
+  // the loader never signals (e.g. it didn't mount), release a beat after the
+  // scene is ready so the welcome can't deadlock the locked, hidden intro. The
+  // timer arms from `ready` — NOT from mount — because the loader now holds
+  // its cover for as long as the scene takes (minutes on 3G): a mount-anchored
+  // timer would flip `released` early and the timeline would start the instant
+  // `ready` landed, playing the reveal beat under the still-fading cover.
   useEffect(() => {
     if (!play) return;
     const release = () => setReleased(true);
     window.addEventListener(INTRO_GO_EVENT, release, { once: true });
-    const t = window.setTimeout(release, 7000);
+    // Loader hand-off arrives ~0.9s after ready (bar land + fade); 3s covers it.
+    const t = ready ? window.setTimeout(release, 3000) : undefined;
     return () => {
       window.removeEventListener(INTRO_GO_EVENT, release);
-      window.clearTimeout(t);
+      if (t !== undefined) window.clearTimeout(t);
     };
-  }, [play]);
+  }, [play, ready]);
 
   // Run the master timeline once the plan is built AND the scene has painted.
   // Scroll locks as soon as we commit to playing (even during the load), but the

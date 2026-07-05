@@ -27,11 +27,34 @@ export const INTRO_START_EVENT = "ascnd:intro-start";
 /**
  * Fired by <Intro> the moment its WebGL scene has GENUINELY painted
  * (SceneReady: chunk downloaded, textures resolved, shaders compiled, frames
- * drawn). <IntroLoader> listens so its cover can hold — bar parked near-full —
- * until the welcome can actually be seen, instead of fading out on a fixed
- * clock over a scene that is still downloading (the slow-network bare-sky gap).
+ * drawn). <IntroLoader> listens so its cover can hold — bar creeping toward
+ * full — until the welcome can actually be seen, instead of fading out on a
+ * fixed clock over a scene that is still downloading (the bare-sky gap).
  */
 export const INTRO_SCENE_READY_EVENT = "ascnd:intro-scene-ready";
+
+/**
+ * Fired by <Intro> when the lazy intro-scene chunk (three.js/drei/R3F) has
+ * finished downloading + parsing — the biggest single milestone of the warm-up
+ * on a slow connection. <IntroLoader> uses it to advance its progress bar with
+ * REAL signal between "JS arrived" and "scene painted".
+ */
+export const INTRO_CHUNK_READY_EVENT = "ascnd:intro-chunk-ready";
+
+/**
+ * The welcome is NEVER skipped for being slow — visitors on 3G wait under the
+ * loader (bar creeping on real milestones) and then get the full intro. This
+ * is the LAST-RESORT safety net only: if the scene hasn't painted by now the
+ * load is considered wedged (driver hang, chunk 404, offline mid-load) and
+ * <Intro> bails to the DOM hero so the page can never be stranded under the
+ * cover forever. Dev builds get a far larger budget purely because unminified
+ * dev chunks are ~10× production size — hitting this in dev on a throttled
+ * profile is expected physics, not a wedge.
+ * All downstream timer backstops (loader hard-cap, hero-reveal, design-shots)
+ * must sit ABOVE this so they can never race a live welcome.
+ */
+export const INTRO_LAST_RESORT_MS =
+  process.env.NODE_ENV === "development" ? 120_000 : 45_000;
 
 /**
  * Fired by <IntroLoader> when its welcome animation has fully played and faded

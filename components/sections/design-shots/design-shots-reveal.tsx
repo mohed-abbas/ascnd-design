@@ -4,6 +4,7 @@ import { useEffect, useLayoutEffect } from "react";
 import gsap from "gsap";
 import { SHOT_ARC_SLOTS, SHOT_BASE } from "./shots-spec";
 import {
+  INTRO_LAST_RESORT_MS,
   INTRO_REVEAL_EVENT,
   INTRO_START_EVENT,
   introWillPlay,
@@ -185,13 +186,13 @@ export default function DesignShotsReveal() {
     // When the welcome intro plays, the persistent WebGL scene owns the tiles for
     // the whole session (scatter → fly onto the arc → conveyor), so the DOM
     // collage stays hidden (armed `opacity:0`). We only confirm the scene really
-    // starts (INTRO_START_EVENT). The intro can also SKIP — its scene wasn't
-    // ready within intro.tsx's SKIP_BUDGET (slow network) so it fires
+    // starts (INTRO_START_EVENT). The intro can also BAIL — it couldn't place
+    // the glass, or the load wedged past INTRO_LAST_RESORT_MS — firing
     // INTRO_REVEAL without ever starting: bloom the DOM conveyor then, since no
     // WebGL tiles will ever exist this session. The timer is only a backstop for
     // "no event ever arrived" (Intro crashed before either dispatch); it sits
-    // ABOVE the intro's worst-case start (release failsafe 7s) so it can never
-    // race a live welcome into a double collage — the old 5s timer could.
+    // ABOVE the last-resort budget so it can never race a live welcome that is
+    // legitimately still waiting for its scene into a double collage.
     if (introWillPlay()) {
       let started = false;
       let begun = false;
@@ -205,7 +206,7 @@ export default function DesignShotsReveal() {
       };
       window.addEventListener(INTRO_START_EVENT, onStart, { once: true });
       window.addEventListener(INTRO_REVEAL_EVENT, beginOnce, { once: true });
-      const failsafe = window.setTimeout(beginOnce, 10000);
+      const failsafe = window.setTimeout(beginOnce, INTRO_LAST_RESORT_MS + 5000);
       return () => {
         cancelled = true;
         window.removeEventListener(INTRO_START_EVENT, onStart);

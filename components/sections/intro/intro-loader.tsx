@@ -1,12 +1,15 @@
 "use client";
 
 import type { CSSProperties } from "react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import gsap from "gsap";
 import Logo from "@/components/ui/logo";
 // Wordmark temporarily disabled in the loader column (see commented block below).
 // import Wordmark from "@/components/ui/wordmark";
 import {
+  INTRO_CHUNK_READY_EVENT,
   INTRO_GO_EVENT,
+  INTRO_LAST_RESORT_MS,
   INTRO_REVEAL_EVENT,
   INTRO_SCENE_READY_EVENT,
   introWillPlay,
@@ -25,23 +28,27 @@ import {
  * its own: the global <Background/> (#62abff + grain) shows through, so there's
  * no double-grain and the handoff to the live scene is on the exact same sky.
  *
- * THE LOADER LEADS (see intro-state.ts INTRO_GO_EVENT). It plays its entrance
- * choreography, then holds the cover until the scene can ACTUALLY be seen:
- *   t≈0.2s  logo masked-reveal (rises from behind its own clip line)
- *   0.3→2.4s hairline fills 0%→85% (determinate entrance; the last 15% belongs
- *           to reality, not the clock)
- *   then    dismiss when BOTH the ~2.4s minimum show has elapsed AND the scene
- *           has genuinely painted (INTRO_SCENE_READY from SceneReady) — the bar
- *           snaps its last 15% and the 0.6s fade begins. On fast connections
- *           the scene is ready inside the minimum, so this matches the old
- *           fixed ~3s feel exactly. On slow ones the cover HOLDS at 85% —
- *           honest "almost there" — instead of fading out over a bare sky.
+ * THE LOADER LEADS (see intro-state.ts INTRO_GO_EVENT), and the welcome is
+ * NEVER skipped for being slow — the cover holds for as long as the scene
+ * genuinely takes, with the bar advancing on REAL loading milestones so it
+ * always shows loading truth, never a parked fake:
+ *   t≈0.2s  logo masked-reveal (rises from behind its own clip line)  [CSS]
+ *   0.3s→   hairline sweeps to ~10% fast, then crawls toward ~22% over ~30s —
+ *           pre-hydration the page KNOWS nothing (main JS still downloading),
+ *           so CSS alone keeps honest, visible motion            [CSS only]
+ *   hydrate JS takes over from the bar's current position and creeps toward
+ *           35% — "app booted, scene chunk downloading"          [milestone]
+ *   chunk   INTRO_CHUNK_READY (three.js/drei parsed) → creep toward 70% —
+ *           on slow networks this is most of the wait            [milestone]
+ *   ready   INTRO_SCENE_READY (textures + shaders + frames painted) → the bar
+ *           runs out to 100%, lands, and the 0.6s fade begins    [milestone]
  *   (fade done) dispatch INTRO_GO → the intro timeline starts on clean sky.
- * If the scene never becomes ready, intro.tsx's SKIP_BUDGET fires INTRO_REVEAL
- * (the skip) and the cover drops immediately; a local HOLD_LIMIT hard-cap
- * guarantees the cover can never outlive a crashed intro either.
- * The entrance/fill are CSS so they paint before hydration (no JS chunk to wait
- * on); JS only wires the ready/skip handoff.
+ * A ~2.4s minimum show keeps the choreography intentional on fast connections
+ * (scene-ready usually beats it; dismiss waits for both). Between milestones
+ * the bar eases asymptotically toward its cap, so it is always moving.
+ * INTRO_REVEAL (intro bailed: can't place the glass, or the LAST-RESORT wedge
+ * net fired) drops the cover immediately; a local hard-cap just above the
+ * last-resort budget guarantees the cover can't outlive a crashed intro.
  *
  * It is rendered on the server too (markup ships in the initial HTML) and is
  * visible by default. The play decision runs after hydration:
@@ -53,23 +60,29 @@ import {
  * never see it — and introWillPlay() is false for them regardless.
  */
 
-// The CSS fill parks at 85% at 0.3s delay + 2.1s = 2.4s — the minimum show.
-// The cover only dismisses once this has elapsed AND the scene is ready.
+// Minimum show — keeps the entrance choreography intentional on fast
+// connections (scene-ready usually lands inside it; dismiss waits for both).
 const MIN_SHOW_MS = 2400;
-// Let the bar's last 15% visibly land (the .loader-fill-done snap) before the
-// fade starts, so "complete" reads as a beat rather than a blink.
+// Let the bar's final run-out visibly land before the fade starts, so
+// "complete" reads as a beat rather than a blink.
 const BAR_LAND_MS = 250;
-// Hard cap: the cover must never outlive a crashed intro. intro.tsx's
-// SKIP_BUDGET (6s) fires INTRO_REVEAL well before this in every live path, so
-// this only exists for "no signal ever arrived".
-const HOLD_LIMIT_MS = 8000;
+// Hard cap: the cover must never outlive a crashed intro. Sits just above
+// intro.tsx's INTRO_LAST_RESORT_MS (which fires INTRO_REVEAL in every live
+// path), so it only ever fires when no signal arrived at all.
+const HOLD_LIMIT_MS = INTRO_LAST_RESORT_MS + 2000;
+
+// Progress caps per milestone — the bar creeps asymptotically toward the cap
+// of the deepest milestone reached, so it always moves but never lies ahead
+// of more than the next phase. scene-ready runs it out to 1.
+const CAP_HYDRATED = 0.35;
+const CAP_CHUNK = 0.7;
 
 export default function IntroLoader() {
   // `dismissing` fades the cover out; `done` unmounts it once the fade settles.
-  // Both start false → visible on load. `fillDone` snaps the bar's last 15%.
+  // Both start false → visible on load.
   const [dismissing, setDismissing] = useState(false);
   const [done, setDone] = useState(false);
-  const [fillDone, setFillDone] = useState(false);
+  const fillRef = useRef<HTMLSpanElement>(null);
 
   useEffect(() => {
     const dismiss = () => setDismissing(true);
@@ -81,8 +94,29 @@ export default function IntroLoader() {
       return () => cancelAnimationFrame(raf);
     }
 
-    // Intro will play: hold the cover until the minimum show has elapsed AND
-    // the scene has genuinely painted, then complete the bar and fade.
+    // ── The milestone-driven bar ──
+    // JS is here, so the "app booted" milestone is reached by definition. Take
+    // over from wherever the CSS crawl got the bar (no jump: read the computed
+    // scale, kill the CSS animation, continue from there via GSAP on the
+    // shared ticker), then creep toward each milestone's cap.
+    const fill = fillRef.current;
+    let creep: gsap.core.Tween | undefined;
+    const advance = (cap: number, duration: number, ease = "power2.out") => {
+      if (!fill) return;
+      creep?.kill();
+      creep = gsap.to(fill, { scaleX: cap, duration, ease });
+    };
+    if (fill) {
+      const m = getComputedStyle(fill).transform.match(/matrix\(([\d.]+)/);
+      const current = m ? Number(m[1]) : 0;
+      fill.style.animation = "none"; // CSS animation would pin the transform
+      gsap.set(fill, { scaleX: current, transformOrigin: "left center" });
+      advance(CAP_HYDRATED, 6); // hydrated — chunk downloading
+    }
+    const onChunk = () => advance(CAP_CHUNK, 6); // chunk parsed — textures/compile next
+
+    // Hold the cover until the minimum show has elapsed AND the scene has
+    // genuinely painted, then run the bar out and fade.
     let minElapsed = false;
     let sceneReady = false;
     let dismissed = false;
@@ -90,35 +124,38 @@ export default function IntroLoader() {
     const maybeDismiss = () => {
       if (dismissed || !minElapsed || !sceneReady) return;
       dismissed = true;
-      // bar just snapped to 100% (onReady) — let it land, then fade
+      // bar is running out to 100% (onReady) — let it land, then fade
       landTimer = window.setTimeout(dismiss, BAR_LAND_MS);
     };
     const onReady = () => {
       sceneReady = true;
-      setFillDone(true);
+      advance(1, 0.25, "power2.inOut"); // the real finish line
       maybeDismiss();
     };
     const minTimer = window.setTimeout(() => {
       minElapsed = true;
       maybeDismiss();
     }, MIN_SHOW_MS);
-    // Skip/bail: <Intro> fired REVEAL without a scene (SKIP_BUDGET on a slow
-    // network, or it couldn't place the glass) — the DOM hero is cascading in,
-    // drop the cover now.
+    // Bail: <Intro> fired REVEAL without a scene (couldn't place the glass, or
+    // the last-resort wedge net) — the DOM hero is cascading in, drop the
+    // cover now.
     const onReveal = () => {
       if (dismissed) return;
       dismissed = true;
       dismiss();
     };
     const capTimer = window.setTimeout(onReveal, HOLD_LIMIT_MS);
+    window.addEventListener(INTRO_CHUNK_READY_EVENT, onChunk, { once: true });
     window.addEventListener(INTRO_SCENE_READY_EVENT, onReady, { once: true });
     window.addEventListener(INTRO_REVEAL_EVENT, onReveal, { once: true });
     return () => {
       window.clearTimeout(minTimer);
       window.clearTimeout(capTimer);
       if (landTimer !== undefined) window.clearTimeout(landTimer);
+      window.removeEventListener(INTRO_CHUNK_READY_EVENT, onChunk);
       window.removeEventListener(INTRO_SCENE_READY_EVENT, onReady);
       window.removeEventListener(INTRO_REVEAL_EVENT, onReveal);
+      creep?.kill();
     };
   }, []);
 
@@ -160,13 +197,12 @@ export default function IntroLoader() {
             <Wordmark className="block text-[38.5px]" />
           </div>
         </div> */}
-        {/* Determinate hairline progress (node 263:227): the CSS entrance fills
-            0%→85%; the last 15% snaps in (`loader-fill-done`) when the scene is
-            genuinely ready, then the whole cover fades. */}
+        {/* Determinate hairline progress (node 263:227): CSS sweeps/crawls the
+            fill pre-hydration; JS then drives it on real loading milestones
+            (hydrated → chunk parsed → scene painted → 100%), then the whole
+            cover fades. */}
         <div className="loader-track">
-          <span
-            className={`loader-fill${fillDone ? " loader-fill-done" : ""}`}
-          />
+          <span ref={fillRef} className="loader-fill" />
         </div>
       </div>
     </div>
