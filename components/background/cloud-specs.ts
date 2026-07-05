@@ -68,7 +68,7 @@ export type SectionBind = {
 };
 
 export const SKY_CLOUDS: CloudSpec[] = [
-  { key: "top-right", ndc: [0.78, 0.72], dist: 22, seed: 4, bounds: [4, 1.2, 1], volume: 4, anchorVh: 0, perspectiveScroll: true },
+  { key: "top-right", ndc: [0.78, 0.72], dist: 22, seed: 4, bounds: [4, 1.2, 1], volume: 4, anchorVh: 0, perspectiveScroll: false },
   // Cards section ("ground to launch in days") — one sky cloud low on the right,
   // same size as the hero top-right. It slides in with the card row, holds at the
   // bottom-right while the section is on screen, then slides out.
@@ -126,6 +126,6 @@ export const SKY_CLOUDS: CloudSpec[] = [
 // the strip (dense across, short up). Sat just past -1 so it rides the very
 // bottom edge. Keeping it low + thin preserves the site's open, fluid feel.
 export const ROCK_CLOUDS: CloudSpec[] = [
-  { key: "rock-left", ndc: [-0.88, -1.02], dist: 22, seed: 7, bounds: [6.5, 0.45, 1], volume: 8, anchorVh: 0, perspectiveScroll: true },
-  { key: "rock-right", ndc: [0.88, -1.02], dist: 22, seed: 3, bounds: [6.5, 0.45, 1], volume: 8, anchorVh: 0, perspectiveScroll: true },
+  { key: "rock-left", ndc: [-0.88, -1.02], dist: 22, seed: 7, bounds: [6.5, 0.45, 1], volume: 8, anchorVh: 0, perspectiveScroll: false },
+  { key: "rock-right", ndc: [0.88, -1.02], dist: 22, seed: 3, bounds: [6.5, 0.45, 1], volume: 8, anchorVh: 0, perspectiveScroll: false },
 ];
