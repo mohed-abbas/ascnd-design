@@ -68,6 +68,14 @@ const TILE_FLIGHT = 1.5;
 
 const IntroScene = dynamic(() => import("./intro-scene"), { ssr: false });
 
+// How long the welcome may wait for the WebGL scene to genuinely paint
+// (SceneReady) before giving up and skipping to the plain DOM hero reveal.
+// The loader's cover runs ~3s, so a scene that's a beat late still gets its
+// welcome; past this, holding visitors on a bare sky costs more than the
+// intro is worth. Must stay BELOW design-shots-reveal's no-event backstop
+// (10s), which assumes the skip decision has already been made by then.
+const SKIP_BUDGET_MS = 6000;
+
 const useIso = typeof window !== "undefined" ? useLayoutEffect : useEffect;
 
 // Client-only "should the intro play" decision, the same useSyncExternalStore
@@ -347,13 +355,24 @@ export default function Intro() {
     });
   }, [play]);
 
-  // Failsafe: if the scene never signals ready (slow GPU, load hiccup), start
-  // anyway so the intro can't hang on a blank sky.
+  // Skip budget: `ready` is only ever set by the scene actually painting
+  // (SceneReady's onReady). If that hasn't happened within the budget — a slow
+  // network still downloading the three.js chunk/textures, or a wedged GPU —
+  // SKIP the welcome instead of playing the timeline blind. (The old 2.5s
+  // failsafe force-set `ready`: the timeline then ran with no canvas mounted,
+  // fired INTRO_START — which suppressed design-shots' DOM-conveyor fallback —
+  // and stranded slow-network visitors on a hero with no collage and no
+  // clouds.) Bailing takes the same graceful path as "can't place the glass"
+  // above: fire the reveal so the DOM hero cascades in normally, and
+  // design-shots-reveal blooms its DOM conveyor instead of the WebGL one.
   useEffect(() => {
-    if (!play) return;
-    const t = window.setTimeout(() => setReady(true), 2500);
+    if (!play || !plan || ready) return;
+    const t = window.setTimeout(() => {
+      window.dispatchEvent(new Event(INTRO_REVEAL_EVENT));
+      setDismissed(true);
+    }, SKIP_BUDGET_MS);
     return () => window.clearTimeout(t);
-  }, [play]);
+  }, [play, plan, ready]);
 
   // Wait for the loader's INTRO_GO before running the timeline. Failsafe: if the
   // loader never signals (e.g. it didn't mount), release after its full budget

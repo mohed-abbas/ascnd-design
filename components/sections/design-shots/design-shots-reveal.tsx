@@ -3,7 +3,11 @@
 import { useEffect, useLayoutEffect } from "react";
 import gsap from "gsap";
 import { SHOT_ARC_SLOTS, SHOT_BASE } from "./shots-spec";
-import { INTRO_START_EVENT, introWillPlay } from "@/components/sections/intro/intro-state";
+import {
+  INTRO_REVEAL_EVENT,
+  INTRO_START_EVENT,
+  introWillPlay,
+} from "@/components/sections/intro/intro-state";
 
 // useLayoutEffect on the client (parks/plays before paint, no flash); falls back
 // to useEffect during SSR to avoid React's server warning. Mirrors rock-reveal.tsx.
@@ -181,20 +185,31 @@ export default function DesignShotsReveal() {
     // When the welcome intro plays, the persistent WebGL scene owns the tiles for
     // the whole session (scatter → fly onto the arc → conveyor), so the DOM
     // collage stays hidden (armed `opacity:0`). We only confirm the scene really
-    // starts (INTRO_START_EVENT); if it never does — the canvas failed to mount —
-    // we fall back to the DOM bloom so the arc is never left blank.
+    // starts (INTRO_START_EVENT). The intro can also SKIP — its scene wasn't
+    // ready within intro.tsx's SKIP_BUDGET (slow network) so it fires
+    // INTRO_REVEAL without ever starting: bloom the DOM conveyor then, since no
+    // WebGL tiles will ever exist this session. The timer is only a backstop for
+    // "no event ever arrived" (Intro crashed before either dispatch); it sits
+    // ABOVE the intro's worst-case start (release failsafe 7s) so it can never
+    // race a live welcome into a double collage — the old 5s timer could.
     if (introWillPlay()) {
       let started = false;
+      let begun = false;
+      const beginOnce = () => {
+        if (begun || started) return;
+        begun = true;
+        begin();
+      };
       const onStart = () => {
         started = true;
       };
       window.addEventListener(INTRO_START_EVENT, onStart, { once: true });
-      const failsafe = window.setTimeout(() => {
-        if (!started) begin();
-      }, 5000);
+      window.addEventListener(INTRO_REVEAL_EVENT, beginOnce, { once: true });
+      const failsafe = window.setTimeout(beginOnce, 10000);
       return () => {
         cancelled = true;
         window.removeEventListener(INTRO_START_EVENT, onStart);
+        window.removeEventListener(INTRO_REVEAL_EVENT, beginOnce);
         window.clearTimeout(failsafe);
         tweens.forEach((t) => t.kill());
       };

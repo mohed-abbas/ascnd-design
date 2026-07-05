@@ -775,7 +775,8 @@ function ScrollRig({
  * the brief sky-only flash). compileAsync uses KHR_parallel_shader_compile
  * where available, so the compile overlaps the loader cover instead of blocking
  * the reveal. A 1.5s local failsafe stops a stalled driver compile from holding
- * the welcome hostage (intro.tsx's 2.5s `ready` failsafe remains the outer net).
+ * the welcome hostage (intro.tsx's SKIP_BUDGET remains the outer net — but that
+ * one SKIPS the welcome entirely rather than forcing it to play unready).
  */
 function SceneReady({ onReady }: { onReady?: () => void }) {
   const gl = useThree((s) => s.gl);
