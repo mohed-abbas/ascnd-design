@@ -19,10 +19,12 @@ import type {
  * geometry lives here once and only the SURFACE differs per variant — the reason
  * this is a variant prop and not two separate components.
  *
- * HOVER AURA — the siri-style rainbow glow ring from demo.html (the "creating
- * your board" ring: a conic rainbow AURA gradient, a blurred glow halo behind the
- * fill + a mask-clipped gradient ring on the edge, both ORBITING the rim via a
- * --aura-angle rotation tween on the shared GSAP ticker). Here it's HOVER-GATED.
+ * HOVER AURA (solid variant only) — the siri-style rainbow glow ring from
+ * demo.html (the "creating your board" ring: a conic rainbow AURA gradient, a
+ * blurred glow halo behind the fill + a mask-clipped gradient ring on the edge,
+ * both ORBITING the rim via a --aura-angle rotation tween on the shared GSAP
+ * ticker). Here it's HOVER-GATED. The clear/glass variant deliberately has NO
+ * aura — just its group-hover glass tint.
  * Per the heavy-effect contract it IDLES TO ZERO: the sweep is paused and the
  * layers
  * faded out whenever the pointer isn't on the button, and it rides GSAP's shared
@@ -100,7 +102,12 @@ export default function Button({
   const glowRef = useRef<HTMLSpanElement>(null);
   const ringRef = useRef<HTMLSpanElement>(null);
 
+  // Aura is the SOLID CTA only — the glass (clear) button keeps just its
+  // group-hover glass tint, no rainbow ring.
+  const hasAura = variant === "solid";
+
   useEffect(() => {
+    if (!hasAura) return;
     const root = rootRef.current;
     const glow = glowRef.current;
     const ring = ringRef.current;
@@ -158,63 +165,48 @@ export default function Button({
       sweep.kill();
       gsap.killTweensOf([glow, ring]);
     };
-  }, []);
+  }, [hasAura]);
 
   const v = VARIANT[variant];
   const rootCls = `${SHAPE} ${v.root}${className ? ` ${className}` : ""}`;
 
-  // The glow halo differs by variant because the fill's opacity differs:
-  //   • solid — opaque white fill occludes the glow, so a filled blurred blob
-  //     (-inset-[3px]) only escapes as a soft halo around the edges. Ideal.
-  //   • clear — the fill is bg-white/10 (near see-through), so a filled blob
-  //     would shine straight through the glass and flood the whole interior.
-  //     Instead the glow is MASK-CLIPPED to the perimeter (same ring technique as
-  //     the ring layer, a touch wider + blurred), so it reads as a soft glowing
-  //     RING hugging the edge, never a filled centre.
-  const glowClear = variant === "clear";
-  const glowCls = `pointer-events-none absolute ${
-    glowClear ? "inset-0 rounded-[32px]" : "-inset-[3px] rounded-[35px]"
-  }`;
-  const glowStyle: React.CSSProperties = {
-    background: AURA,
-    opacity: 0,
-    ...(glowClear
-      ? {
-          padding: "5px",
-          WebkitMask:
-            "linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0)",
-          WebkitMaskComposite: "xor",
-          maskComposite: "exclude",
-          filter: "blur(6px)",
-        }
-      : { filter: "blur(9px)" }),
-  };
-
-  // glow → fill → ring → label (matches the card layering).
+  // glow → fill → ring → label (matches the card layering). The rainbow glow +
+  // ring are the SOLID CTA only: its opaque white fill occludes the glow, so the
+  // filled blurred blob (-inset-[3px]) escapes only as a soft edge halo. The
+  // clear/glass button renders just its fill (no aura) — a filled blob would
+  // shine straight through bg-white/10 and flood the interior.
   const aura = (
     <>
-      {/* blurred glow — filled halo (solid) or a perimeter ring (clear) */}
-      <span ref={glowRef} aria-hidden className={glowCls} style={glowStyle} />
+      {hasAura && (
+        <span
+          ref={glowRef}
+          aria-hidden
+          className="pointer-events-none absolute -inset-[3px] rounded-[35px]"
+          style={{ background: AURA, filter: "blur(9px)", opacity: 0 }}
+        />
+      )}
       {/* the variant surface (fill) */}
       <span
         aria-hidden
         className={`pointer-events-none absolute inset-0 rounded-[32px] ${v.fill}`}
       />
-      {/* mask-clipped gradient ring on the 3px edge */}
-      <span
-        ref={ringRef}
-        aria-hidden
-        className="pointer-events-none absolute inset-0 rounded-[32px]"
-        style={{
-          padding: "3px",
-          background: AURA,
-          WebkitMask:
-            "linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0)",
-          WebkitMaskComposite: "xor",
-          maskComposite: "exclude",
-          opacity: 0,
-        }}
-      />
+      {hasAura && (
+        // mask-clipped gradient ring on the 3px edge
+        <span
+          ref={ringRef}
+          aria-hidden
+          className="pointer-events-none absolute inset-0 rounded-[32px]"
+          style={{
+            padding: "3px",
+            background: AURA,
+            WebkitMask:
+              "linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0)",
+            WebkitMaskComposite: "xor",
+            maskComposite: "exclude",
+            opacity: 0,
+          }}
+        />
+      )}
     </>
   );
 
