@@ -29,7 +29,7 @@ useTexture.preload("/rocks/left-rock.avif");
 useTexture.preload("/rocks/right-rock.avif");
 // The introV2 "shot" tiles (the necklace beads-to-be) refract through the glass,
 // so they live in the scene too — warm them alongside the rocks.
-for (const n of [2, 3, 4, 5, 6, 7, 8, 9]) useTexture.preload(`/shots/shot${n}.png`);
+for (const n of [2, 3, 4, 5, 6, 7, 8, 9]) useTexture.preload(`/shots/shot${n}.avif`);
 
 /**
  * The welcome-intro WebGL stage. Reuses the proven /lab/glass setup — PERSPECTIVE

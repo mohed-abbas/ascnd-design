@@ -88,12 +88,12 @@ export type Shot = {
  * shot↔arc pairing matches the hero necklace exactly (shot2→center, shot8→far-L…).
  */
 export const SHOTS: Shot[] = [
-  { src: "/shots/shot2.png", size: 261, radius: 3.84, x: 0, y: 115, mirror: false, ring: 0, arc: 3, priority: true, alt: "", scatter: { dx: -310, dy: 226.5, size: 223 } }, // center / pendant
-  { src: "/shots/shot3.png", size: 158, radius: 2.32, x: 253.5, y: 50.5, mirror: false, ring: 1, arc: 4, alt: "", scatter: { dx: -34.5, dy: -103, size: 158 } }, // inner-R
-  { src: "/shots/shot6.png", size: 158, radius: 2.32, x: -253.5, y: 50.5, mirror: false, ring: 1, arc: 2, alt: "", scatter: { dx: -684.5, dy: -94, size: 158 } }, // inner-L
-  { src: "/shots/shot4.png", size: 117, radius: 1.72, x: 404, y: -74, mirror: false, ring: 2, arc: 5, alt: "", scatter: { dx: 209.5, dy: 211, size: 204 } }, // mid-R
-  { src: "/shots/shot7.png", size: 117, radius: 1.72, x: -404, y: -74, mirror: false, ring: 2, arc: 1, alt: "", scatter: { dx: 417.5, dy: -114, size: 212 } }, // mid-L
-  { src: "/shots/shot5.png", size: 76, radius: 1.12, x: 476.5, y: -207.5, mirror: false, ring: 3, arc: 6, alt: "", scatter: { dx: 762, dy: 231.5, size: 165 } }, // far-R
-  { src: "/shots/shot8.png", size: 76, radius: 1.12, x: -476.5, y: -207.5, mirror: false, ring: 3, arc: 0, alt: "", scatter: { dx: 687.5, dy: -200, size: 76 } }, // far-L
-  { src: "/shots/shot9.png", size: 60, radius: 0.88, x: 0, y: -480, mirror: false, ring: 0, arc: 7, alt: "" }, // return (hidden) — 8th unique shot (TroxEstate) so no image ever repeats on the conveyor
+  { src: "/shots/shot2.avif", size: 261, radius: 3.84, x: 0, y: 115, mirror: false, ring: 0, arc: 3, priority: true, alt: "", scatter: { dx: -310, dy: 226.5, size: 223 } }, // center / pendant
+  { src: "/shots/shot3.avif", size: 158, radius: 2.32, x: 253.5, y: 50.5, mirror: false, ring: 1, arc: 4, alt: "", scatter: { dx: -34.5, dy: -103, size: 158 } }, // inner-R
+  { src: "/shots/shot6.avif", size: 158, radius: 2.32, x: -253.5, y: 50.5, mirror: false, ring: 1, arc: 2, alt: "", scatter: { dx: -684.5, dy: -94, size: 158 } }, // inner-L
+  { src: "/shots/shot4.avif", size: 117, radius: 1.72, x: 404, y: -74, mirror: false, ring: 2, arc: 5, alt: "", scatter: { dx: 209.5, dy: 211, size: 204 } }, // mid-R
+  { src: "/shots/shot7.avif", size: 117, radius: 1.72, x: -404, y: -74, mirror: false, ring: 2, arc: 1, alt: "", scatter: { dx: 417.5, dy: -114, size: 212 } }, // mid-L
+  { src: "/shots/shot5.avif", size: 76, radius: 1.12, x: 476.5, y: -207.5, mirror: false, ring: 3, arc: 6, alt: "", scatter: { dx: 762, dy: 231.5, size: 165 } }, // far-R
+  { src: "/shots/shot8.avif", size: 76, radius: 1.12, x: -476.5, y: -207.5, mirror: false, ring: 3, arc: 0, alt: "", scatter: { dx: 687.5, dy: -200, size: 76 } }, // far-L
+  { src: "/shots/shot9.avif", size: 60, radius: 0.88, x: 0, y: -480, mirror: false, ring: 0, arc: 7, alt: "" }, // return (hidden) — 8th unique shot (TroxEstate) so no image ever repeats on the conveyor
 ];

@@ -25,7 +25,7 @@ import { Leva, useControls, button } from "leva";
  */
 
 const FONT = "/fonts/product-sans-medium.typeface.json";
-const SHOTS = ["/shots/shot3.png", "/shots/shot4.png", "/shots/shot5.png", "/shots/shot6.png", "/shots/shot7.png"];
+const SHOTS = ["/shots/shot3.avif", "/shots/shot4.avif", "/shots/shot5.avif", "/shots/shot6.avif", "/shots/shot7.avif"];
 
 // Latest Leva values, kept module-side so the "copy config" button reads fresh
 // data without touching a React ref during render (a lab-only convenience).
