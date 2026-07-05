@@ -22,7 +22,13 @@ export default function Hero() {
   return (
     <section
       data-hero
-      className="relative min-h-dvh w-full overflow-hidden"
+      // min-height floor: this layout is Figma-mapped to a 982px-tall frame —
+      // HeroText hangs from top:52.4% (bottom ≈ .524H + 256px) while the logos
+      // row anchors to bottom:44px (top ≈ H − 132px). Below H ≈ 850px those
+      // collide (the "trusted by founders" caption ran through the CTAs on
+      // short windows), so the hero grows past the viewport there instead —
+      // the page scrolls a touch and the composition keeps its clearances.
+      className="relative min-h-[max(100dvh,850px)] w-full overflow-hidden"
     >
       {/* Drives the staggered on-load slide-up reveal of the text blocks below
           (marked with data-reveal* / data-reveal-order). Renders nothing. */}

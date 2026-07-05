@@ -57,13 +57,18 @@ function SparkleSvg() {
     <svg viewBox="0 0 24 24" className="size-full">
       {Array.from({ length: 12 }).map((_, i) => {
         const a = (i * 30 * Math.PI) / 180;
+        // toFixed(3): full-precision floats serialize differently between the
+        // server and client renders (last-digit drift → hydration mismatch);
+        // 3 decimals is identical on both and far beyond visual fidelity here.
+        const at = (r: number, f: (n: number) => number) =>
+          (12 + f(a) * r).toFixed(3);
         return (
           <line
             key={i}
-            x1={12 + Math.cos(a) * 3.4}
-            y1={12 + Math.sin(a) * 3.4}
-            x2={12 + Math.cos(a) * 9.5}
-            y2={12 + Math.sin(a) * 9.5}
+            x1={at(3.4, Math.cos)}
+            y1={at(3.4, Math.sin)}
+            x2={at(9.5, Math.cos)}
+            y2={at(9.5, Math.sin)}
             stroke="currentColor"
             strokeWidth="1.6"
             strokeLinecap="round"
