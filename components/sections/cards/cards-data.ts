@@ -35,8 +35,8 @@ export type ShotTile = {
 
 /** Card1 "receive" design-shot collage — 4 tiles in a 594×510 plane. */
 export const SHOT_TILES: ShotTile[] = [
-  { src: "/cards/shot-finance.png", alt: "Fintech dashboard concept", x: 0, y: 0, w: 295, h: 224 },
-  { src: "/cards/shot-weightloss.png", alt: "Health app landing page", x: 1, y: 233, w: 294, h: 277 },
-  { src: "/cards/shot-collage.png", alt: "Eyewear brand photography", x: 307, y: 49, w: 250, h: 234 },
-  { src: "/cards/shot-taskma.png", alt: "Task manager web app", x: 306, y: 290, w: 288, h: 207 },
+  { src: "/cards/shot-finance.avif", alt: "Fintech dashboard concept", x: 0, y: 0, w: 295, h: 224 },
+  { src: "/cards/shot-weightloss.avif", alt: "Health app landing page", x: 1, y: 233, w: 294, h: 277 },
+  { src: "/cards/shot-collage.avif", alt: "Eyewear brand photography", x: 307, y: 49, w: 250, h: 234 },
+  { src: "/cards/shot-taskma.avif", alt: "Task manager web app", x: 306, y: 290, w: 288, h: 207 },
 ];
