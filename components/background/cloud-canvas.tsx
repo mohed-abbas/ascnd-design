@@ -471,12 +471,32 @@ function SectionRig({
  * is still no second rAF loop. The browser parks rAF on hidden tabs, so this
  * idles automatically when the page isn't visible. Desktop-gated upstream, and
  * reduced-motion never mounts the canvas, so the steady repaint is affordable.
+ *
+ * The pump must run for as long as ANY cloud is on screen, or a visible cloud
+ * freezes its morph — and, because drei drives the billow off the clock's
+ * ABSOLUTE elapsedTime with a demand-mode getDelta() (real wall-clock between
+ * repaints), the next scroll-driven repaint after an idle gap lands a huge
+ * delta and POPS the morph forward in one frame (the stutter this rig exists to
+ * prevent). The field clouds parallax with the page, so each reaches its rest
+ * spot at scroll = anchorVh viewports and clears the top edge ~1.5 vh later
+ * (scrollFactor cancels in that settle math). `pumpUntilVh` is therefore the
+ * LAST cloud's anchorVh + that margin — computed from the specs in <CloudCanvas>
+ * so the pump covers the real cloud range (the cards/why-stay clouds sit at
+ * anchorVh up to ~4), not a fixed hero-only cutoff. The <SectionRig> path is
+ * kept for any future `section`-bound clouds.
  */
 function MorphRig({
   activeClouds,
+  pumpUntilVh,
 }: {
   /** Section clouds currently on screen, maintained by <SectionRig>. */
   activeClouds: React.RefObject<Set<string>>;
+  /**
+   * Scroll depth (in viewport-heights) below which some field cloud is still on
+   * screen, so the morph must keep pumping. = max field anchorVh + slide-out
+   * margin; see <CloudCanvas>.
+   */
+  pumpUntilVh: number;
 }) {
   const invalidate = useThree((s) => s.invalidate);
 
@@ -484,19 +504,16 @@ function MorphRig({
     gsap.registerPlugin(ScrollTrigger);
     const STEP = 1 / 30; // seconds between repaints
     let last = 0;
-    // Pause the pump when nothing morphing is visible. The FIELD clouds (hero +
-    // rock bases) all clear the top edge by ~1.2 vh of scroll, so past 1.5 vh
-    // they're gone — but SECTION clouds (cards, why-stay) live deeper down-page,
-    // so the pump also runs whenever <SectionRig> reports any of them on screen
-    // (audit F4.1: the old hero-only cutoff froze their morph while visible).
-    // A frozen morph off-screen costs nothing and is invisible; we repaint once
-    // on the way back so the clouds are current when they re-enter (audit R5).
-    let fieldOnScreen = true;
+    // Pause the pump only once EVERY field cloud has scrolled off the top and no
+    // section cloud is reported on screen — i.e. nothing morphing is visible. A
+    // frozen morph off-screen costs nothing and is invisible; we repaint once on
+    // the way back so the clouds are current when they re-enter (audit R5).
+    let cloudsOnScreen = true;
     // gsap.ticker passes elapsed time in seconds; throttle to STEP. `last`
     // advances in whole STEPs (not `last = time`) so the leftover fraction of a
     // tick carries over — a true 30 fps average instead of drifting to ~27.
     const tick = (time: number) => {
-      if (!fieldOnScreen && activeClouds.current.size === 0) return;
+      if (!cloudsOnScreen && activeClouds.current.size === 0) return;
       if (time - last >= STEP) {
         last = time - ((time - last) % STEP);
         invalidate();
@@ -504,15 +521,15 @@ function MorphRig({
     };
     gsap.ticker.add(tick);
 
-    // Trigger-less ScrollTrigger: active once scrolled past 1.5× the viewport,
-    // where the hero-anchored field clouds are gone. `start` is a function so it
-    // re-resolves on resize/refresh.
+    // Trigger-less ScrollTrigger: active once scrolled past the last field
+    // cloud's on-screen range, where the parallaxing clouds are all gone.
+    // `start` is a function so it re-resolves on resize/refresh.
     const st = ScrollTrigger.create({
-      start: () => window.innerHeight * 1.5,
+      start: () => window.innerHeight * pumpUntilVh,
       end: "max",
       onToggle: (self) => {
-        fieldOnScreen = !self.isActive;
-        if (fieldOnScreen) invalidate(); // repaint the skipped frame on return
+        cloudsOnScreen = !self.isActive;
+        if (cloudsOnScreen) invalidate(); // repaint the skipped frame on return
       },
     });
 
@@ -520,7 +537,7 @@ function MorphRig({
       gsap.ticker.remove(tick);
       st.kill();
     };
-  }, [invalidate, activeClouds]);
+  }, [invalidate, activeClouds, pumpUntilVh]);
 
   return null;
 }
@@ -643,6 +660,19 @@ export default function CloudCanvas({
   // path is a clean parallel. Groups with no clouds render nothing and get no rig.
   const perspFieldClouds = fieldClouds.filter((c) => c.perspectiveScroll);
   const flatFieldClouds = fieldClouds.filter((c) => !c.perspectiveScroll);
+
+  // How deep (in viewport-heights of scroll) the field clouds stay on screen —
+  // the last cloud reaches its rest at scroll = anchorVh vh and clears the top
+  // edge ~1.5 vh after, so <MorphRig> must keep pumping until then or that cloud
+  // freezes its morph while still visible. For the rock-base layer (anchorVh 0)
+  // this is ~1.5 vh, matching the old hero-only cutoff; for the sky layer it
+  // extends to cover the cards/why-stay clouds (anchorVh up to ~4).
+  const PUMP_MARGIN_VH = 1.5;
+  const fieldMaxAnchorVh = fieldClouds.reduce(
+    (max, c) => Math.max(max, c.anchorVh ?? 0),
+    0,
+  );
+  const pumpUntilVh = fieldMaxAnchorVh + PUMP_MARGIN_VH;
 
   const perspFieldRef = useRef<Group | null>(null);
   const flatFieldRef = useRef<Group | null>(null);
@@ -778,7 +808,7 @@ export default function CloudCanvas({
         </>
       )}
       <SectionRig clouds={sectionClouds} cloudRefs={sectionRefs} activeClouds={activeClouds} />
-      <MorphRig activeClouds={activeClouds} />
+      <MorphRig activeClouds={activeClouds} pumpUntilVh={pumpUntilVh} />
       <InvalidateOnReady />
       <ContextWatchdog onUnrecoverable={remount} />
     </Canvas>
