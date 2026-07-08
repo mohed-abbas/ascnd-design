@@ -1,6 +1,7 @@
 import Cards from "@/components/sections/cards/cards";
 import Hero from "@/components/sections/hero/hero";
 import IntroLoader from "@/components/sections/intro/intro-loader";
+import Pills from "@/components/sections/pills/pills";
 import Tagline from "@/components/sections/tagline/tagline";
 import WhyStay from "@/components/sections/why-stay/why-stay";
 
@@ -25,6 +26,9 @@ export default function Home() {
       <div className="shrink-0">
         <WhyStay />
       </div>
+      {/* Scattered "capability pills" field around a centred headline + CTA
+          ("everything that gets you up there"), over the shared sky. */}
+      <Pills />
     </>
   );
 }
