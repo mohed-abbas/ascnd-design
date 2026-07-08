@@ -1,4 +1,5 @@
 import Button from "@/components/ui/button";
+import PillsFlow from "./pills-flow";
 import PillsHeading from "./pills-heading";
 import { PILLS } from "./pills-data";
 
@@ -48,19 +49,26 @@ export default function Pills() {
       data-pills
       className="relative min-h-dvh w-full overflow-hidden"
     >
+      {/* Slow upward flow: pills rise, fade out through the top of the mask, and
+          wrap back below to rise again (see pills-flow.tsx). Renders nothing. */}
+      <PillsFlow />
+
       {/* The 1319×977 "capabilities" frame, centre-anchored (design scale). */}
       <div className="absolute left-1/2 top-1/2 h-[977px] w-[1319px] -translate-x-1/2 -translate-y-1/2">
-        {/* Pill field — the 1258×876 "Pills" box at (13,17), radial-masked. */}
+        {/* Pill field — the 1258×876 "Pills" box at (13,17), radial-masked.
+            overflow-hidden clips the rising pills so their wrap (pills-flow.tsx)
+            happens off-screen and reads as a seamless upward stream. */}
         <div
           aria-hidden
-          className="absolute left-[13px] top-[17px] h-[876px] w-[1258px]"
+          className="absolute left-[13px] top-[17px] h-[876px] w-[1258px] overflow-hidden"
           style={{ maskImage: PILL_MASK, WebkitMaskImage: PILL_MASK }}
         >
           {PILLS.map((p) => (
             <div
               key={p.id}
+              data-pill
               data-node-id={p.id}
-              className="absolute flex h-[42px] items-center rounded-[20px] border-[1.5px] border-solid border-white/30 bg-gradient-to-b from-black/10 to-black/5 px-[15px] backdrop-blur-[2px]"
+              className="absolute flex h-[42px] items-center rounded-[20px] border-[1.5px] border-solid border-white/30 bg-gradient-to-b from-black/10 to-black/5 px-[15px] backdrop-blur-[2px] will-change-transform"
               style={{ left: p.left, top: p.top }}
             >
               <span
