@@ -36,6 +36,9 @@
  * |                                            | blur reads as a milky blue bar over sky). |
  * | components/sections/why-stay/              | makeCappedInvalidate (--reel-y writes    |
  * |   why-stay-reveal.tsx                      | behind the glass pill)                   |
+ * | components/sections/showcase/              | showcaseDprMax (live). Cloth segments +  |
+ * |   showcase-canvas.tsx                      | scroll-invalidate caps arrive with the   |
+ * |                                            | motion phases.                           |
  *
  * ★ RULE (audit 2026-07-02 F5.1): any NEW heavy effect — a WebGL canvas, a
  * free-running loop, a per-frame SVG/CSS filter — must be added to this table
@@ -85,6 +88,15 @@ export interface QualityConfig {
   readonly text3dCurveSegments: number;
   /** Text3D bevel tessellation. */
   readonly text3dBevelSegments: number;
+
+  // ── Project showcase wheel (components/sections/showcase/showcase-canvas.tsx) ──
+  /**
+   * Upper bound of the showcase Canvas `dpr={[1, x]}`. The cards are flat
+   * textured planes; the cloth warp (a later phase) is soft, so a capped dpr is
+   * imperceptible while cutting fragment cost on retina — same reasoning as the
+   * clouds' cloudDprMax. Read live (re-applying dpr is cheap and invisible).
+   */
+  readonly showcaseDprMax: number;
 }
 
 export const TIERS: Record<TierName, QualityConfig> = {
@@ -107,6 +119,8 @@ export const TIERS: Record<TierName, QualityConfig> = {
     mtmBackside: false,
     text3dCurveSegments: 32,
     text3dBevelSegments: 12,
+    // Match the clouds: 1.5 on retina is imperceptible on soft card art.
+    showcaseDprMax: 1.5,
   },
   medium: {
     tier: "medium",
@@ -117,6 +131,7 @@ export const TIERS: Record<TierName, QualityConfig> = {
     mtmBackside: false,
     text3dCurveSegments: 16,
     text3dBevelSegments: 8,
+    showcaseDprMax: 1.5,
   },
   low: {
     tier: "low",
@@ -127,5 +142,6 @@ export const TIERS: Record<TierName, QualityConfig> = {
     mtmBackside: false,
     text3dCurveSegments: 16,
     text3dBevelSegments: 6,
+    showcaseDprMax: 1.25,
   },
 };

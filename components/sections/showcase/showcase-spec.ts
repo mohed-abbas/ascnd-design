@@ -51,6 +51,18 @@ export const WHEEL_POINT_Y = 342;
  *  (Figma node 435:521: group-relative top 610 → frame 740). */
 export const CAPTION_TOP = 740;
 
+/**
+ * The wheel's shared rotation pivot, in FRAME px — directly below the visible
+ * arc. This is the same point the DOM cards rotate around (their transform-origin
+ * is `CARD_WIDTH/2px  CARD_HEIGHT/2 + PIVOT_DISTANCE px`, which resolves to this
+ * frame point). Exported so the WebGL wheel (showcase-canvas.tsx) fans its card
+ * planes around the EXACT same pivot, keeping the two renderers pixel-aligned.
+ */
+export const WHEEL_PIVOT_X = WHEEL_POINT_X; // 756
+export const WHEEL_PIVOT_Y = WHEEL_POINT_Y + PIVOT_DISTANCE; // 342 + 2760 = 3102
+/** Distance from the pivot up to a card's centre — i.e. the wheel radius (px). */
+export const WHEEL_RADIUS = PIVOT_DISTANCE; // 2760
+
 // ── Projects ─────────────────────────────────────────────────────────────────
 export type Project = {
   /** Stable unique id / React key. */
