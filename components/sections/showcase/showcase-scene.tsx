@@ -3,6 +3,7 @@
 import dynamic from "next/dynamic";
 import Button from "@/components/ui/button";
 import ShowcaseCard from "./showcase-card";
+import ShowcaseScroll from "./showcase-scroll";
 import { useHydrated, useWebglEligible } from "@/lib/perf/use-webgl-eligible";
 import {
   cardAngle,
@@ -53,9 +54,13 @@ export default function ShowcaseScene() {
   return (
     <>
       {webglOn && (
-        <div aria-hidden className="pointer-events-none absolute inset-0">
-          <ShowcaseCanvas />
-        </div>
+        <>
+          <div aria-hidden className="pointer-events-none absolute inset-0">
+            <ShowcaseCanvas />
+          </div>
+          {/* Pins the section + scrubs the wheel's rotation; renders nothing. */}
+          <ShowcaseScroll />
+        </>
       )}
 
       <div className="relative" style={{ width: FRAME_WIDTH, height: FRAME_HEIGHT }}>

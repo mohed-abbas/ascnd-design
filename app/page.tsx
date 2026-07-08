@@ -35,8 +35,15 @@ export default function Home() {
           with"), centred over the shared sky. */}
       <WorkingWith />
       {/* "stuff we've shipped" — project-showcase section: a fanned arc of
-          project cards with a per-word heading reveal, over the shared sky. */}
-      <Showcase />
+          project cards over the shared sky. On capable desktops the wheel is
+          drawn in WebGL and PINS to scrub its rotation as you scroll, then
+          unpins. Wrapped in a plain block div ON PURPOSE (same reason as
+          WhyStay above): <body> is a flex column, and ScrollTrigger can't grow
+          pin-spacing on a direct flex child — the block wrapper gives the pin
+          normal flow to expand into. Don't remove it. */}
+      <div className="shrink-0">
+        <Showcase />
+      </div>
     </>
   );
 }

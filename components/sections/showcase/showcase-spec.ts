@@ -96,14 +96,42 @@ export const PROJECTS: Project[] = Array.from({ length: 12 }, (_, i) => ({
 
 // ── Resting arc ──────────────────────────────────────────────────────────────
 /**
- * Which card is upright at the top of the wheel at rest. Chosen mid-array so the
- * static arc is symmetric — two cards off each edge, five visible.
- * (Animation was reverted 2026-07-08; the sweep/reveal constants that lived here
- * are gone — this is the static structure only.)
+ * How many cards flank the upright centre card on each side of the visible arc
+ * (≈2 → five cards visible). This also bounds the scroll sweep so the arc never
+ * empties: the wheel is finite (no wrap), so if the CENTRE reached the first or
+ * last card, that side of the fan would run out of cards and gap open. Keeping a
+ * flank in reserve at each extreme means both ends of the sweep stay full,
+ * balanced arcs — while every card still passes through the visible fan.
  */
-export const REST_CENTER_INDEX = Math.floor(PROJECTS.length / 2); // 6
+export const VISIBLE_FLANK = 2;
+/**
+ * Which card is upright at the top of the wheel at rest — the START of the
+ * sweep. Set to VISIBLE_FLANK so the left flank is already full at rest (cards
+ * 0…FLANK−1 fill it) and there's nothing missing off the left edge.
+ */
+export const REST_CENTER_INDEX = VISIBLE_FLANK; // 2
 
 /** Resting rotation (deg) for card `index`: 0 = upright centre, ± = fanned out. */
 export function cardAngle(index: number): number {
   return (index - REST_CENTER_INDEX) * ANGULAR_STEP;
 }
+
+// ── Scroll rotation (Phase 2) ──────────────────────────────────────────────────
+/**
+ * On scroll the section PINS and the whole wheel spins in place, cycling every
+ * project up through the centre, then UNPINS once they've all passed and normal
+ * scroll resumes. The wheel turns from the resting arc (centre = REST_CENTER_INDEX,
+ * showing the first cards) to centre = WHEEL_SWEEP_TO_INDEX (showing the last
+ * cards). Scrolling DOWN rotates the fan so cards slide leftward (the reference
+ * feel). Both endpoints keep VISIBLE_FLANK cards on each side, so the arc stays
+ * full throughout — the last FLANK cards ride the right edge at the end rather
+ * than the centre, which is why the sweep stops FLANK cards short of the array end.
+ */
+export const WHEEL_SWEEP_TO_INDEX = PROJECTS.length - 1 - VISIBLE_FLANK; // 9
+/** Number of cards the centre advances across the sweep. */
+export const WHEEL_SWEEP_STEPS = WHEEL_SWEEP_TO_INDEX - REST_CENTER_INDEX; // 7
+/** Total wheel rotation across the pinned scroll (deg). */
+export const WHEEL_SWEEP_DEG = WHEEL_SWEEP_STEPS * ANGULAR_STEP; // 56
+/** Scroll distance (in viewport-heights) to advance the wheel one card — sets
+ *  how long the section stays pinned: pin distance = STEPS × this × 100vh. */
+export const PIN_VH_PER_STEP = 0.8;

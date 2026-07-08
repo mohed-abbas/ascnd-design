@@ -4,6 +4,7 @@ import { Canvas, useThree } from "@react-three/fiber";
 import { useCallback, useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { useQuality } from "@/lib/perf/use-quality";
+import { makeCappedInvalidate } from "@/lib/perf/capped-invalidate";
 import {
   cardAngle,
   CARD_BORDER,
@@ -15,7 +16,12 @@ import {
   REST_CENTER_INDEX,
   WHEEL_PIVOT_Y,
   WHEEL_RADIUS,
+  WHEEL_SWEEP_DEG,
 } from "./showcase-spec";
+import {
+  getWheelProgress,
+  subscribeWheelProgress,
+} from "./showcase-scroll-state";
 
 /**
  * Project-showcase wheel — WebGL layer (Three.js / R3F). PHASE 1: the STATIC
@@ -49,6 +55,10 @@ import {
  */
 
 const DEG2RAD = Math.PI / 180;
+
+// Total wheel rotation across the pinned scroll (radians). At progress p the
+// WheelGroup turns p × this, bringing successive cards to the upright centre.
+const WHEEL_SWEEP_RAD = WHEEL_SWEEP_DEG * DEG2RAD;
 
 // Pivot in world space: frame (WHEEL_PIVOT_X, WHEEL_PIVOT_Y) with the frame
 // centred on the origin. x is the frame centre (→ 0); y flips (screen-down →
@@ -220,15 +230,47 @@ function CardMesh({
   );
 }
 
-function Wheel() {
+function Wheel({ groupRef }: { groupRef: React.RefObject<THREE.Group | null> }) {
   const textures = useCardTextures();
   return (
-    <group position={[0, PIVOT_WORLD_Y, 0]}>
+    <group ref={groupRef} position={[0, PIVOT_WORLD_Y, 0]}>
       {PROJECTS.map((project, i) => (
         <CardMesh key={project.id} index={i} texture={textures[project.src]} />
       ))}
     </group>
   );
+}
+
+/**
+ * Scroll rotation rig (Phase 2). Subscribes to the shared progress store
+ * (written by the DOM pin driver, showcase-scroll.tsx) and turns the whole
+ * WheelGroup around the pivot — 0 = resting arc, WHEEL_SWEEP_RAD at the end.
+ * Repaints through a capped invalidate (the demand canvas paints on change; the
+ * cap throttles the up-to-120Hz scroll stream to the heavy-effect fps). Seeds
+ * from the current progress on mount (covers a load restored mid-section).
+ */
+function WheelScrollRig({
+  groupRef,
+}: {
+  groupRef: React.RefObject<THREE.Group | null>;
+}) {
+  const invalidate = useThree((s) => s.invalidate);
+  useEffect(() => {
+    const capped = makeCappedInvalidate(invalidate);
+    const apply = (progress: number) => {
+      const g = groupRef.current;
+      if (!g) return;
+      g.rotation.z = progress * WHEEL_SWEEP_RAD;
+      capped();
+    };
+    const unsubscribe = subscribeWheelProgress(apply);
+    apply(getWheelProgress()); // seed
+    return () => {
+      unsubscribe();
+      capped.cancel();
+    };
+  }, [groupRef, invalidate]);
+  return null;
 }
 
 // ── Demand-mode helpers (mirror components/background/cloud-canvas.tsx) ─────────
@@ -307,6 +349,7 @@ function ContextWatchdog({ onUnrecoverable }: { onUnrecoverable: () => void }) {
 
 export default function ShowcaseCanvas() {
   const { showcaseDprMax } = useQuality();
+  const wheelRef = useRef<THREE.Group>(null);
   // Bumping this remounts the <Canvas> with a fresh GL context — last resort when
   // a lost context never restores. See <ContextWatchdog>.
   const [canvasKey, setCanvasKey] = useState(0);
@@ -325,7 +368,8 @@ export default function ShowcaseCanvas() {
       // swallows clicks meant for the DOM caption / CTA beneath it.
       style={{ position: "absolute", inset: 0, pointerEvents: "none" }}
     >
-      <Wheel />
+      <Wheel groupRef={wheelRef} />
+      <WheelScrollRig groupRef={wheelRef} />
       <InvalidateOnReady />
       <ContextWatchdog onUnrecoverable={remount} />
     </Canvas>
