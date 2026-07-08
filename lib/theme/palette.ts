@@ -44,13 +44,15 @@ export type ModePalette = {
 
 export const PALETTES: Record<ThemeMode, ModePalette> = {
   // Cool blue up top melting into a warm gold horizon — early, gentle warmth.
-  // Clouds stay near day-BRIGHT (dim warm light just read as dull grey), tinted a
-  // saturated golden peach so they glow warm rather than wash out.
+  // Clouds are lit BRIGHTER than the pale warm sky (key above day's 2.6) and pulled
+  // back to near-white with only a whisper of gold — a saturated warm tint made
+  // them the same tone as the sky and dissolved them, so this keeps the crisp
+  // day-like pop with just a faint warm cast.
   sunrise: {
     sky: { top: "#8ec0f2", mid: "#f4c9b0", bottom: "#ffe0b8" },
     cloud: {
-      ambient: { color: "#ffe6c9", intensity: 1.55 },
-      key: { color: "#ffc879", intensity: 2.8 },
+      ambient: { color: "#fff5ea", intensity: 1.6 },
+      key: { color: "#ffeed6", intensity: 3.0 },
     },
     grain: 0.11,
   },
@@ -64,13 +66,13 @@ export const PALETTES: Record<ThemeMode, ModePalette> = {
     grain: 0.1,
   },
   // Lavender-blue drifting through mauve into an amber horizon — warmer, richer.
-  // Same fix as sunrise: keep clouds bright, tint a saturated warm coral-gold so
-  // they catch the sunset glow instead of going dull grey.
+  // Same fix as sunrise: bright, near-white clouds (key above day's 2.6) with only
+  // a faint rose-warm cast, so they pop off the warm sky instead of blending in.
   sunset: {
     sky: { top: "#8f9fe0", mid: "#d9a9d4", bottom: "#ffbf9c" },
     cloud: {
-      ambient: { color: "#ffd8c2", intensity: 1.5 },
-      key: { color: "#ffa257", intensity: 2.8 },
+      ambient: { color: "#fff2ee", intensity: 1.6 },
+      key: { color: "#ffe6dc", intensity: 3.0 },
     },
     grain: 0.12,
   },
