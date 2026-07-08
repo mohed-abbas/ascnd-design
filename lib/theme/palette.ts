@@ -54,7 +54,7 @@ export const PALETTES: Record<ThemeMode, ModePalette> = {
       ambient: { color: "#fff5ea", intensity: 1.6 },
       key: { color: "#ffeed6", intensity: 3.0 },
     },
-    grain: 0.11,
+    grain: 0.06,
   },
   // The brand daytime sky — essentially today's #62abff, now a subtle gradient.
   day: {
@@ -74,7 +74,7 @@ export const PALETTES: Record<ThemeMode, ModePalette> = {
       ambient: { color: "#fff2ee", intensity: 1.6 },
       key: { color: "#ffe6dc", intensity: 3.0 },
     },
-    grain: 0.12,
+    grain: 0.05,
   },
   // Deep, desaturated brand navy with a slightly lifted horizon; dim cool
   // moonlight on the clouds so they don't glare white against the dark sky.
@@ -84,7 +84,7 @@ export const PALETTES: Record<ThemeMode, ModePalette> = {
       ambient: { color: "#8fa8c8", intensity: 0.5 },
       key: { color: "#c4d4ec", intensity: 1.0 },
     },
-    grain: 0.14,
+    grain: 0.05,
   },
 };
 

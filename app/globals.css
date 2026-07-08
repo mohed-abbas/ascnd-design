@@ -29,21 +29,21 @@ html[data-mode="sunrise"] {
   --sky-top: #8ec0f2;
   --sky-mid: #f4c9b0;
   --sky-bottom: #ffe0b8;
-  --grain-opacity: 0.11;
+  --grain-opacity: 0.06;
 }
 
 html[data-mode="sunset"] {
   --sky-top: #8f9fe0;
   --sky-mid: #d9a9d4;
   --sky-bottom: #ffbf9c;
-  --grain-opacity: 0.12;
+  --grain-opacity: 0.05;
 }
 
 html[data-mode="night"] {
   --sky-top: #0e2a52;
   --sky-mid: #1c3f6e;
   --sky-bottom: #2d5688;
-  --grain-opacity: 0.14;
+  --grain-opacity: 0.05;
 }
 
 @theme inline {
