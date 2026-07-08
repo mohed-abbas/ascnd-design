@@ -3,7 +3,9 @@
 import { Canvas, useThree } from "@react-three/fiber";
 import { useCallback, useEffect, useRef, useState } from "react";
 import * as THREE from "three";
+import gsap from "gsap";
 import { useQuality } from "@/lib/perf/use-quality";
+import { getQualityConfig } from "@/lib/perf/quality-store";
 import { makeCappedInvalidate } from "@/lib/perf/capped-invalidate";
 import {
   cardAngle,
@@ -24,10 +26,11 @@ import {
 } from "./showcase-scroll-state";
 
 /**
- * Project-showcase wheel — WebGL layer (Three.js / R3F). PHASE 1: the STATIC
- * fan, at parity with the DOM arc (showcase-card.tsx), rendered in WebGL so the
- * later phases can add scroll rotation (Phase 2), the cloth vertex warp
- * (Phase 3), and the fly-in reveal (Phase 4) on top of the same meshes.
+ * Project-showcase wheel — WebGL layer (Three.js / R3F). The fan of textured
+ * card planes, drawn in WebGL at parity with the DOM arc (showcase-card.tsx).
+ * Built up in phases: the static fan (P1), scroll rotation (P2, WheelScrollRig),
+ * the cloth vertex warp (P3, ClothRig + the displacement in CARD_VERTEX), and
+ * the fly-in reveal (P4) — all on the same meshes.
  *
  * Geometry (single source of truth: showcase-spec.ts): every card plane is a
  * child of one WheelGroup positioned at the shared pivot, WHEEL_RADIUS px above
@@ -70,23 +73,73 @@ const PIVOT_WORLD_Y = -(WHEEL_PIVOT_Y - FRAME_HEIGHT / 2); // ≈ −2611
 // source order — good enough for the static fan; revisited if a phase needs it.
 const Z_STEP = 1;
 
+// ── Cloth warp (Phase 3) — shared drive uniforms ──────────────────────────────
+// One `uAmp` (0 = flat → 1 = full bend) and one `uTime` (travelling-wave phase),
+// shared BY REFERENCE across all 12 card materials so <ClothRig> drives the whole
+// fan with a single mutation per tick. `uAmp` is velocity-driven (fast scroll →
+// more bend) and relaxes to 0 at rest, where the rig stops repainting (idle to
+// zero — the whole reason this reads as "cloth in motion, flat when still").
+const clothUniforms = {
+  uAmp: { value: 0 },
+  uTime: { value: 0 },
+};
+
 // ── Card material ────────────────────────────────────────────────────────────
 // A textured plane with rounded corners, a 1.5px white border, and the Figma
-// top→bottom dark scrim — the DOM card's look, in one unlit shader. object-cover
+// top→bottom dark scrim, plus the CLOTH WARP: the vertex stage bends the plane
+// (Phase 3) and the fragment SHADES the bend so it reads under the flat ortho
+// camera (ortho ignores depth, so a pure Z-curl would be invisible — the shading
+// from the curved surface's normal is what conveys the 3D bend). object-cover
 // crops the image to the card aspect. A fixed 1px AA edge (no fwidth, so it
-// compiles cleanly regardless of GLSL version). Phase 3 extends the VERTEX stage
-// of this same material with the cloth displacement.
+// compiles cleanly regardless of GLSL version).
+//
+// Cloth look constants (px / unitless), tuned by eye like the clouds' CLOUD block:
+//   Z curl 44px drives the SHADING (via the normal); a small 10px in-plane ripple
+//   gives visible deformation; shade contrast 0.4 darkens the troughs, sheen 0.14
+//   brightens the crests. At uAmp 0 the plane is flat (normal +Z) so the card is
+//   pixel-identical to the static fan — the warp only exists while moving.
 const CARD_VERTEX = /* glsl */ `
+  uniform vec2 uSize;
+  uniform float uAmp;
+  uniform float uTime;
+  uniform float uSeed;
   varying vec2 vUv;
+  varying vec3 vNormal;
+
+  // Cloth height field over the local plane point p (px, centred), returning the
+  // height and its slope (for the normal). Two travelling sine waves = a broad
+  // curl + a finer ripple; uSeed decorrelates the cards so they don't bend in
+  // lockstep; uTime moves the waves while bending.
+  float cloth(vec2 p, out float dzdx, out float dzdy) {
+    float kx1 = 6.2831853 * 1.15 / uSize.x;  // ~1.15 waves across the width
+    float ky1 = 6.2831853 * 0.55 / uSize.y;  // gentle diagonal
+    float kx2 = 6.2831853 * 2.30 / uSize.x;  // finer ripple
+    float ph1 = p.x * kx1 + p.y * ky1 + uTime * 2.1 + uSeed;
+    float ph2 = p.x * kx2 - p.y * ky1 * 1.4 + uTime * 3.0 + uSeed * 1.7;
+    float a1 = 1.0, a2 = 0.35;
+    dzdx = a1 * cos(ph1) * kx1 + a2 * cos(ph2) * kx2;
+    dzdy = a1 * cos(ph1) * ky1 + a2 * cos(ph2) * (-ky1 * 1.4);
+    return a1 * sin(ph1) + a2 * sin(ph2);
+  }
+
   void main() {
     vUv = uv;
-    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    vec3 pos = position;
+    float dzdx, dzdy;
+    float z = cloth(position.xy, dzdx, dzdy);
+    float zPx = uAmp * 44.0;              // Z curl amplitude (drives shading)
+    pos.z += zPx * z;
+    pos.x += uAmp * 10.0 * z;             // subtle in-plane ripple (visible under ortho)
+    // Surface normal of the height field (flat → +Z when uAmp = 0).
+    vNormal = normalize(vec3(-zPx * dzdx, -zPx * dzdy, 1.0));
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
   }
 `;
 
 const CARD_FRAGMENT = /* glsl */ `
   precision highp float;
   varying vec2 vUv;
+  varying vec3 vNormal;
   uniform sampler2D uTexture;
   uniform vec2 uSize;        // card px (w, h)
   uniform float uRadius;     // corner radius px
@@ -123,11 +176,19 @@ const CARD_FRAGMENT = /* glsl */ `
     float border = smoothstep(-uBorder - aa * 0.5, -uBorder + aa * 0.5, d);
     col = mix(col, uBorderColor, border);
 
+    // Cloth shading — conveys the bend under the flat ortho camera. A flat card
+    // has normal +Z (facing = 1) → light = 1.0 → unchanged from the static fan.
+    // Curved areas turn away (facing < 1) → darkened troughs; a sideways sheen
+    // (normal.x) brightens the crests for a fabric-like glint.
+    float facing = clamp(vNormal.z, 0.0, 1.0);
+    float light = mix(1.0 - 0.40, 1.0, facing) + 0.14 * vNormal.x;
+    col *= light;
+
     gl_FragColor = vec4(col, alpha);
   }
 `;
 
-function makeCardUniforms() {
+function makeCardUniforms(seed: number) {
   return {
     uTexture: { value: null as THREE.Texture | null },
     uSize: { value: new THREE.Vector2(CARD_WIDTH, CARD_HEIGHT) },
@@ -137,6 +198,10 @@ function makeCardUniforms() {
     uTexAspect: { value: CARD_WIDTH / CARD_HEIGHT },
     uScrimTop: { value: 0.1 }, // rgba(0,0,0,.1) at the top
     uScrimBottom: { value: 0.05 }, // rgba(0,0,0,.05) at the bottom
+    uSeed: { value: seed }, // per-card phase offset (decorrelates the fan)
+    // Shared BY REFERENCE — <ClothRig> mutates these once to drive every card.
+    uAmp: clothUniforms.uAmp,
+    uTime: clothUniforms.uTime,
   };
 }
 
@@ -183,9 +248,12 @@ function useCardTextures(): Record<string, THREE.Texture> {
 function CardMesh({
   index,
   texture,
+  segments,
 }: {
   index: number;
   texture: THREE.Texture | undefined;
+  /** Mesh subdivision [width, height] for the cloth warp (tiered at mount). */
+  segments: [number, number];
 }) {
   const invalidate = useThree((s) => s.invalidate);
   // Stable per-card uniforms object (created once). R3F builds/disposes the
@@ -193,7 +261,7 @@ function CardMesh({
   // ref inside the effect below — a ref touched solely in an effect is the
   // compiler-approved mutable escape hatch (same as the cloud rigs' group refs).
   const matRef = useRef<THREE.ShaderMaterial>(null);
-  const [uniforms] = useState(() => makeCardUniforms());
+  const [uniforms] = useState(() => makeCardUniforms(index * 1.3));
 
   // Feed the texture (and its true aspect for object-cover) once decoded, then
   // repaint (demand mode paints nothing on its own).
@@ -215,7 +283,7 @@ function CardMesh({
   return (
     <group rotation-z={-cardAngle(index) * DEG2RAD}>
       <mesh position={[0, WHEEL_RADIUS, z]}>
-        <planeGeometry args={[CARD_WIDTH, CARD_HEIGHT, 1, 1]} />
+        <planeGeometry args={[CARD_WIDTH, CARD_HEIGHT, segments[0], segments[1]]} />
         <shaderMaterial
           ref={matRef}
           attach="material"
@@ -230,15 +298,98 @@ function CardMesh({
   );
 }
 
-function Wheel({ groupRef }: { groupRef: React.RefObject<THREE.Group | null> }) {
+function Wheel({
+  groupRef,
+  segments,
+}: {
+  groupRef: React.RefObject<THREE.Group | null>;
+  segments: [number, number];
+}) {
   const textures = useCardTextures();
   return (
     <group ref={groupRef} position={[0, PIVOT_WORLD_Y, 0]}>
       {PROJECTS.map((project, i) => (
-        <CardMesh key={project.id} index={i} texture={textures[project.src]} />
+        <CardMesh
+          key={project.id}
+          index={i}
+          texture={textures[project.src]}
+          segments={segments}
+        />
       ))}
     </group>
   );
+}
+
+// Cloth drive tuning (see clothUniforms). SPEED_REF = the scroll speed
+// (progress per second) that maps to full bend; RISE/FALL ease the amplitude so
+// the cards snap into a bend and relax out of it with a trailing, cloth-like lag.
+const CLOTH_SPEED_REF = 0.55;
+const CLOTH_RISE = 0.35;
+const CLOTH_FALL = 0.08;
+const CLOTH_EPS = 0.002;
+
+/**
+ * Cloth warp driver (Phase 3). Renders nothing.
+ *
+ * Turns scroll SPEED into bend amplitude: each shared-ticker tick it reads the
+ * wheel progress, derives how fast it's changing, eases `uAmp` toward that speed
+ * (fast rise, slow fall → a trailing cloth lag), and advances `uTime` so the
+ * waves travel while bending. Repaints through a capped invalidate.
+ *
+ * IDLES TO ZERO: once the bend has relaxed to flat AND the wheel is still, it
+ * writes one final flat frame and then stops repainting entirely — the tick keeps
+ * running (it's the shared GSAP ticker, cheap), but nothing is drawn until motion
+ * resumes. This is the heavy-effect contract's "stop when nothing changes".
+ * Rides the shared ticker (Lenis' rAF) — no private loop; parks on hidden tabs.
+ */
+function ClothRig() {
+  const invalidate = useThree((s) => s.invalidate);
+  useEffect(() => {
+    const capped = makeCappedInvalidate(invalidate);
+    let amp = 0;
+    let settled = true;
+    let lastProgress = getWheelProgress();
+    let lastTime = -1;
+
+    // gsap.ticker passes elapsed seconds; skip the first tick (no baseline dt).
+    const tick = (time: number) => {
+      if (lastTime < 0) {
+        lastTime = time;
+        lastProgress = getWheelProgress();
+        return;
+      }
+      const dt = Math.max(1e-3, time - lastTime);
+      lastTime = time;
+      const p = getWheelProgress();
+      const speed = Math.abs(p - lastProgress) / dt; // progress per second
+      lastProgress = p;
+
+      const target = Math.min(1, speed / CLOTH_SPEED_REF);
+      amp += (target - amp) * (target > amp ? CLOTH_RISE : CLOTH_FALL);
+
+      if (amp < CLOTH_EPS && target < CLOTH_EPS) {
+        // Settled: write one flat frame, then idle (stop repainting).
+        if (!settled) {
+          amp = 0;
+          clothUniforms.uAmp.value = 0;
+          capped();
+          settled = true;
+        }
+        return;
+      }
+      settled = false;
+      clothUniforms.uAmp.value = amp;
+      clothUniforms.uTime.value = time;
+      capped();
+    };
+
+    gsap.ticker.add(tick);
+    return () => {
+      gsap.ticker.remove(tick);
+      capped.cancel();
+    };
+  }, [invalidate]);
+  return null;
 }
 
 /**
@@ -350,6 +501,13 @@ function ContextWatchdog({ onUnrecoverable }: { onUnrecoverable: () => void }) {
 export default function ShowcaseCanvas() {
   const { showcaseDprMax } = useQuality();
   const wheelRef = useRef<THREE.Group>(null);
+  // Mesh subdivision for the cloth warp — SNAPSHOT at mount (segments drive the
+  // geometry; honouring a live tier step-down would rebuild all 12 meshes). Card
+  // is taller than wide, so the height gets proportionally more segments.
+  const [segments] = useState<[number, number]>(() => {
+    const s = getQualityConfig().showcaseClothSegments;
+    return [s, Math.round((s * CARD_HEIGHT) / CARD_WIDTH)];
+  });
   // Bumping this remounts the <Canvas> with a fresh GL context — last resort when
   // a lost context never restores. See <ContextWatchdog>.
   const [canvasKey, setCanvasKey] = useState(0);
@@ -368,8 +526,9 @@ export default function ShowcaseCanvas() {
       // swallows clicks meant for the DOM caption / CTA beneath it.
       style={{ position: "absolute", inset: 0, pointerEvents: "none" }}
     >
-      <Wheel groupRef={wheelRef} />
+      <Wheel groupRef={wheelRef} segments={segments} />
       <WheelScrollRig groupRef={wheelRef} />
+      <ClothRig />
       <InvalidateOnReady />
       <ContextWatchdog onUnrecoverable={remount} />
     </Canvas>

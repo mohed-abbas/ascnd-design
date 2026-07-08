@@ -36,9 +36,9 @@
  * |                                            | blur reads as a milky blue bar over sky). |
  * | components/sections/why-stay/              | makeCappedInvalidate (--reel-y writes    |
  * |   why-stay-reveal.tsx                      | behind the glass pill)                   |
- * | components/sections/showcase/              | showcaseDprMax (live). Cloth segments +  |
- * |   showcase-canvas.tsx                      | scroll-invalidate caps arrive with the   |
- * |                                            | motion phases.                           |
+ * | components/sections/showcase/              | showcaseDprMax (live), showcaseClothSeg- |
+ * |   showcase-canvas.tsx                      | ments (mount snapshot), makeCappedInval- |
+ * |                                            | idate (WheelScrollRig + ClothRig).       |
  *
  * ★ RULE (audit 2026-07-02 F5.1): any NEW heavy effect — a WebGL canvas, a
  * free-running loop, a per-frame SVG/CSS filter — must be added to this table
@@ -91,12 +91,20 @@ export interface QualityConfig {
 
   // ── Project showcase wheel (components/sections/showcase/showcase-canvas.tsx) ──
   /**
-   * Upper bound of the showcase Canvas `dpr={[1, x]}`. The cards are flat
-   * textured planes; the cloth warp (a later phase) is soft, so a capped dpr is
-   * imperceptible while cutting fragment cost on retina — same reasoning as the
-   * clouds' cloudDprMax. Read live (re-applying dpr is cheap and invisible).
+   * Upper bound of the showcase Canvas `dpr={[1, x]}`. The cards are soft
+   * textured planes; a capped dpr is imperceptible while cutting fragment cost
+   * on retina — same reasoning as the clouds' cloudDprMax. Read live
+   * (re-applying dpr is cheap and invisible).
    */
   readonly showcaseDprMax: number;
+  /**
+   * Card mesh subdivision (segments across the width) for the cloth warp — the
+   * vertex-cost knob. Higher = smoother curve. The height gets proportionally
+   * more segments (card is taller than wide). Snapshotted at canvas mount (a
+   * live change would rebuild all 12 geometries on-screen), so a mid-session
+   * step-down applies on the next mount.
+   */
+  readonly showcaseClothSegments: number;
 }
 
 export const TIERS: Record<TierName, QualityConfig> = {
@@ -121,6 +129,7 @@ export const TIERS: Record<TierName, QualityConfig> = {
     text3dBevelSegments: 12,
     // Match the clouds: 1.5 on retina is imperceptible on soft card art.
     showcaseDprMax: 1.5,
+    showcaseClothSegments: 24,
   },
   medium: {
     tier: "medium",
@@ -132,6 +141,7 @@ export const TIERS: Record<TierName, QualityConfig> = {
     text3dCurveSegments: 16,
     text3dBevelSegments: 8,
     showcaseDprMax: 1.5,
+    showcaseClothSegments: 16,
   },
   low: {
     tier: "low",
@@ -143,5 +153,6 @@ export const TIERS: Record<TierName, QualityConfig> = {
     text3dCurveSegments: 16,
     text3dBevelSegments: 6,
     showcaseDprMax: 1.25,
+    showcaseClothSegments: 10,
   },
 };
