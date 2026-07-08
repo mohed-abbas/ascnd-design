@@ -11,40 +11,56 @@ const REDUCE_MOTION = "(prefers-reduced-motion: reduce)";
 // The masked field height (the 1258×876 "Pills" box in pills.tsx).
 const BOX_H = 876;
 // Fully-clear margin above/below the box: a pill this far past an edge is
-// entirely outside the clipped box (invisible), so it can wrap without a visible
-// jump. ≥ one pill height.
+// entirely outside the clipped box, so its upward wrap is unseen. ≥ pill height.
 const CLEAR = 60;
 // Vertical distance a pill travels before wrapping (top-clear → bottom-clear).
 const RANGE = BOX_H + CLEAR * 2;
 // Upward drift speed — deliberately "really slow". px per second.
 const PX_PER_SEC = 14;
-// Individual fade-in on reveal.
-const FADE_DUR = 0.6;
-const FADE_STAGGER = 0.05;
+
+// Random opacity "twinkle": each pill fades in, holds, fades out, holds — on its
+// own timing + phase, so pills materialise and vanish anywhere in the field
+// (not only by rising in from the bottom).
+const FADE_IN = 1.4; // gentle appear
+// Fade out "really slowly", at a pace comparable to the upward drift: the pill
+// dissolves over the time it would drift FADE_OUT_DIST px, and LINEARLY (like the
+// drift's ease) so the opacity falls at a constant rate — a slow dissolve, not a
+// blink.
+const FADE_OUT_DIST = 105; // px of drift-equivalent
+const FADE_OUT = FADE_OUT_DIST / PX_PER_SEC; // ≈ 7.5s at 14 px/s
+const VIS_HOLD = [2, 5]; // seconds fully visible (min, +range)
+const INV_HOLD = [1.5, 3.5]; // seconds invisible (min, +range)
+
+// Deterministic 0..1 from a seed (fract of a big sine). Stable across renders,
+// no Math.random, so no hydration/first-paint surprise.
+const rand = (seed: number) => {
+  const x = Math.sin(seed) * 10000;
+  return x - Math.floor(x);
+};
 
 /**
- * Pill flow (Figma frame SectionPills). The field drifts slowly UPWARD forever:
- * each pill rises, fades out through the top of the fixed radial mask (pills.tsx)
- * and — once it has fully cleared the box (into the clipped zone) — wraps back
- * below to rise again, so fresh pills keep entering the mask from the bottom.
- * The mask does all the fade-in/out; the wrap happens off-screen (the box is
- * overflow-hidden), so the loop is seamless.
+ * Pill flow (Figma frame SectionPills). Two independent, per-pill motions:
  *
- * On reveal the pills first fade in INDIVIDUALLY (staggered) at their resting
- * scatter, then the drift begins.
+ *  1. DRIFT — the field creeps slowly upward forever. Each pill rises and, once
+ *     it fully clears the box (into the clipped margin), wraps back below to rise
+ *     again, so the field never empties. The wrap is off-screen, so it's seamless.
  *
- * Renders nothing — drives the [data-pill] nodes from pills.tsx (same driver
- * split as the other sections).
+ *  2. TWINKLE — each pill independently fades in, holds, fades out, holds, on its
+ *     own random period + phase. Because opacity is decoupled from position, a
+ *     pill can appear or disappear ANYWHERE in the field, not just enter from the
+ *     bottom edge. A faded-out pill is visibility:hidden, so its backdrop-blur
+ *     stops computing (fewer live blurs at once).
+ *
+ * The fixed radial mask (pills.tsx) still caps each pill by position — the twinkle
+ * opacity multiplies with it — so edge pills stay faint even at full twinkle.
+ *
+ * Renders nothing — drives the [data-pill] nodes from pills.tsx.
  *
  * House-rules compliance:
  * - Rides GSAP's shared ticker (LenisProvider) — no private rAF.
- * - IDLES TO ZERO: the drift only plays while the section overlaps the viewport
- *   (ScrollTrigger onToggle); off-screen it's paused.
- * - Reduced-motion: no fade, no drift — the pills sit at their resting spots.
- *
- * Uniform speed + a shared travel RANGE keeps the design's scatter intact as it
- * cycles (every pill rises in lock-step and wraps over the same distance, so the
- * relative spacing never drifts apart).
+ * - IDLES TO ZERO: drift + twinkle only run while the section overlaps the
+ *   viewport (ScrollTrigger onToggle); off-screen everything is paused.
+ * - Reduced-motion: no drift, no twinkle — the pills sit visible at rest.
  */
 export default function PillsFlow() {
   useEffect(() => {
@@ -61,47 +77,52 @@ export default function PillsFlow() {
         return;
       }
 
-      // Hidden until the section reveals, then fade in one by one.
       gsap.set(pills, { autoAlpha: 0 });
 
-      // One continuous upward tween per pill. The modifier wraps `y` so that the
-      // pill's absolute position (its style `top` + y) cycles within
-      // [-CLEAR, BOX_H + CLEAR): when it rises past the top-clear it re-appears at
-      // the bottom-clear — both fully outside the box, so the wrap is unseen.
-      const drift = pills.map((el) => {
+      const anims: (gsap.core.Tween | gsap.core.Timeline)[] = [];
+
+      pills.forEach((el, i) => {
         const top = parseFloat(el.style.top) || 0;
+
+        // 1) Upward drift. The modifier wraps `y` so the pill's absolute position
+        // (style `top` + y) cycles within [-CLEAR, BOX_H + CLEAR): rising past the
+        // top-clear re-appears at the bottom-clear — both outside the clipped box.
         const wrapY = gsap.utils.wrap(-CLEAR - top, BOX_H + CLEAR - top);
-        return gsap.to(el, {
-          y: `-=${RANGE}`,
-          duration: RANGE / PX_PER_SEC,
-          ease: "none",
-          repeat: -1,
-          paused: true,
-          modifiers: { y: (v) => `${wrapY(parseFloat(v))}px` },
-        });
+        anims.push(
+          gsap.to(el, {
+            y: `-=${RANGE}`,
+            duration: RANGE / PX_PER_SEC,
+            ease: "none",
+            repeat: -1,
+            paused: true,
+            modifiers: { y: (v) => `${wrapY(parseFloat(v))}px` },
+          }),
+        );
+
+        // 2) Random twinkle: fade in → hold visible → fade out → hold invisible.
+        const visHold = VIS_HOLD[0] + rand(i * 3.3) * VIS_HOLD[1];
+        const invHold = INV_HOLD[0] + rand(i * 4.7) * INV_HOLD[1];
+        const tl = gsap.timeline({ repeat: -1, paused: true });
+        tl.fromTo(
+          el,
+          { autoAlpha: 0 },
+          { autoAlpha: 1, duration: FADE_IN, ease: "power2.out" },
+        )
+          .to(el, {
+            autoAlpha: 0,
+            duration: FADE_OUT,
+            ease: "none",
+            delay: visHold,
+          })
+          .to({}, { duration: invHold }); // hold invisible before repeating
+        tl.progress(rand(i * 5.9)); // random phase — desynced from the start
+        anims.push(tl);
       });
 
-      const play = () => drift.forEach((t) => t.play());
-      const pause = () => drift.forEach((t) => t.pause());
+      const play = () => anims.forEach((a) => a.play());
+      const pause = () => anims.forEach((a) => a.pause());
 
-      // Reveal: fade the pills in individually the first time the section enters,
-      // and start the drift.
-      ScrollTrigger.create({
-        trigger: section,
-        start: "top 80%",
-        once: true,
-        onEnter: () => {
-          gsap.to(pills, {
-            autoAlpha: 1,
-            duration: FADE_DUR,
-            ease: "power2.out",
-            stagger: { each: FADE_STAGGER, from: "random" },
-          });
-          play();
-        },
-      });
-
-      // Idle to zero: drift only while the section overlaps the viewport.
+      // Idle to zero: only animate while the section overlaps the viewport.
       ScrollTrigger.create({
         trigger: section,
         start: "top bottom",

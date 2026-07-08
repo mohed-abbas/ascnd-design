@@ -36,12 +36,12 @@ import { PILLS } from "./pills-data";
  * pills-reveal.tsx driver, same split as the other sections.
  */
 
-// CSS alpha mask for the pill field: fully opaque around the headline, easing
-// to a faint 6% at the rim so edge pills melt into the sky rather than hard-cut.
-// Centred on the frame centre (offset within the Pills box). Tune the stops to
-// grow/shrink the clear core.
+// CSS alpha mask for the pill field — a VERTICAL fade only: pills dissolve at the
+// TOP and BOTTOM edges (where the rising flow melts in/out) while the left, right
+// and middle stay fully visible. No horizontal/radial falloff. Tune the middle
+// stop percentages to grow/shrink the top/bottom fade bands.
 const PILL_MASK =
-  "radial-gradient(ellipse 62% 62% at 51% 54%, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 26%, rgba(0,0,0,0.06) 90%)";
+  "linear-gradient(to bottom, rgba(0,0,0,0) 0%, rgba(0,0,0,1) 20%, rgba(0,0,0,1) 80%, rgba(0,0,0,0) 100%)";
 
 export default function Pills() {
   return (
@@ -49,8 +49,9 @@ export default function Pills() {
       data-pills
       className="relative min-h-dvh w-full overflow-hidden"
     >
-      {/* Slow upward flow: pills rise, fade out through the top of the mask, and
-          wrap back below to rise again (see pills-flow.tsx). Renders nothing. */}
+      {/* Slow upward drift + a random per-pill fade in/out twinkle, so pills
+          materialise and vanish anywhere in the field (see pills-flow.tsx).
+          Renders nothing. */}
       <PillsFlow />
 
       {/* The 1319×977 "capabilities" frame, centre-anchored (design scale). */}
