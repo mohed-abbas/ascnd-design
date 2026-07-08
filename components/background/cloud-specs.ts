@@ -99,7 +99,7 @@ export const SKY_CLOUDS: CloudSpec[] = [
   {
     key: "whystay-br",
     ndc: [0.78, -0.72],
-     dist: 50,
+    dist: 50,
     seed: 11,
     bounds: [8, 4, 1],
     volume: 10,
@@ -109,13 +109,39 @@ export const SKY_CLOUDS: CloudSpec[] = [
   {
     key: "whystay-bl-2",
     ndc: [-0.78, -0.72],
-     dist: 24,
+    dist: 24,
     seed: 11,
     bounds: [4, 1.5, 1],
     volume: 8,
     anchorVh: 4,
     perspectiveScroll: false,
   },
+  {
+    key: "workingwith-left",
+    ndc: [-0.95, -0.90],
+    dist: 24,
+    seed: 11,
+    bounds: [7, 1.4, 1],
+    volume: 4,
+    // section: {
+    //   trigger: "[data-working-with]",
+    //   slide: 0.1,
+    //   travel: 1,
+    // },
+    anchorVh: 7,
+    perspectiveScroll: false,
+  },
+  {
+    key: "workingwith-right-bottom",
+    ndc: [0.90, -2.5],
+    dist: 24,
+    seed: 11,
+    bounds: [4, 1, 1],
+    volume: 3,
+    anchorVh: 7,
+    perspectiveScroll: false,
+  },
+  // data-working-with
 
 ];
 
