@@ -16,6 +16,8 @@ import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { getQualityConfig, heavyEffectFpsCap } from "@/lib/perf/quality-store";
 import { makeCappedInvalidate } from "@/lib/perf/capped-invalidate";
+import { useMode } from "@/lib/theme/use-mode";
+import { PALETTES } from "@/lib/theme/palette";
 import {
   SHOT_BASE,
   SHOT_FRAME_RADIUS,
@@ -826,7 +828,13 @@ function Glass({
   const textRef = useRef<Mesh>(null);
   // Refraction fill where the scene is empty (open sky) — without it the
   // transmission samples the transparent FBO (black) and the glass goes dark.
-  const sky = useMemo(() => new THREE.Color("#62abff"), []);
+  // Tied to the current sky MODE (its mid gradient stop, the dominant tone behind
+  // the glass) so the wordmark refracts a colour consistent with the live sky —
+  // otherwise it stays day-blue over a sunrise/sunset/night backdrop. The intro
+  // canvas repaints continuously while the welcome plays (IntroFrameCap), so a
+  // mode switch updates the glass in place. day.mid === the old #62abff.
+  const mode = useMode();
+  const sky = useMemo(() => new THREE.Color(PALETTES[mode].sky.mid), [mode]);
 
   // Adaptive glass quality (docs/performance-audit.md §6): the MTM is the intro's
   // heaviest frame cost (~3 scene renders/frame with backside on). Snapshot the

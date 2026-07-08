@@ -11,6 +11,9 @@ import type { CloudSpec } from "./cloud-specs";
 import { useQuality } from "@/lib/perf/use-quality";
 import { getQualityConfig } from "@/lib/perf/quality-store";
 import { makeCappedInvalidate } from "@/lib/perf/capped-invalidate";
+import { useMode } from "@/lib/theme/use-mode";
+import { getMode } from "@/lib/theme/mode-store";
+import { CROSSFADE, PALETTES } from "@/lib/theme/palette";
 
 /**
  * Volumetric cloud field (Three.js / R3F + drei <Clouds>).
@@ -88,27 +91,21 @@ const RANGE = 400;
 // painted shading is what makes the billboards read as dimensional.
 const CAMERA = { position: [0, 11, 18] as [number, number, number], fov: 50 };
 
-// Cloud lighting as a THEME MAP. Only directional + ambient lights — NO
-// positioned/spot lights — so a cloud is lit identically wherever it sits
-// (white everywhere; the old red position-tint is gone). That position-
-// independence is also what makes theming clean: a mode is just light
-// colours/intensities (+ the sky colour, which actually lives in <Background/>;
-// mirrored here for reference). Only `day` exists today — `evening` (warm gold
-// key) and `night` (dim cool moonlight) drop in here later with no canvas
-// changes. The key's `position` is a DIRECTION (light → origin), not a place,
-// so it has no distance falloff.
-const CLOUD_THEME = {
-  day: {
-    sky: "#62abff",
-    ambient: { color: "#ffffff", intensity: 1.5 },
-    key: {
-      color: "#ffffff",
-      intensity: 2.6,
-      position: [0, 20, 12] as [number, number, number],
-    },
-  },
-} as const;
-const THEME = CLOUD_THEME.day;
+// Cloud lighting is position-INDEPENDENT (only ambient + directional, no spot
+// lights) so a cloud is lit identically wherever it sits — which is exactly what
+// makes theming a clean colour swap. The per-mode ambient/key colours+intensities
+// now live in lib/theme/palette.ts (PALETTES[mode].cloud); <ThemeRig> tweens the
+// two lights when the mode changes, in lockstep with the DOM sky (same CROSSFADE).
+// The key light's DIRECTION is mode-invariant, so it stays here (it's a direction —
+// light → origin — not a place, so there's no distance falloff).
+const KEY_LIGHT_POSITION = [0, 20, 12] as [number, number, number];
+
+// Flip to false to REVERT to always-white clouds (day lighting in every mode):
+// <ThemeRig> won't mount and the lights initialise to the day palette, so the sky
+// gradient still changes but the clouds stop retinting. See palette.ts.
+const RETINT_CLOUDS = true;
+
+const REDUCE_MOTION = "(prefers-reduced-motion: reduce)";
 
 // Reference depth (world units along the camera ray) for the scroll math. The
 // hero clouds all sit here, so the scroll→world conversion below is exact for
@@ -640,6 +637,90 @@ function ContextWatchdog({
   return null;
 }
 
+/**
+ * Cloud retint driver (theme controller). Renders nothing. On a mode change it
+ * GSAP-tweens the ambient + key lights' colour and intensity from their current
+ * values to PALETTES[mode].cloud over the shared CROSSFADE — the same duration/
+ * ease the DOM sky uses (theme-driver.tsx), so sky and clouds recolour together.
+ *
+ * House-rules compliance:
+ * - Rides GSAP's shared ticker (no private rAF); the demand loop is pumped by a
+ *   CAPPED invalidate() each tick (heavyEffectFpsCap), and only during a switch.
+ * - IDLES TO ZERO: a settled mode runs no tween and paints nothing.
+ * - First mount does nothing — the lights are initialised to the mount mode's
+ *   palette in <CloudCanvas>. Reduced-motion snaps (no animation).
+ * Only mounted when RETINT_CLOUDS is true.
+ */
+function ThemeRig({
+  ambientRef,
+  keyRef,
+}: {
+  ambientRef: React.RefObject<THREE.AmbientLight | null>;
+  keyRef: React.RefObject<THREE.DirectionalLight | null>;
+}) {
+  const mode = useMode();
+  const invalidate = useThree((s) => s.invalidate);
+  const mounted = useRef(false);
+  const tweenRef = useRef<gsap.core.Tween | null>(null);
+
+  useEffect(() => {
+    // First run: lights already initialised to this mode's palette (CloudCanvas).
+    if (!mounted.current) {
+      mounted.current = true;
+      return;
+    }
+    const ambient = ambientRef.current;
+    const key = keyRef.current;
+    if (!ambient || !key) return;
+
+    tweenRef.current?.kill();
+
+    const target = PALETTES[mode].cloud;
+    const ta = new THREE.Color(target.ambient.color);
+    const tk = new THREE.Color(target.key.color);
+
+    if (window.matchMedia(REDUCE_MOTION).matches) {
+      ambient.color.copy(ta);
+      ambient.intensity = target.ambient.intensity;
+      key.color.copy(tk);
+      key.intensity = target.key.intensity;
+      invalidate();
+      return;
+    }
+
+    // Snapshot the outgoing light state, then lerp both lights off one proxy so
+    // colour + intensity share the ease/duration. A capped invalidate() repaints
+    // the demand canvas through the crossfade (trailing paint guarantees the
+    // final frame lands on the target).
+    const a0 = ambient.color.clone();
+    const ai0 = ambient.intensity;
+    const k0 = key.color.clone();
+    const ki0 = key.intensity;
+    const capped = makeCappedInvalidate(invalidate);
+    const proxy = { p: 0 };
+    tweenRef.current = gsap.to(proxy, {
+      p: 1,
+      duration: CROSSFADE.duration,
+      ease: CROSSFADE.ease,
+      onUpdate: () => {
+        ambient.color.copy(a0).lerp(ta, proxy.p);
+        ambient.intensity = ai0 + (target.ambient.intensity - ai0) * proxy.p;
+        key.color.copy(k0).lerp(tk, proxy.p);
+        key.intensity = ki0 + (target.key.intensity - ki0) * proxy.p;
+        capped();
+      },
+      onComplete: () => capped.cancel(),
+    });
+
+    return () => {
+      tweenRef.current?.kill();
+      capped.cancel();
+    };
+  }, [mode, ambientRef, keyRef, invalidate]);
+
+  return null;
+}
+
 export default function CloudCanvas({
   clouds,
   scrollFactor = DEFAULT_SCROLL_FACTOR,
@@ -679,6 +760,17 @@ export default function CloudCanvas({
   const perspRefs = useRef<(Group | null)[]>([]);
   const flatRefs = useRef<(Group | null)[]>([]);
   const sectionRefs = useRef<(Group | null)[]>([]);
+  // The two theme lights — <ThemeRig> tweens their colour/intensity on a mode
+  // change. Initialised (below) to the CURRENT mode's palette so the first paint
+  // is already correct; when RETINT_CLOUDS is off they stay on the day palette.
+  const ambientRef = useRef<THREE.AmbientLight | null>(null);
+  const keyRef = useRef<THREE.DirectionalLight | null>(null);
+  // Snapshot at mount (the canvas is ssr:false, so getMode() reads the real
+  // persisted mode here). Not bound to live mode — ThemeRig owns the lights
+  // imperatively so a switch TWEENS rather than snapping via a prop change.
+  const [initialCloud] = useState(
+    () => (RETINT_CLOUDS ? PALETTES[getMode()] : PALETTES.day).cloud,
+  );
   // Which section clouds are on screen — written by <SectionRig>, read by
   // <MorphRig> to keep their living morph pumping while visible. Empty on a
   // field-only canvas (the ROCK layer), which keeps the plain 1.5 vh rule.
@@ -733,14 +825,20 @@ export default function CloudCanvas({
       // never fires. The clouds are purely decorative, so no interaction is lost.
       style={{ position: "absolute", inset: 0, pointerEvents: "none" }}
     >
-      {/* Position-independent light rig (see CLOUD_THEME): a white directional
-          key + ambient fill light every cloud identically, wherever it sits, so
-          they're uniformly white with no position-based tint. Theme-swappable. */}
-      <ambientLight color={THEME.ambient.color} intensity={THEME.ambient.intensity} />
+      {/* Position-independent light rig: a directional key + ambient fill light
+          every cloud identically, wherever it sits, so they carry no position
+          tint. Colour/intensity come from the current mode's palette (initialCloud)
+          and are tweened per-mode by <ThemeRig> (mounted below when retinting). */}
+      <ambientLight
+        ref={ambientRef}
+        color={initialCloud.ambient.color}
+        intensity={initialCloud.ambient.intensity}
+      />
       <directionalLight
-        color={THEME.key.color}
-        intensity={THEME.key.intensity}
-        position={THEME.key.position}
+        ref={keyRef}
+        color={initialCloud.key.color}
+        intensity={initialCloud.key.intensity}
+        position={KEY_LIGHT_POSITION}
       />
 
       <Clouds
@@ -811,6 +909,7 @@ export default function CloudCanvas({
       <MorphRig activeClouds={activeClouds} pumpUntilVh={pumpUntilVh} />
       <InvalidateOnReady />
       <ContextWatchdog onUnrecoverable={remount} />
+      {RETINT_CLOUDS && <ThemeRig ambientRef={ambientRef} keyRef={keyRef} />}
     </Canvas>
   );
 }

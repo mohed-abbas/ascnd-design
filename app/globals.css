@@ -5,6 +5,47 @@
   --foreground: #171717;
 }
 
+/* ─── Sky mode palette (theme controller) ──────────────────────────────────
+   The vertical sky-gradient stops for the current time-of-day mode, consumed by
+   the fixed <Background/> layer. These are the RESTING values for each mode:
+   they render the correct sky on first paint / SSR / no-JS, keyed off the
+   `data-mode` attribute a pre-paint inline script stamps on <html> (layout.tsx).
+   On a user-initiated switch, ThemeDriver GSAP-tweens INLINE overrides of these
+   same three vars on <html> for the crossfade — the inline style wins over these
+   rules during the animation, then rests on the new mode's values.
+
+   MUST stay in sync with PALETTES in lib/theme/palette.ts (the source of truth).
+   The bare :root default is `day`, so a document with no data-mode still paints
+   the brand sky. */
+:root,
+html[data-mode="day"] {
+  --sky-top: #4a9dff;
+  --sky-mid: #62abff;
+  --sky-bottom: #9cc9ff;
+  --grain-opacity: 0.1;
+}
+
+html[data-mode="sunrise"] {
+  --sky-top: #8ec0f2;
+  --sky-mid: #f4c9b0;
+  --sky-bottom: #ffe0b8;
+  --grain-opacity: 0.11;
+}
+
+html[data-mode="sunset"] {
+  --sky-top: #8f9fe0;
+  --sky-mid: #d9a9d4;
+  --sky-bottom: #ffbf9c;
+  --grain-opacity: 0.12;
+}
+
+html[data-mode="night"] {
+  --sky-top: #0e2a52;
+  --sky-mid: #1c3f6e;
+  --sky-bottom: #2d5688;
+  --grain-opacity: 0.14;
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);

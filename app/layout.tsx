@@ -7,6 +7,8 @@ import CloudLayer from "@/components/background/cloud-layer";
 import Cursor from "@/components/cursor/cursor";
 import LenisProvider from "@/components/providers/lenis-provider";
 import QualityController from "@/components/providers/quality-controller";
+import ThemeDriver from "@/components/providers/theme-driver";
+import ModeSwitcher from "@/components/ui/mode-switcher";
 
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
@@ -96,6 +98,18 @@ export default function RootLayout({
               "if('scrollRestoration' in history)history.scrollRestoration='manual';",
           }}
         />
+        {/* Stamp the persisted sky mode onto <html> before first paint, so the
+            correct --sky-* gradient (globals.css [data-mode]) and cloud palette
+            render immediately — no flash of day-blue before hydration. Same
+            synchronous-during-parse trick as the scripts around it; falls back to
+            'day' on any invalid/blocked storage. Must match MODE_STORAGE_KEY +
+            THEME_MODES in lib/theme/palette.ts. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              "try{var m=localStorage.getItem('ascnd:mode');document.documentElement.dataset.mode=['sunrise','day','sunset','night'].indexOf(m)>-1?m:'day';}catch(e){document.documentElement.dataset.mode='day';}",
+          }}
+        />
         {/* Arm the on-load reveal before first paint. This runs synchronously
             during HTML parse (the same flash-prevention trick next-themes uses),
             so the `.reveal-armed` hidden state in globals.css applies the instant
@@ -113,6 +127,9 @@ export default function RootLayout({
             starting tier, and arms the frame-time watchdog on the shared ticker
             (docs/performance-audit.md §6). Renders nothing. */}
         <QualityController />
+        {/* Crossfades the DOM sky (--sky-* vars) when the mode changes; renders
+            nothing. Pairs with ThemeRig inside the cloud canvas (same CROSSFADE). */}
+        <ThemeDriver />
         <LenisProvider>
           {/* Two independent fixed layers at the root: the sky backdrop
               (-z-20) and the volumetric clouds (-z-10), with page content
@@ -126,6 +143,10 @@ export default function RootLayout({
               layers so no filter/backdrop-filter ancestor breaks it. Gated to
               real-mouse desktops; renders nothing otherwise. */}
           <Cursor />
+          {/* Sky-mode switcher — a fixed left-edge glass rail. Sibling of the
+              fixed sky layers (no filter/backdrop-filter ancestor), so it never
+              breaks their position:fixed. */}
+          <ModeSwitcher />
         </LenisProvider>
       </body>
     </html>
