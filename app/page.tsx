@@ -4,6 +4,7 @@ import IntroLoader from "@/components/sections/intro/intro-loader";
 import Pills from "@/components/sections/pills/pills";
 import Tagline from "@/components/sections/tagline/tagline";
 import WhyStay from "@/components/sections/why-stay/why-stay";
+import WorkingWith from "@/components/sections/working-with/working-with";
 
 export default function Home() {
   return (
@@ -29,6 +30,9 @@ export default function Home() {
       {/* Scattered "capability pills" field around a centred headline + CTA
           ("everything that gets you up there"), over the shared sky. */}
       <Pills />
+      {/* Quiet mixed-font statement + two-tone paragraph ("who you're working
+          with"), centred over the shared sky. */}
+      <WorkingWith />
     </>
   );
 }
