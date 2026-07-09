@@ -1,4 +1,5 @@
 import Cards from "@/components/sections/cards/cards";
+import Comparison from "@/components/sections/comparison/comparison";
 import Hero from "@/components/sections/hero/hero";
 import IntroLoader from "@/components/sections/intro/intro-loader";
 import Pills from "@/components/sections/pills/pills";
@@ -33,6 +34,10 @@ export default function Home() {
       {/* Quiet mixed-font statement + two-tone paragraph ("who you're working
           with"), centred over the shared sky. */}
       <WorkingWith />
+      {/* Feature matrix: ascnd vs hiring / agencies / freelancers ("none of the
+          above"), a glass comparison table over the shared sky. Last section
+          for now. */}
+      <Comparison />
     </>
   );
 }
