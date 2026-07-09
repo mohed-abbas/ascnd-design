@@ -14,15 +14,19 @@ import { GROUP_H, GROUP_W, UNITS } from "./testimonials-data";
  * (testimonials.tsx); this canvas layers over them, so a rock overflows and sits
  * in front of its outline exactly as in the Figma.
  *
- * Source model: /rocks/testimonial-rock.glb — the studio GLB (glb2.glb, kept in
+ * Source model: /rocks/testimonial-rock.v1.glb — the studio GLB (glb2.glb, kept in
  * public/rocks/ as the uncompressed source) optimised for the web via
  * gltf-transform: two 2048² textures → 512² + WebP (the rock renders ~200px, so
  * 2K was wildly oversized) and geometry meshopt-compressed. 8.5 MB → 358 KB
  * (24×). WebP loads natively via GLTFLoader's EXT_texture_webp; the meshopt +
  * KHR_mesh_quantization geometry decodes via the MeshoptDecoder that drei's
  * useGLTF bundles (three-stdlib) — both are self-contained, no CDN/network
- * decoder. Regenerate: `gltf-transform optimize glb2.glb testimonial-rock.glb
+ * decoder. Regenerate: `gltf-transform optimize glb2.glb testimonial-rock.vN.glb
  * --texture-compress webp --texture-size 512` then `gltf-transform meshopt`.
+ * NOTE: the `.vN.` suffix is load-bearing — the file is served `immutable`
+ * (next.config.ts headers), so a same-name overwrite would strand returning
+ * visitors on the stale copy for a year. BUMP the version (v1 → v2) whenever the
+ * model changes, and update the three refs here + the next.config.ts source.
  *
  * Realism pass (so the rocks sit IN the sky, not on it):
  *  - IBL: a procedural sky-gradient environment (useSkyEnvironment) — the main
@@ -54,7 +58,7 @@ import { GROUP_H, GROUP_W, UNITS } from "./testimonials-data";
  *   off-screen.
  */
 
-useGLTF.preload("/rocks/testimonial-rock.glb");
+useGLTF.preload("/rocks/testimonial-rock.v1.glb");
 
 const TAU = Math.PI * 2;
 
@@ -101,7 +105,7 @@ function buildSkyEnvMap(gl: THREE.WebGLRenderer): THREE.Texture {
 
 /** Centre + normalise the rock mesh; build its matte, sky-lit material. */
 function useRockAsset() {
-  const { scene } = useGLTF("/rocks/testimonial-rock.glb");
+  const { scene } = useGLTF("/rocks/testimonial-rock.v1.glb");
   const gl = useThree((s) => s.gl);
 
   const asset = useMemo(() => {

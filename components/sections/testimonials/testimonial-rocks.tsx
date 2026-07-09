@@ -98,7 +98,7 @@ export default function TestimonialRocks() {
       // FileLoader request the canvas later makes (same-origin, credentials
       // "same-origin"), so crossOrigin="anonymous" matches and the preload is
       // consumed — not double-fetched (cf. the font preload in layout.tsx).
-      ReactDOM.preload("/rocks/testimonial-rock.glb", {
+      ReactDOM.preload("/rocks/testimonial-rock.v1.glb", {
         as: "fetch",
         crossOrigin: "anonymous",
       });
@@ -108,10 +108,13 @@ export default function TestimonialRocks() {
       void import("./testimonial-rocks-canvas");
     };
     // Safari only shipped requestIdleCallback in 16.4 (our floor), but guard
-    // anyway and fall back to a short timeout so the preload always fires.
+    // anyway and fall back to a short timeout so the preload always fires. The
+    // `timeout` is load-bearing: the hero is heavy (clouds, intro glass, GSAP),
+    // so idle can be starved for seconds — without a deadline the preload could
+    // slip to near-view and lose its whole head start. 2s caps that.
     const ric = window.requestIdleCallback;
     if (typeof ric === "function") {
-      const id = ric(run);
+      const id = ric(run, { timeout: 2000 });
       return () => window.cancelIdleCallback(id);
     }
     const id = window.setTimeout(run, 200);
