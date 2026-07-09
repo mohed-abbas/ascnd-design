@@ -5,6 +5,7 @@ import IntroLoader from "@/components/sections/intro/intro-loader";
 import Pills from "@/components/sections/pills/pills";
 import Pricing from "@/components/sections/pricing/pricing";
 import Tagline from "@/components/sections/tagline/tagline";
+import Testimonials from "@/components/sections/testimonials/testimonials";
 import WhyStay from "@/components/sections/why-stay/why-stay";
 import WorkingWith from "@/components/sections/working-with/working-with";
 
@@ -38,6 +39,10 @@ export default function Home() {
       {/* Feature matrix: ascnd vs hiring / agencies / freelancers ("none of the
           above"), a glass comparison table over the shared sky. */}
       <Comparison />
+      {/* Client pull-quote floating in open sky, framed by four rocks ringed
+          with thin orbit outlines ("testimonials"), over the shared sky. Sits
+          before pricing. */}
+      <Testimonials />
       {/* Two-tier pricing ("simple pricing, pause anytime"): subscription +
           fixed-sprint glass cards joined by a dashed connector, over the shared
           sky. Last section for now. */}
