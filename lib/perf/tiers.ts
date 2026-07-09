@@ -36,6 +36,12 @@
  * |                                            | blur reads as a milky blue bar over sky). |
  * | components/sections/why-stay/              | makeCappedInvalidate (--reel-y writes    |
  * |   why-stay-reveal.tsx                      | behind the glass pill)                   |
+ * | components/sections/comparison/            | comparisonAuraSweep — gates the featured |
+ * |   ascnd-aura.tsx                           | column's orbiting rainbow (per-frame     |
+ * |                                            | conic-gradient + blur repaint). false on |
+ * |                                            | low → static aura, no orbit. Also idles  |
+ * |                                            | to zero off-screen (IntersectionObserver)|
+ * |                                            | and rides the shared GSAP ticker.        |
  *
  * ★ RULE (audit 2026-07-02 F5.1): any NEW heavy effect — a WebGL canvas, a
  * free-running loop, a per-frame SVG/CSS filter — must be added to this table
@@ -85,6 +91,16 @@ export interface QualityConfig {
   readonly text3dCurveSegments: number;
   /** Text3D bevel tessellation. */
   readonly text3dBevelSegments: number;
+
+  // ── Comparison featured-column aura (components/sections/comparison/ascnd-aura.tsx) ──
+  /**
+   * Whether the featured "ascnd" column's rainbow aura ORBITS. The orbit is a
+   * per-frame conic-gradient + blur repaint; on the weakest tier we hold it
+   * static (a fixed-angle rainbow, no repaint) to drop that cost. Higher tiers
+   * still idle to zero off-screen (the orbit only runs while the section is in
+   * view). Reduced-motion also forces it static regardless of tier.
+   */
+  readonly comparisonAuraSweep: boolean;
 }
 
 export const TIERS: Record<TierName, QualityConfig> = {
@@ -107,6 +123,7 @@ export const TIERS: Record<TierName, QualityConfig> = {
     mtmBackside: false,
     text3dCurveSegments: 32,
     text3dBevelSegments: 12,
+    comparisonAuraSweep: true,
   },
   medium: {
     tier: "medium",
@@ -117,6 +134,7 @@ export const TIERS: Record<TierName, QualityConfig> = {
     mtmBackside: false,
     text3dCurveSegments: 16,
     text3dBevelSegments: 8,
+    comparisonAuraSweep: true,
   },
   low: {
     tier: "low",
@@ -127,5 +145,6 @@ export const TIERS: Record<TierName, QualityConfig> = {
     mtmBackside: false,
     text3dCurveSegments: 16,
     text3dBevelSegments: 6,
+    comparisonAuraSweep: false,
   },
 };

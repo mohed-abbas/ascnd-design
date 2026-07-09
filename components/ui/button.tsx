@@ -7,6 +7,7 @@ import type {
   ButtonHTMLAttributes,
   ReactNode,
 } from "react";
+import { AURA, GLOW_OPACITY, SWEEP_DURATION } from "./aura";
 
 /**
  * The site's CTA button — factored out of the two hero CTAs (hero-text.tsx,
@@ -41,19 +42,9 @@ import type {
  */
 export type ButtonVariant = "solid" | "clear";
 
-// The aura gradient — the siri-style rainbow from demo.html (the "creating your
-// board" ring). A CONIC gradient so the colour ORBITS the rim: the angle is
-// driven by --aura-angle (degrees, set per-frame by the rotation tween below),
-// and the endpoints match (#5ea8ff → #5ea8ff across 360°) so a full revolution
-// has no seam. Fallback 0 keeps the SSR/first paint valid before JS.
-const AURA =
-  "conic-gradient(from calc(var(--aura-angle, 0) * 1deg), #5ea8ff, #a06bff, #ff6ec7, #ff9d5c, #ffe36e, #5ef2c8, #5ea8ff)";
-
-// Seconds per full revolution of the aura around the rim (continuous). Matches
-// the demo's 2.6s auraSpin — slow enough to read as a smooth orbit.
-const SWEEP_DURATION = 2.6;
-// Glow strength on hover — matches the demo's .aura-glow (0.55).
-const GLOW_OPACITY = 0.55;
+// The rainbow aura (conic gradient orbiting the rim via --aura-angle), its sweep
+// duration and hover glow strength are shared with the comparison column's glow
+// — see components/ui/aura.ts.
 
 // Shared shape (root) — rounded corners, padding, size, centering. `group` so the
 // clear fill can react to hover in CSS; `isolate` so the aura layers stack cleanly

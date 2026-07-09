@@ -1,3 +1,4 @@
+import AscndAura from "./ascnd-aura";
 import { CheckMark, Dash } from "./comparison-icons";
 import {
   COMPARISON_COLUMNS,
@@ -65,19 +66,18 @@ export default function Comparison() {
           </p>
         </div>
 
-        {/* Glass matrix card (469:553), pinned at top:211. */}
-        <div className="absolute left-0 top-[211px] h-[601px] w-[1360px] overflow-clip rounded-[20px] border-[1.5px] border-solid border-white/30 bg-gradient-to-b from-black/10 to-black/5 backdrop-blur-[2px]">
+        {/* Glass matrix card (469:553), pinned at top:211. NOT overflow-clip:
+            the featured column spans the full card height and its rainbow glow
+            must bloom past the top/bottom edges (a clip would chop it into a
+            broken loop). The grid fills the card edge-to-edge with no content in
+            the rounded corners, so nothing else needs clipping. */}
+        <div className="absolute left-0 top-[211px] h-[601px] w-[1360px] rounded-[20px] border-[1.5px] border-solid border-white/30 bg-gradient-to-b from-black/10 to-black/5 backdrop-blur-[2px]">
           {/* Featured-column highlight (469:554): a brighter panel behind the
-              grid, spanning the "ascnd" track. Its edges double as that
-              column's vertical dividers. */}
-          <div
-            aria-hidden
-            className="pointer-events-none absolute left-[303.5px] top-[-1.5px] z-0 h-[601px] w-[173px] rounded-[20px] border border-solid border-white/40"
-            style={{
-              backgroundImage:
-                "linear-gradient(169.6deg, rgba(255,255,255,0.2) 1.55%, rgba(255,255,255,0.06) 97%)",
-            }}
-          />
+              grid over the "ascnd" track, at full card height, wearing the
+              siri-style rainbow aura (same effect as the CTA button's hover
+              ring). The card is not clipped, so its glowing border is a
+              continuous loop on all four sides. */}
+          <AscndAura />
 
           {/* Column dividers (Figma Line223): inset 13.5px from the top edge,
               unlike the full-height ascnd highlight border. */}
