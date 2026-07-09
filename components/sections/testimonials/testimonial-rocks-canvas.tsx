@@ -30,8 +30,9 @@ import { GROUP_H, GROUP_W, UNITS } from "./testimonials-data";
  *  - Lights: low ambient + a shaping key (flat ambient was the "clay" tell),
  *    hemisphere/rim keep undersides off near-black — kept light for the Figma.
  *  - AgX tone mapping (was NoToneMapping/`flat`) for photographic highlights.
- *  - Material: metalness 0, roughness 0.75 (was chalky 1.0), normalScale 1.4,
- *    envMapIntensity 0.6. (Metalness forced — glTF's absent factor defaults 1.)
+ *  - Material: metalness 0.2, roughness 0.25 (a glossy wet-stone sheen off the
+ *    IBL; was chalky 1.0), normalScale 1.4, envMapIntensity 0.6. (Metalness
+ *    forced — glTF's absent factor defaults 1.)
  *
  * Placement: an ORTHOGRAPHIC camera in R3F maps 1 world unit → 1 px, so each
  * rock sits at its exact group-px centre and its `size` reads as px on screen —
@@ -46,6 +47,11 @@ import { GROUP_H, GROUP_W, UNITS } from "./testimonials-data";
  * - dpr capped at 1.5. Tier gating + the no-WebGL/reduced-motion/mobile fallback
  *   live in the wrapper (testimonial-rocks.tsx); this file only mounts when 3D
  *   is already chosen.
+ * - LOADED AHEAD: the wrapper idle-preloads this chunk + the GLB long before
+ *   near-view (ReactDOM.preload + a warm import()), so useGLTF resolves from
+ *   cache at mount instead of a cold serial waterfall (chunk → then GLB). Only
+ *   the download moved earlier; the render still mounts at near-view and idles
+ *   off-screen.
  */
 
 useGLTF.preload("/rocks/testimonial-rock.glb");

@@ -50,6 +50,10 @@
  * |                                            | GSAP ticker + advance(), dpr≤1.5, and    |
  * |                                            | idles to zero off-screen (IO). No-WebGL/ |
  * |                                            | reduced-motion/mobile also → flat PNG.   |
+ * |                                            | When true, the wrapper idle-preloads the |
+ * |                                            | canvas chunk + GLB before near-view so   |
+ * |                                            | the mount is cache-hot, not a cold       |
+ * |                                            | chunk→GLB download waterfall.            |
  *
  * ★ RULE (audit 2026-07-02 F5.1): any NEW heavy effect — a WebGL canvas, a
  * free-running loop, a per-frame SVG/CSS filter — must be added to this table

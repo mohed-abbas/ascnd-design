@@ -3,6 +3,7 @@
 import dynamic from "next/dynamic";
 import Image from "next/image";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import ReactDOM from "react-dom";
 import { useQuality } from "@/lib/perf/use-quality";
 import { ROCK_SCALE, UNITS } from "./testimonials-data";
 
@@ -52,9 +53,13 @@ const noopSubscribe = () => () => {};
  * the flat fallback (canvas eligibility is unknowable on the server), then swap
  * after hydration — like CloudLayer.
  *
- * The 3D canvas is lazy: it mounts only once the section nears the viewport
+ * The 3D canvas is lazy: it MOUNTS only once the section nears the viewport
  * (IntersectionObserver, expanded margin) and pauses when it scrolls away, so
- * the 8.5 MB model isn't fetched until needed and the loop idles off-screen.
+ * the GPU loop idles off-screen. But mounting is NOT when we start downloading:
+ * once an eligible device hydrates we idle-preload the canvas chunk + the GLB
+ * (see the effect below) long before near-view, so the mount resolves from
+ * cache instead of a cold serial waterfall (chunk → then GLB) racing the user's
+ * arrival. Only the *downloads* move earlier; the render still idles off-screen.
  */
 export default function TestimonialRocks() {
   const eligible = useSyncExternalStore(subscribe, getSnapshot, () => false);
@@ -80,6 +85,38 @@ export default function TestimonialRocks() {
   }, []);
 
   const use3D = hydrated && eligible && testimonialsDrift;
+
+  // Warm the 3D chunk + GLB during idle, long before near-view, so the canvas
+  // mounts from cache instead of cold-loading a serial waterfall (chunk → then
+  // GLB) exactly as the user arrives. Only eligible 3D devices pay this; the
+  // PNG-fallback path never triggers it. The mount stays near-view gated below,
+  // so GPU work still idles off-screen — we move only the *downloads* earlier.
+  useEffect(() => {
+    if (!use3D) return;
+    const run = () => {
+      // GLB bytes start downloading in parallel with the chunk parse. Same
+      // FileLoader request the canvas later makes (same-origin, credentials
+      // "same-origin"), so crossOrigin="anonymous" matches and the preload is
+      // consumed — not double-fetched (cf. the font preload in layout.tsx).
+      ReactDOM.preload("/rocks/testimonial-rock.glb", {
+        as: "fetch",
+        crossOrigin: "anonymous",
+      });
+      // ...and the chunk downloads + parses, its module scope firing
+      // useGLTF.preload() → the GLB decodes into drei's cache, so the later
+      // near-view mount resolves synchronously and the load-in plays clean.
+      void import("./testimonial-rocks-canvas");
+    };
+    // Safari only shipped requestIdleCallback in 16.4 (our floor), but guard
+    // anyway and fall back to a short timeout so the preload always fires.
+    const ric = window.requestIdleCallback;
+    if (typeof ric === "function") {
+      const id = ric(run);
+      return () => window.cancelIdleCallback(id);
+    }
+    const id = window.setTimeout(run, 200);
+    return () => window.clearTimeout(id);
+  }, [use3D]);
 
   return (
     <div
