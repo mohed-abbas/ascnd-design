@@ -42,6 +42,12 @@
  * |                                            | low → static aura, no orbit. Also idles  |
  * |                                            | to zero off-screen (IntersectionObserver)|
  * |                                            | and rides the shared GSAP ticker.        |
+ * | components/sections/testimonials/          | testimonialsDrift — gates the rocks'     |
+ * |   testimonials-drift.tsx                   | orbit+tumble and the ring dots' revolve  |
+ * |                                            | (transform-only GSAP loops). false on    |
+ * |                                            | low → resting Figma pose. Idles to zero  |
+ * |                                            | off-screen (IntersectionObserver), rides |
+ * |                                            | the shared GSAP ticker.                  |
  *
  * ★ RULE (audit 2026-07-02 F5.1): any NEW heavy effect — a WebGL canvas, a
  * free-running loop, a per-frame SVG/CSS filter — must be added to this table
@@ -101,6 +107,16 @@ export interface QualityConfig {
    * view). Reduced-motion also forces it static regardless of tier.
    */
   readonly comparisonAuraSweep: boolean;
+
+  // ── Testimonials rock/ring drift (components/sections/testimonials/testimonials-drift.tsx) ──
+  /**
+   * Whether the testimonials rocks orbit + tumble and their ring dots revolve.
+   * All motion is transform-only GSAP loops on the shared ticker, gated to
+   * in-view (idle to zero off-screen). false on low → rocks/rings render at
+   * their resting Figma pose, no loops. Reduced-motion forces the same
+   * regardless of tier.
+   */
+  readonly testimonialsDrift: boolean;
 }
 
 export const TIERS: Record<TierName, QualityConfig> = {
@@ -124,6 +140,7 @@ export const TIERS: Record<TierName, QualityConfig> = {
     text3dCurveSegments: 32,
     text3dBevelSegments: 12,
     comparisonAuraSweep: true,
+    testimonialsDrift: true,
   },
   medium: {
     tier: "medium",
@@ -135,6 +152,7 @@ export const TIERS: Record<TierName, QualityConfig> = {
     text3dCurveSegments: 16,
     text3dBevelSegments: 8,
     comparisonAuraSweep: true,
+    testimonialsDrift: true,
   },
   low: {
     tier: "low",
@@ -146,5 +164,6 @@ export const TIERS: Record<TierName, QualityConfig> = {
     text3dCurveSegments: 16,
     text3dBevelSegments: 6,
     comparisonAuraSweep: false,
+    testimonialsDrift: false,
   },
 };

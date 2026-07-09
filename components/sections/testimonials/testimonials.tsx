@@ -1,5 +1,5 @@
 import Image from "next/image";
-import TestimonialRings from "./testimonial-rings";
+import TestimonialsDrift from "./testimonials-drift";
 import { TESTIMONIALS } from "./testimonials-data";
 
 /**
@@ -14,25 +14,67 @@ import { TESTIMONIALS } from "./testimonials-data";
  * the shared sky + global cloud layer already provide that atmosphere.
  *
  * The one centre-anchored block is the Figma `TestimonialRocks` group
- * (1239.771 × 595.775, itself centred in the 1512×982 frame). Every child is
- * pinned by its Figma metric so the rocks stay concentric with their rings.
+ * (1239.771 × 595.775, itself centred in the 1512×982 frame).
  *
- * Layout is authored animation-first: each rock is an independently positioned
- * wrapper (transform-free, so a reveal/float can drive its transform) with the
- * static rotation on an inner layer; the rings live in one overlay SVG with a
- * data hook per ring/dot; the quote is one node carrying [data-testimonials-
- * quote]. The reveal itself is added separately.
+ * ── UNIT MODEL (the layout is authored for the drift animation) ────────────
+ * Each rock + its ring + its dot is ONE co-located "unit", positioned as a
+ * zero-size POINT at the shared centre (ring centre from Figma — the rock is
+ * ~2px off in the mock; here they share one centre so they stay concentric).
+ * Every moving layer is its own point-anchored child so a rotation pivots about
+ * that centre, not a box corner:
+ *   [data-tm-ring]   — ring outline + dot; rotating it revolves the dot
+ *   [data-tm-holder] — the rock's orbit carrier (drift translates it)
+ *   [data-tm-spin]   — the rock's self-spin (drift rotates it); the resting
+ *                      Figma angle lives on the inner box's static transform
+ * At rest (SSR / reduced-motion / low tier) every layer is untouched, so the
+ * unit renders at its exact Figma pose. TestimonialsDrift drives the motion.
+ *
+ * Rocks are bigger than their rings and spill past the outline (as in Figma) —
+ * the source PNG is trimmed to the rock silhouette so object-cover fills the box.
  */
 
-// Rocks keyed by their CENTRE point in the group's space (so each sits
-// concentric with the matching ring in testimonial-rings.tsx), plus the box
-// size and static rotation lifted from the Figma instances (482:456–459).
-const ROCKS = [
-  { cx: 151.0855, cy: 101.3325, w: 136.844, h: 168.309, rotate: 60 }, // large · top-left
-  { cx: 1131.8855, cy: 487.8875, w: 136.844, h: 168.309, rotate: 135 }, // large · bottom-right
-  { cx: 1178.8855, cy: 54.8875, w: 59.472, h: 73.147, rotate: 135 }, // small · top-right
-  { cx: 61.1155, cy: 488.1145, w: 77.517, h: 95.341, rotate: 135 }, // small · bottom-left
-] as const;
+type Unit = {
+  /** Shared centre of the rock + ring, in the group's px space. */
+  cx: number;
+  cy: number;
+  rock: { w: number; h: number; rotate: number };
+  ring: { r: number; stroke: number };
+  /** Dot offset from the centre + its radius. */
+  dot: { dx: number; dy: number; r: number };
+};
+
+// Ring centres = Figma ellipse frame offset (20.28, 17) + each circle's centre;
+// dot offsets = dot centre − ring centre. Rocks share the ring centre.
+const UNITS: Unit[] = [
+  {
+    cx: 152.999,
+    cy: 101,
+    rock: { w: 136.844, h: 168.309, rotate: 60 },
+    ring: { r: 73.5, stroke: 1 },
+    dot: { dx: 49, dy: -78, r: 6 },
+  }, // 0 · large · top-left
+  {
+    cx: 1133.8,
+    cy: 487.555,
+    rock: { w: 136.844, h: 168.309, rotate: 135 },
+    ring: { r: 73.5, stroke: 1 },
+    dot: { dx: -71, dy: -68, r: 6 },
+  }, // 1 · large · bottom-right
+  {
+    cx: 1179.72,
+    cy: 54.7432,
+    rock: { w: 59.472, h: 73.147, rotate: 135 },
+    ring: { r: 31.9429, stroke: 0.434597 },
+    dot: { dx: -30.86, dy: -29.5526, r: 2.60758 },
+  }, // 2 · small · top-right
+  {
+    cx: 62.198,
+    cy: 487.926,
+    rock: { w: 77.517, h: 95.341, rotate: 135 },
+    ring: { r: 41.6349, stroke: 0.566462 },
+    dot: { dx: 13.7814, dy: -38.519, r: 3.39877 },
+  }, // 3 · small · bottom-left
+];
 
 export default function Testimonials() {
   const { quote } = TESTIMONIALS[0];
@@ -44,42 +86,64 @@ export default function Testimonials() {
     >
       {/* Centre-anchored design block = the Figma TestimonialRocks group. */}
       <div className="relative h-[595.775px] w-[1239.771px]">
-        {/* Rocks — each anchored by its centre (left/top = centre − half-size)
-            so the wrapper stays transform-free for animation; rotation is on
-            the inner layer. */}
-        {ROCKS.map((rock, i) => (
+        {UNITS.map((u, i) => (
           <div
             key={i}
-            data-testimonials-rock={i}
+            data-tm-unit
             className="absolute"
-            style={{
-              left: rock.cx - rock.w / 2,
-              top: rock.cy - rock.h / 2,
-              width: rock.w,
-              height: rock.h,
-            }}
+            style={{ left: u.cx, top: u.cy }}
           >
+            {/* Ring outline + dot — revolve together about the centre. */}
             <div
-              className="relative size-full"
-              style={{ transform: `rotate(${rock.rotate}deg)` }}
+              data-tm-ring
+              aria-hidden
+              className="pointer-events-none absolute left-0 top-0 h-0 w-0"
             >
-              <Image
-                src="/rocks/testimonial-rock.png"
-                alt=""
-                aria-hidden
-                fill
-                sizes={`${Math.ceil(rock.w)}px`}
-                className="select-none object-cover"
+              <span
+                className="absolute rounded-full border border-solid border-white"
+                style={{
+                  left: -u.ring.r,
+                  top: -u.ring.r,
+                  width: u.ring.r * 2,
+                  height: u.ring.r * 2,
+                  borderWidth: u.ring.stroke,
+                }}
               />
+              <span
+                className="absolute rounded-full bg-white"
+                style={{
+                  left: u.dot.dx - u.dot.r,
+                  top: u.dot.dy - u.dot.r,
+                  width: u.dot.r * 2,
+                  height: u.dot.r * 2,
+                }}
+              />
+            </div>
+
+            {/* Rock — holder (orbit) → spin (tumble) → box (resting angle). */}
+            <div data-tm-holder className="absolute left-0 top-0 h-0 w-0">
+              <div data-tm-spin className="absolute left-0 top-0 h-0 w-0">
+                <div
+                  className="relative"
+                  style={{
+                    width: u.rock.w,
+                    height: u.rock.h,
+                    transform: `translate(-50%, -50%) rotate(${u.rock.rotate}deg)`,
+                  }}
+                >
+                  <Image
+                    src="/rocks/testimonial-rock.png"
+                    alt=""
+                    aria-hidden
+                    fill
+                    sizes={`${Math.ceil(u.rock.w)}px`}
+                    className="select-none object-cover"
+                  />
+                </div>
+              </div>
             </div>
           </div>
         ))}
-
-        {/* Orbit outlines + dots overlay (482:460), in the group's space. */}
-        <TestimonialRings
-          data-testimonials-rings
-          className="pointer-events-none absolute left-[20.28px] top-[17px] h-[544.555px] w-[1191.602px]"
-        />
 
         {/* The pull-quote — centred in the group (box left 120, w 1000). Same
             49px mixed-font heading treatment as the sibling sections. */}
@@ -96,6 +160,8 @@ export default function Testimonials() {
           </p>
         </div>
       </div>
+
+      <TestimonialsDrift />
     </section>
   );
 }
