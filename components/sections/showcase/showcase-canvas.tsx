@@ -73,16 +73,14 @@ const PIVOT_WORLD_Y = -(WHEEL_PIVOT_Y - FRAME_HEIGHT / 2); // ≈ −2611
 // source order — good enough for the static fan; revisited if a phase needs it.
 const Z_STEP = 1;
 
-// ── Cloth warp (Phase 3) — shared drive uniforms ──────────────────────────────
-// One `uAmp` (0 = flat → 1 = full bend) and one `uTime` (travelling-wave phase),
-// shared BY REFERENCE across all 12 card materials so <ClothRig> drives the whole
-// fan with a single mutation per tick. `uAmp` is velocity-driven (fast scroll →
-// more bend) and relaxes to 0 at rest, where the rig stops repainting (idle to
-// zero — the whole reason this reads as "cloth in motion, flat when still").
-const clothUniforms = {
-  uAmp: { value: 0 },
-  uTime: { value: 0 },
-};
+// ── Cloth warp (Phase 3) — material registry ──────────────────────────────────
+// <ClothRig> drives the bend by mutating each card material's `uAmp` (0 = flat →
+// 1 = full bend) and `uTime` (travelling-wave phase) uniforms every tick. It must
+// mutate the MATERIAL's uniforms, not the object passed to <shaderMaterial>:
+// R3F CLONES that prop, so a shared original never reaches the shader (verified —
+// this was the Phase-3 wiring bug that left the cards flat). Each CardMesh
+// registers its live material here on mount.
+const cardMaterials = new Set<THREE.ShaderMaterial>();
 
 // ── Card material ────────────────────────────────────────────────────────────
 // A textured plane with rounded corners, a 1.5px white border, and the Figma
@@ -111,9 +109,9 @@ const CARD_VERTEX = /* glsl */ `
   // curl + a finer ripple; uSeed decorrelates the cards so they don't bend in
   // lockstep; uTime moves the waves while bending.
   float cloth(vec2 p, out float dzdx, out float dzdy) {
-    float kx1 = 6.2831853 * 1.15 / uSize.x;  // ~1.15 waves across the width
+    float kx1 = 6.2831853 * 1.50 / uSize.x;  // ~1.5 waves across the width
     float ky1 = 6.2831853 * 0.55 / uSize.y;  // gentle diagonal
-    float kx2 = 6.2831853 * 2.30 / uSize.x;  // finer ripple
+    float kx2 = 6.2831853 * 2.60 / uSize.x;  // finer ripple
     float ph1 = p.x * kx1 + p.y * ky1 + uTime * 2.1 + uSeed;
     float ph2 = p.x * kx2 - p.y * ky1 * 1.4 + uTime * 3.0 + uSeed * 1.7;
     float a1 = 1.0, a2 = 0.35;
@@ -127,9 +125,9 @@ const CARD_VERTEX = /* glsl */ `
     vec3 pos = position;
     float dzdx, dzdy;
     float z = cloth(position.xy, dzdx, dzdy);
-    float zPx = uAmp * 44.0;              // Z curl amplitude (drives shading)
+    float zPx = uAmp * 95.0;              // Z curl amplitude (shading + persp foreshorten)
     pos.z += zPx * z;
-    pos.x += uAmp * 10.0 * z;             // subtle in-plane ripple (visible under ortho)
+    pos.x += uAmp * 38.0 * z;             // in-plane ripple (visible even under ortho)
     // Surface normal of the height field (flat → +Z when uAmp = 0).
     vNormal = normalize(vec3(-zPx * dzdx, -zPx * dzdy, 1.0));
     gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
@@ -181,7 +179,7 @@ const CARD_FRAGMENT = /* glsl */ `
     // Curved areas turn away (facing < 1) → darkened troughs; a sideways sheen
     // (normal.x) brightens the crests for a fabric-like glint.
     float facing = clamp(vNormal.z, 0.0, 1.0);
-    float light = mix(1.0 - 0.40, 1.0, facing) + 0.14 * vNormal.x;
+    float light = mix(1.0 - 0.70, 1.0, facing) + 0.28 * vNormal.x;
     col *= light;
 
     gl_FragColor = vec4(col, alpha);
@@ -199,9 +197,8 @@ function makeCardUniforms(seed: number) {
     uScrimTop: { value: 0.1 }, // rgba(0,0,0,.1) at the top
     uScrimBottom: { value: 0.05 }, // rgba(0,0,0,.05) at the bottom
     uSeed: { value: seed }, // per-card phase offset (decorrelates the fan)
-    // Shared BY REFERENCE — <ClothRig> mutates these once to drive every card.
-    uAmp: clothUniforms.uAmp,
-    uTime: clothUniforms.uTime,
+    uAmp: { value: 0 }, // driven per-material by ClothRig (see cardMaterials)
+    uTime: { value: 0 },
   };
 }
 
@@ -263,6 +260,17 @@ function CardMesh({
   const matRef = useRef<THREE.ShaderMaterial>(null);
   const [uniforms] = useState(() => makeCardUniforms(index * 1.3));
 
+  // Register this card's live material so ClothRig can drive its cloth uniforms
+  // (R3F clones the uniforms prop, so the rig must reach the material directly).
+  useEffect(() => {
+    const mat = matRef.current;
+    if (!mat) return;
+    cardMaterials.add(mat);
+    return () => {
+      cardMaterials.delete(mat);
+    };
+  }, [texture]);
+
   // Feed the texture (and its true aspect for object-cover) once decoded, then
   // repaint (demand mode paints nothing on its own).
   useEffect(() => {
@@ -323,7 +331,7 @@ function Wheel({
 // Cloth drive tuning (see clothUniforms). SPEED_REF = the scroll speed
 // (progress per second) that maps to full bend; RISE/FALL ease the amplitude so
 // the cards snap into a bend and relax out of it with a trailing, cloth-like lag.
-const CLOTH_SPEED_REF = 0.55;
+const CLOTH_SPEED_REF = 0.28;
 const CLOTH_RISE = 0.35;
 const CLOTH_FALL = 0.08;
 const CLOTH_EPS = 0.002;
@@ -346,6 +354,12 @@ function ClothRig() {
   const invalidate = useThree((s) => s.invalidate);
   useEffect(() => {
     const capped = makeCappedInvalidate(invalidate);
+    const drive = (a: number, t: number) => {
+      for (const m of cardMaterials) {
+        m.uniforms.uAmp.value = a;
+        m.uniforms.uTime.value = t;
+      }
+    };
     let amp = 0;
     let settled = true;
     let lastProgress = getWheelProgress();
@@ -364,22 +378,27 @@ function ClothRig() {
       const speed = Math.abs(p - lastProgress) / dt; // progress per second
       lastProgress = p;
 
-      const target = Math.min(1, speed / CLOTH_SPEED_REF);
+      // [PROTOTYPE DEBUG] force override to inspect the bend at a fixed amp.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const forced = (window as any).__forceCloth;
+      const target =
+        typeof forced === "number"
+          ? forced
+          : Math.min(1, speed / CLOTH_SPEED_REF);
       amp += (target - amp) * (target > amp ? CLOTH_RISE : CLOTH_FALL);
 
       if (amp < CLOTH_EPS && target < CLOTH_EPS) {
         // Settled: write one flat frame, then idle (stop repainting).
         if (!settled) {
           amp = 0;
-          clothUniforms.uAmp.value = 0;
+          drive(0, time);
           capped();
           settled = true;
         }
         return;
       }
       settled = false;
-      clothUniforms.uAmp.value = amp;
-      clothUniforms.uTime.value = time;
+      drive(amp, time);
       capped();
     };
 
@@ -501,6 +520,14 @@ function ContextWatchdog({ onUnrecoverable }: { onUnrecoverable: () => void }) {
 export default function ShowcaseCanvas() {
   const { showcaseDprMax } = useQuality();
   const wheelRef = useRef<THREE.Group>(null);
+  // [PROTOTYPE] camera model chosen by ?cloth=… (default persp). persp → the
+  // curl foreshortens (3D poster bend); ortho → flat, bend reads via shading +
+  // in-plane ripple only. Lets us A/B the two directions before committing.
+  const [mode] = useState<"persp" | "ortho">(() =>
+    new URLSearchParams(window.location.search).get("cloth") === "ortho"
+      ? "ortho"
+      : "persp",
+  );
   // Mesh subdivision for the cloth warp — SNAPSHOT at mount (segments drive the
   // geometry; honouring a live tier step-down would rebuild all 12 meshes). Card
   // is taller than wide, so the height gets proportionally more segments.
@@ -515,12 +542,30 @@ export default function ShowcaseCanvas() {
 
   return (
     <Canvas
-      key={canvasKey}
-      orthographic
+      key={`${canvasKey}-${mode}`}
+      orthographic={mode === "ortho"}
       frameloop="demand"
       dpr={[1, showcaseDprMax]}
       gl={{ antialias: true, alpha: true }}
-      camera={{ position: [0, 0, 100], zoom: 1, near: 0.1, far: 1000 }}
+      camera={
+        mode === "ortho"
+          ? { position: [0, 0, 100], zoom: 1, near: 0.1, far: 1000 }
+          : { position: [0, 0, 1800], fov: 28, near: 1, far: 5000 }
+      }
+      // [PROTOTYPE] persp: place the camera so the frustum height at the card
+      // plane (z≈0) equals the canvas height → 1 world unit ≈ 1 CSS px, so the
+      // arc still pixel-matches while the cloth Z-curl foreshortens. (Mutating
+      // the camera in onCreated, not an effect — the same pattern the cloud
+      // canvas uses to avoid the compiler's hook-immutability rule.)
+      onCreated={(state) => {
+        if (mode !== "persp") return;
+        const cam = state.camera as THREE.PerspectiveCamera;
+        const fovRad = (cam.fov * Math.PI) / 180;
+        cam.position.set(0, 0, state.size.height / (2 * Math.tan(fovRad / 2)));
+        cam.near = 1;
+        cam.far = cam.position.z * 2;
+        cam.updateProjectionMatrix();
+      }}
       // The wrapper is pointer-events-none, but R3F sets the <canvas> itself to
       // pointer-events:auto; force it off so this full-section overlay never
       // swallows clicks meant for the DOM caption / CTA beneath it.
