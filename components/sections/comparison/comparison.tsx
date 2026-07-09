@@ -46,12 +46,13 @@ export default function Comparison() {
   return (
     <section
       data-comparison
-      className="relative min-h-dvh w-full overflow-hidden"
+      className="relative flex min-h-dvh w-full items-center justify-center overflow-hidden py-[20dvh]"
     >
-      {/* Content block (Figma 469:646, 812×1360), viewport-centred. Header and
-          card are pinned (top:0 / top:211) rather than flow-spaced, matching the
-          design's explicit positions. */}
-      <div className="absolute left-1/2 top-1/2 h-[812px] w-[1360px] -translate-x-1/2 -translate-y-1/2">
+      {/* Content block (Figma 469:646, 812×1360), flow-centred so a viewport
+          shorter than the block grows the section (page scrolls) instead of
+          clipping it. Header and card are pinned inside (top:0 / top:211) rather
+          than flow-spaced, matching the design's explicit positions. */}
+      <div className="relative h-[812px] w-[1360px]">
         {/* Heading + supporting copy (469:550), pinned to the top and centred. */}
         <div className="absolute left-1/2 top-0 flex w-[628px] -translate-x-1/2 flex-col items-center gap-[25px] text-center text-white">
           <h2 className="text-[49px] leading-[1.1] tracking-[-1.47px]">

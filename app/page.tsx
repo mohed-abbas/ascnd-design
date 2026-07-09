@@ -3,6 +3,7 @@ import Comparison from "@/components/sections/comparison/comparison";
 import Hero from "@/components/sections/hero/hero";
 import IntroLoader from "@/components/sections/intro/intro-loader";
 import Pills from "@/components/sections/pills/pills";
+import Pricing from "@/components/sections/pricing/pricing";
 import Tagline from "@/components/sections/tagline/tagline";
 import WhyStay from "@/components/sections/why-stay/why-stay";
 import WorkingWith from "@/components/sections/working-with/working-with";
@@ -35,9 +36,12 @@ export default function Home() {
           with"), centred over the shared sky. */}
       <WorkingWith />
       {/* Feature matrix: ascnd vs hiring / agencies / freelancers ("none of the
-          above"), a glass comparison table over the shared sky. Last section
-          for now. */}
+          above"), a glass comparison table over the shared sky. */}
       <Comparison />
+      {/* Two-tier pricing ("simple pricing, pause anytime"): subscription +
+          fixed-sprint glass cards joined by a dashed connector, over the shared
+          sky. Last section for now. */}
+      <Pricing />
     </>
   );
 }
