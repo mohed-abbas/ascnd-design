@@ -42,12 +42,14 @@
  * |                                            | low → static aura, no orbit. Also idles  |
  * |                                            | to zero off-screen (IntersectionObserver)|
  * |                                            | and rides the shared GSAP ticker.        |
- * | components/sections/testimonials/          | testimonialsDrift — gates the rocks'     |
- * |   testimonials-drift.tsx                   | orbit+tumble and the ring dots' revolve  |
- * |                                            | (transform-only GSAP loops). false on    |
- * |                                            | low → resting Figma pose. Idles to zero  |
- * |                                            | off-screen (IntersectionObserver), rides |
- * |                                            | the shared GSAP ticker.                  |
+ * | components/sections/testimonials/          | testimonialsDrift — gates the ring dots' |
+ * |   testimonials-drift.tsx +                 | revolve (transform GSAP loop) AND the 3D |
+ * |   testimonial-rocks(-canvas).tsx           | GLB rock canvas (orbit+tumble). false on |
+ * |                                            | low → flat PNG rocks, no revolve. Canvas |
+ * |                                            | is frameloop=never, driven by the shared |
+ * |                                            | GSAP ticker + advance(), dpr≤1.5, and    |
+ * |                                            | idles to zero off-screen (IO). No-WebGL/ |
+ * |                                            | reduced-motion/mobile also → flat PNG.   |
  *
  * ★ RULE (audit 2026-07-02 F5.1): any NEW heavy effect — a WebGL canvas, a
  * free-running loop, a per-frame SVG/CSS filter — must be added to this table
