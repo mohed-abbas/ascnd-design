@@ -113,8 +113,8 @@ function useRockAsset() {
 
     const env = buildSkyEnvMap(gl);
     const material = (src.material as THREE.MeshStandardMaterial).clone();
-    material.metalness = 0; // rock, not metal
-    material.roughness = 0.75; // was 1.0 (chalky) — let it catch a faint sheen
+    material.metalness = 0.2; // rock, not metal
+    material.roughness = 0.25; // was 1.0 (chalky) — let it catch a faint sheen
     material.envMap = env; // sky IBL — grounds it in the scene
     material.envMapIntensity = 0.6;
     material.normalScale?.set(1.4, 1.4); // deepen surface relief
