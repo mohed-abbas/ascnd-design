@@ -1,4 +1,5 @@
 import AscndAura from "./ascnd-aura";
+import ComparisonReveal from "./comparison-reveal";
 import { CheckMark, Dash } from "./comparison-icons";
 import {
   COMPARISON_COLUMNS,
@@ -53,15 +54,23 @@ export default function Comparison() {
           clipping it. Header and card are pinned inside (top:0 / top:211) rather
           than flow-spaced, matching the design's explicit positions. */}
       <div className="relative h-[812px] w-[1360px]">
+        {/* Word-by-word blur reveal on the heading (see comparison-reveal.tsx). */}
+        <ComparisonReveal />
         {/* Heading + supporting copy (469:550), pinned to the top and centred. */}
         <div className="absolute left-1/2 top-0 flex w-[628px] -translate-x-1/2 flex-col items-center gap-[25px] text-center text-white">
-          <h2 className="text-[49px] leading-[1.1] tracking-[-1.47px]">
+          <h2
+            data-comparison-head
+            className="text-[49px] leading-[1.1] tracking-[-1.47px]"
+          >
             <span className="block whitespace-nowrap font-light">
               hiring, agencies, or freelancers?
             </span>
             <span className="block font-instrument">none of the above.</span>
           </h2>
-          <p className="w-[567px] text-[16px] leading-normal tracking-[0.32px]">
+          <p
+            data-comparison-sub
+            className="w-[567px] text-[16px] leading-normal tracking-[0.32px]"
+          >
             freelancers go quiet a week before launch. agencies can&rsquo;t be
             paused. hiring takes months. there&rsquo;s a fourth option.
           </p>

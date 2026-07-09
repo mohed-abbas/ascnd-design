@@ -32,16 +32,19 @@ export default function Pricing() {
     >
       <div className="flex w-[1146px] flex-col items-center gap-[20px]">
         {/* ── Header ─────────────────────────────────────────────────────── */}
-        <div
-          data-pricing-head
-          className="flex w-[628px] flex-col items-center gap-[25px] text-center text-white"
-        >
-          <h2 className="text-[49px] font-light leading-[1.1] tracking-[-1.47px]">
+        <div className="flex w-[628px] flex-col items-center gap-[25px] text-center text-white">
+          <h2
+            data-pricing-head
+            className="text-[49px] font-light leading-[1.1] tracking-[-1.47px]"
+          >
             <span>simple pricing, </span>
             <span className="font-instrument">pause</span>
             <span> anytime</span>
           </h2>
-          <p className="text-[16px] leading-normal tracking-[0.32px]">
+          <p
+            data-pricing-sub
+            className="text-[16px] leading-normal tracking-[0.32px]"
+          >
             two ways to work with us. same senior team either way.
           </p>
         </div>
