@@ -1,5 +1,6 @@
 import Cards from "@/components/sections/cards/cards";
 import Comparison from "@/components/sections/comparison/comparison";
+import Faq from "@/components/sections/faq/faq";
 import Hero from "@/components/sections/hero/hero";
 import IntroLoader from "@/components/sections/intro/intro-loader";
 import Pills from "@/components/sections/pills/pills";
@@ -45,8 +46,12 @@ export default function Home() {
       <Testimonials />
       {/* Two-tier pricing ("simple pricing, pause anytime"): subscription +
           fixed-sprint glass cards joined by a dashed connector, over the shared
-          sky. Last section for now. */}
+          sky. */}
       <Pricing />
+      {/* "questions, answered straight": six glass FAQ pills that expand on click
+          (single-open accordion), under a mixed-font heading, over the shared
+          sky. Last section for now. */}
+      <Faq />
     </>
   );
 }
