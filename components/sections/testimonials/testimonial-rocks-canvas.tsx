@@ -93,10 +93,17 @@ type Motion = (typeof MOTION3D)[number];
 // rock (~7% of its size): the cursor stays inside the silhouette, so the dodge
 // can't push the rock out from under the pointer and jitter over/out.
 const HOVER_GROW = 0.06; // scale multiplier at full hover
-const HOVER_PUSH = 0.07; // dodge distance as a fraction of the rock's size
+const HOVER_PUSH = 0.16; // dodge distance as a fraction of the rock's size
 const HOVER_IN = { k: 1, duration: 0.45, ease: "back.out(2.5)" } as const;
 const HOVER_OUT = { k: 0, duration: 0.6, ease: "power2.out" } as const;
-const PUSH_TWEEN = { duration: 0.35, ease: "power2.out" } as const;
+// GLIDE, not push — a critically-damped spring integrated each frame by the
+// render pump. A re-targeted tween CANNOT glide here: it restarts its ease on
+// every pointer-move, so with any gentle (slow-start) ease the rock stayed
+// pinned in the first frames of the curve and the dodge read as unnoticeable.
+// The spring carries velocity across re-aims — it drifts into motion, tracks
+// the cursor continuously, and settles with no stop-start.
+const PUSH_SPRING = 40; // stiffness — ~0.5s response
+const PUSH_DAMP = 2 * Math.sqrt(PUSH_SPRING); // critical damping — no overshoot
 
 /**
  * A procedural sky-gradient environment map (image-based lighting) — no network
@@ -215,19 +222,15 @@ function Rock({
     if (on) requestQuoteAdvance();
   }, []);
 
-  // The dodge: push.pos (px, world space) eases toward wherever dodge() last
-  // aimed it — quickTo re-targets the same tween on every pointer move, so
-  // chasing the rock re-aims the lean smoothly instead of restarting it. One
-  // memo builds the target object AND its quickTo setters (a ref would trip
-  // react-hooks/refs: .current must not be read during render).
-  const pushTo = useMemo(() => {
-    const pos = { x: 0, y: 0 };
-    return {
-      pos,
-      x: gsap.quickTo(pos, "x", PUSH_TWEEN),
-      y: gsap.quickTo(pos, "y", PUSH_TWEEN),
-    };
-  }, []);
+  // The dodge state: pos (px, world space) is what the pump applies; target is
+  // where dodge() last aimed it (away from the cursor, zero on pointer-out);
+  // vel makes it a spring — pos chases target with continuous velocity, so
+  // re-aiming on every pointer move stays glassy-smooth.
+  const push = useRef({
+    pos: { x: 0, y: 0 },
+    vel: { x: 0, y: 0 },
+    target: { x: 0, y: 0 },
+  });
   const dodge = useCallback(
     (e: ThreeEvent<PointerEvent>) => {
       // Away = from the cursor's hit point on the rock, through its centre.
@@ -245,18 +248,16 @@ function Rock({
         dy /= len;
       }
       const mag = unit.size * HOVER_PUSH;
-      pushTo.x(dx * mag);
-      pushTo.y(dy * mag);
+      push.current.target.x = dx * mag;
+      push.current.target.y = dy * mag;
     },
-    [pushTo, unit.size],
+    [unit.size],
   );
   useEffect(
     () => () => {
       hoverTween.current?.kill();
-      pushTo.x.tween?.kill();
-      pushTo.y.tween?.kill();
     },
-    [pushTo],
+    [],
   );
 
   // Fly-in offset (px), added to the orbit position by the pump each frame.
@@ -275,14 +276,25 @@ function Rock({
   );
 
   // The float: a slow orbit + 3D tumble about the base, plus the fly-in offset,
-  // plus the hover nudge (dodge push + grow).
+  // plus the hover nudge (dodge spring + grow).
   useEffect(() => {
     const size = unit.size;
+    let last: number | undefined;
     return register((t) => {
+      // Integrate the dodge spring. dt is clamped so a pump gap (section was
+      // off-screen, tab hidden) can't make one giant unstable step on resume.
+      const dt = Math.min(last === undefined ? 0 : t - last, 0.05);
+      last = t;
+      const p = push.current;
+      p.vel.x += ((p.target.x - p.pos.x) * PUSH_SPRING - p.vel.x * PUSH_DAMP) * dt;
+      p.vel.y += ((p.target.y - p.pos.y) * PUSH_SPRING - p.vel.y * PUSH_DAMP) * dt;
+      p.pos.x += p.vel.x * dt;
+      p.pos.y += p.vel.y * dt;
+
       const a = motion.orbitPhase + t * (TAU / motion.orbitDur) * motion.orbitDir;
       orbit.current?.position.set(
-        baseX + Math.cos(a) * motion.orbitR + offset.current.x + pushTo.pos.x,
-        baseY + Math.sin(a) * motion.orbitR + offset.current.y + pushTo.pos.y,
+        baseX + Math.cos(a) * motion.orbitR + offset.current.x + p.pos.x,
+        baseY + Math.sin(a) * motion.orbitR + offset.current.y + p.pos.y,
         0,
       );
       tumble.current?.rotation.set(
@@ -292,7 +304,7 @@ function Rock({
       );
       mesh.current?.scale.setScalar((size / 2) * (1 + hover.current.k * HOVER_GROW));
     });
-  }, [register, motion, baseX, baseY, unit.size, pushTo]);
+  }, [register, motion, baseX, baseY, unit.size]);
 
   // PLAY: re-park off-screen, then ease the offset → 0 (the fly-in). The pump
   // (running whenever the section is visible) renders every frame of it.
@@ -340,8 +352,8 @@ function Rock({
           onPointerMove={dodge}
           onPointerOut={() => {
             setHover(false);
-            pushTo.x(0);
-            pushTo.y(0);
+            push.current.target.x = 0;
+            push.current.target.y = 0;
           }}
         />
       </group>
