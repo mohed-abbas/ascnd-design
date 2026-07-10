@@ -5,6 +5,7 @@ import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { SplitText } from "gsap/SplitText";
 import { QUOTE_CYCLE_SECS, TESTIMONIALS } from "./testimonials-data";
+import { onQuoteAdvance } from "./testimonials-quote-advance";
 
 gsap.registerPlugin(ScrollTrigger, SplitText);
 
@@ -68,6 +69,12 @@ function quoteMarkup(i: number) {
  * the quote is still below the fold. "top 80%" plays it as the quote actually
  * enters view — a beat ahead of the rocks flying in.
  *
+ * HOVER ADVANCE: hovering any rock (testimonial-rocks-canvas.tsx) fires
+ * requestQuoteAdvance() → we swap right away, same exit/entrance as the clock.
+ * Guarded: ignored before the initial reveal and while an exit is already in
+ * flight (natural ~1s cooldown, so a waggling cursor can't shred the words);
+ * a hover DURING the entrance kills it and swaps — responsiveness wins.
+ *
  * House-rules compliance: the 5s clock is a gsap.delayedCall (shared ticker —
  * no setInterval/private rAF) and is PAUSED while the section is off-screen
  * (ScrollTrigger toggle), so the cycle idles to zero out of view; an in-flight
@@ -94,6 +101,7 @@ export default function TestimonialsQuoteReveal() {
     let viewST: ScrollTrigger | undefined;
     let cancelled = false;
     let inView = false;
+    let revealed = false; // initial scroll-in reveal has played
     let idx = 0;
 
     // Hide the quote synchronously, before fonts resolve, so no finished-state
@@ -110,6 +118,7 @@ export default function TestimonialsQuoteReveal() {
 
     const playIn = () => {
       if (cancelled) return;
+      revealed = true;
       split?.revert();
       split = new SplitText(quote, { type: "words" });
       inTween = gsap.fromTo(split.words, WORD_IN.from, {
@@ -120,6 +129,10 @@ export default function TestimonialsQuoteReveal() {
 
     const swap = () => {
       if (cancelled || !split) return;
+      // A hover-advance can land mid-entrance or ahead of the clock — clear
+      // both so the exit owns the words and no stale timer double-swaps.
+      inTween?.kill();
+      timer?.kill();
       outTween = gsap.to(split.words, {
         ...WORD_OUT,
         onComplete: () => {
@@ -131,6 +144,15 @@ export default function TestimonialsQuoteReveal() {
         },
       });
     };
+
+    // Hover on a rock → advance now. Ignored until the initial reveal has
+    // played, and while an exit is already running (the ~1s swap is the
+    // cooldown — repeated hovers can't stack exits on the same words).
+    const unAdvance = onQuoteAdvance(() => {
+      if (cancelled || !revealed) return;
+      if (outTween?.isActive()) return;
+      swap();
+    });
 
     const build = () => {
       if (cancelled) return;
@@ -166,6 +188,7 @@ export default function TestimonialsQuoteReveal() {
 
     return () => {
       cancelled = true;
+      unAdvance();
       st?.kill();
       viewST?.kill();
       timer?.kill();

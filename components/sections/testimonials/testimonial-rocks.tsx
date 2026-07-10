@@ -192,7 +192,13 @@ export default function TestimonialRocks() {
             // to their ring. The section's overflow-hidden clips this to the
             // viewport, so a rock is invisible until it crosses the screen edge.
             // Mounted at idle (warm), paused off-screen so it idles to zero.
-            <div className="absolute left-1/2 top-1/2 h-[120vh] w-[120vw] -translate-x-1/2 -translate-y-1/2">
+            //
+            // pointer-events-auto (overriding the layer's none): the rocks are
+            // hover-interactive — R3F raycasts the meshes, so only an actual rock
+            // hit reacts (nudge + next quote); the rest of the canvas ignores the
+            // pointer. The quote sits ABOVE this layer (z-10), so its text stays
+            // selectable; nothing else interactive lives under the canvas.
+            <div className="pointer-events-auto absolute left-1/2 top-1/2 h-[120vh] w-[120vw] -translate-x-1/2 -translate-y-1/2">
               <RocksCanvas paused={!inView} />
             </div>
           )

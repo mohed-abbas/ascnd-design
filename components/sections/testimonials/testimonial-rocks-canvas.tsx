@@ -2,7 +2,7 @@
 
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Canvas, useThree } from "@react-three/fiber";
-import { useGLTF } from "@react-three/drei";
+import { useCursor, useGLTF } from "@react-three/drei";
 import * as THREE from "three";
 import gsap from "gsap";
 import { GROUP_H, GROUP_W, REVEAL, UNITS } from "./testimonials-data";
@@ -11,6 +11,7 @@ import {
   onTestimonialsRevealPlay,
   onTestimonialsRevealReset,
 } from "./testimonials-reveal";
+import { requestQuoteAdvance } from "./testimonials-quote-advance";
 
 /**
  * The four testimonials rocks as REAL 3D meshes — the "floating 3D rock" the
@@ -18,6 +19,11 @@ import {
  * its own axes and orbits its ring centre. The rings + dots stay as DOM
  * (testimonials.tsx); this canvas layers over them, so a rock overflows and sits
  * in front of its outline exactly as in the Figma.
+ *
+ * The rocks are HOVER-INTERACTIVE: pointer over a rock (raycast against the
+ * mesh) springs a small lift+grow nudge and advances the pull-quote to the next
+ * testimonial (requestQuoteAdvance → testimonials-quote-reveal.tsx). See the
+ * HOVER_* constants + Rock below.
  *
  * Source model: /rocks/testimonial-rock.v1.glb — the studio GLB (glb2.glb, kept in
  * public/rocks/ as the uncompressed source) optimised for the web via
@@ -76,6 +82,16 @@ const MOTION3D = [
 ] as const;
 
 type Motion = (typeof MOTION3D)[number];
+
+// Hover nudge — pointer over a rock lifts it a few px and grows it slightly
+// (a springy "the rock noticed you" pop), and fires the next testimonial
+// (requestQuoteAdvance → testimonials-quote-reveal.tsx). k is a 0→1 progress
+// tweened by GSAP and read by the render pump, so the nudge composes with the
+// orbit + fly-in offsets without touching them.
+const HOVER_LIFT = 10; // px, canvas space is y-up so + is up
+const HOVER_GROW = 0.06; // scale multiplier at full hover
+const HOVER_IN = { k: 1, duration: 0.45, ease: "back.out(2.5)" } as const;
+const HOVER_OUT = { k: 0, duration: 0.6, ease: "power2.out" } as const;
 
 /**
  * A procedural sky-gradient environment map (image-based lighting) — no network
@@ -175,8 +191,30 @@ function Rock({
 }) {
   const orbit = useRef<THREE.Group>(null);
   const tumble = useRef<THREE.Group>(null);
+  const mesh = useRef<THREE.Mesh>(null);
   const baseX = unit.cx - GROUP_W / 2;
   const baseY = -(unit.cy - GROUP_H / 2);
+
+  // Hover: raycast pointer events on the mesh itself (pixel-true against the
+  // rock's geometry — no DOM hotspot to drift from the tumbling silhouette).
+  // Entering triggers the next testimonial and springs the nudge in; leaving
+  // eases it back. useCursor flips the page cursor to a pointer while over.
+  const hover = useRef({ k: 0 });
+  const hoverTween = useRef<gsap.core.Tween | undefined>(undefined);
+  const [hovered, setHovered] = useState(false);
+  useCursor(hovered);
+  const setHover = useCallback((on: boolean) => {
+    setHovered(on);
+    hoverTween.current?.kill();
+    hoverTween.current = gsap.to(hover.current, on ? HOVER_IN : HOVER_OUT);
+    if (on) requestQuoteAdvance();
+  }, []);
+  useEffect(
+    () => () => {
+      hoverTween.current?.kill();
+    },
+    [],
+  );
 
   // Fly-in offset (px), added to the orbit position by the pump each frame.
   // Parked at base × (flyFactor − 1) — so the rock sits at base × flyFactor,
@@ -193,13 +231,18 @@ function Rock({
       : { x: parkedX, y: parkedY },
   );
 
-  // The float: a slow orbit + 3D tumble about the base, plus the fly-in offset.
+  // The float: a slow orbit + 3D tumble about the base, plus the fly-in offset,
+  // plus the hover nudge (lift + grow, scaled by hover.k).
   useEffect(() => {
+    const size = unit.size;
     return register((t) => {
       const a = motion.orbitPhase + t * (TAU / motion.orbitDur) * motion.orbitDir;
       orbit.current?.position.set(
         baseX + Math.cos(a) * motion.orbitR + offset.current.x,
-        baseY + Math.sin(a) * motion.orbitR + offset.current.y,
+        baseY +
+          Math.sin(a) * motion.orbitR +
+          offset.current.y +
+          hover.current.k * HOVER_LIFT,
         0,
       );
       tumble.current?.rotation.set(
@@ -207,8 +250,9 @@ function Rock({
         motion.phase[1] + t * motion.spin[1],
         motion.phase[2] + t * motion.spin[2],
       );
+      mesh.current?.scale.setScalar((size / 2) * (1 + hover.current.k * HOVER_GROW));
     });
-  }, [register, motion, baseX, baseY]);
+  }, [register, motion, baseX, baseY, unit.size]);
 
   // PLAY: re-park off-screen, then ease the offset → 0 (the fly-in). The pump
   // (running whenever the section is visible) renders every frame of it.
@@ -243,7 +287,17 @@ function Rock({
   return (
     <group ref={orbit} position={[baseX, baseY, 0]}>
       <group ref={tumble} rotation={[motion.phase[0], motion.phase[1], motion.phase[2]]}>
-        <mesh geometry={geometry} material={material} scale={unit.size / 2} />
+        <mesh
+          ref={mesh}
+          geometry={geometry}
+          material={material}
+          scale={unit.size / 2}
+          onPointerOver={(e) => {
+            e.stopPropagation();
+            setHover(true);
+          }}
+          onPointerOut={() => setHover(false)}
+        />
       </group>
     </group>
   );
