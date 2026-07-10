@@ -1,5 +1,6 @@
 import TestimonialRocks from "./testimonial-rocks";
 import TestimonialsDrift from "./testimonials-drift";
+import TestimonialsQuoteReveal from "./testimonials-quote-reveal";
 import { TESTIMONIALS, UNITS } from "./testimonials-data";
 
 /**
@@ -91,6 +92,7 @@ export default function Testimonials() {
       </div>
 
       <TestimonialsDrift />
+      <TestimonialsQuoteReveal />
     </section>
   );
 }
