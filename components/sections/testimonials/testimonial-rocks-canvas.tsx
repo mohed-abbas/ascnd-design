@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Canvas, useThree } from "@react-three/fiber";
+import { Canvas, useThree, type ThreeEvent } from "@react-three/fiber";
 import { useCursor, useGLTF } from "@react-three/drei";
 import * as THREE from "three";
 import gsap from "gsap";
@@ -21,9 +21,9 @@ import { requestQuoteAdvance } from "./testimonials-quote-advance";
  * in front of its outline exactly as in the Figma.
  *
  * The rocks are HOVER-INTERACTIVE: pointer over a rock (raycast against the
- * mesh) springs a small lift+grow nudge and advances the pull-quote to the next
- * testimonial (requestQuoteAdvance → testimonials-quote-reveal.tsx). See the
- * HOVER_* constants + Rock below.
+ * mesh) makes it dodge away from the cursor with a slight grow, and advances
+ * the pull-quote to the next testimonial (requestQuoteAdvance →
+ * testimonials-quote-reveal.tsx). See the HOVER_* constants + Rock below.
  *
  * Source model: /rocks/testimonial-rock.v1.glb — the studio GLB (glb2.glb, kept in
  * public/rocks/ as the uncompressed source) optimised for the web via
@@ -83,15 +83,20 @@ const MOTION3D = [
 
 type Motion = (typeof MOTION3D)[number];
 
-// Hover nudge — pointer over a rock lifts it a few px and grows it slightly
-// (a springy "the rock noticed you" pop), and fires the next testimonial
-// (requestQuoteAdvance → testimonials-quote-reveal.tsx). k is a 0→1 progress
-// tweened by GSAP and read by the render pump, so the nudge composes with the
-// orbit + fly-in offsets without touching them.
-const HOVER_LIFT = 10; // px, canvas space is y-up so + is up
+// Hover nudge — pointer over a rock grows it slightly AND pushes it away from
+// the cursor (a shy dodge: the push direction is cursor-hit → rock centre,
+// re-aimed on every pointer move, so the rock keeps leaning away as you chase
+// it), and fires the next testimonial (requestQuoteAdvance →
+// testimonials-quote-reveal.tsx). k (grow) and the push offset are GSAP-tweened
+// values read by the render pump, so the nudge composes with the orbit +
+// fly-in offsets without touching them. The push is deliberately small vs the
+// rock (~7% of its size): the cursor stays inside the silhouette, so the dodge
+// can't push the rock out from under the pointer and jitter over/out.
 const HOVER_GROW = 0.06; // scale multiplier at full hover
+const HOVER_PUSH = 0.07; // dodge distance as a fraction of the rock's size
 const HOVER_IN = { k: 1, duration: 0.45, ease: "back.out(2.5)" } as const;
 const HOVER_OUT = { k: 0, duration: 0.6, ease: "power2.out" } as const;
+const PUSH_TWEEN = { duration: 0.35, ease: "power2.out" } as const;
 
 /**
  * A procedural sky-gradient environment map (image-based lighting) — no network
@@ -209,11 +214,49 @@ function Rock({
     hoverTween.current = gsap.to(hover.current, on ? HOVER_IN : HOVER_OUT);
     if (on) requestQuoteAdvance();
   }, []);
+
+  // The dodge: push.pos (px, world space) eases toward wherever dodge() last
+  // aimed it — quickTo re-targets the same tween on every pointer move, so
+  // chasing the rock re-aims the lean smoothly instead of restarting it. One
+  // memo builds the target object AND its quickTo setters (a ref would trip
+  // react-hooks/refs: .current must not be read during render).
+  const pushTo = useMemo(() => {
+    const pos = { x: 0, y: 0 };
+    return {
+      pos,
+      x: gsap.quickTo(pos, "x", PUSH_TWEEN),
+      y: gsap.quickTo(pos, "y", PUSH_TWEEN),
+    };
+  }, []);
+  const dodge = useCallback(
+    (e: ThreeEvent<PointerEvent>) => {
+      // Away = from the cursor's hit point on the rock, through its centre.
+      const c = orbit.current?.position;
+      if (!c) return;
+      let dx = c.x - e.point.x;
+      let dy = c.y - e.point.y;
+      const len = Math.hypot(dx, dy);
+      // Dead-centre hit has no direction — dodge upward.
+      if (len < 1) {
+        dx = 0;
+        dy = 1;
+      } else {
+        dx /= len;
+        dy /= len;
+      }
+      const mag = unit.size * HOVER_PUSH;
+      pushTo.x(dx * mag);
+      pushTo.y(dy * mag);
+    },
+    [pushTo, unit.size],
+  );
   useEffect(
     () => () => {
       hoverTween.current?.kill();
+      pushTo.x.tween?.kill();
+      pushTo.y.tween?.kill();
     },
-    [],
+    [pushTo],
   );
 
   // Fly-in offset (px), added to the orbit position by the pump each frame.
@@ -232,17 +275,14 @@ function Rock({
   );
 
   // The float: a slow orbit + 3D tumble about the base, plus the fly-in offset,
-  // plus the hover nudge (lift + grow, scaled by hover.k).
+  // plus the hover nudge (dodge push + grow).
   useEffect(() => {
     const size = unit.size;
     return register((t) => {
       const a = motion.orbitPhase + t * (TAU / motion.orbitDur) * motion.orbitDir;
       orbit.current?.position.set(
-        baseX + Math.cos(a) * motion.orbitR + offset.current.x,
-        baseY +
-          Math.sin(a) * motion.orbitR +
-          offset.current.y +
-          hover.current.k * HOVER_LIFT,
+        baseX + Math.cos(a) * motion.orbitR + offset.current.x + pushTo.pos.x,
+        baseY + Math.sin(a) * motion.orbitR + offset.current.y + pushTo.pos.y,
         0,
       );
       tumble.current?.rotation.set(
@@ -252,7 +292,7 @@ function Rock({
       );
       mesh.current?.scale.setScalar((size / 2) * (1 + hover.current.k * HOVER_GROW));
     });
-  }, [register, motion, baseX, baseY, unit.size]);
+  }, [register, motion, baseX, baseY, unit.size, pushTo]);
 
   // PLAY: re-park off-screen, then ease the offset → 0 (the fly-in). The pump
   // (running whenever the section is visible) renders every frame of it.
@@ -295,8 +335,14 @@ function Rock({
           onPointerOver={(e) => {
             e.stopPropagation();
             setHover(true);
+            dodge(e);
           }}
-          onPointerOut={() => setHover(false)}
+          onPointerMove={dodge}
+          onPointerOut={() => {
+            setHover(false);
+            pushTo.x(0);
+            pushTo.y(0);
+          }}
         />
       </group>
     </group>
