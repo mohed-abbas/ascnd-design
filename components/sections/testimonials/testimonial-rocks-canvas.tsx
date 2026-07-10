@@ -5,7 +5,8 @@ import { Canvas, useThree } from "@react-three/fiber";
 import { useGLTF } from "@react-three/drei";
 import * as THREE from "three";
 import gsap from "gsap";
-import { GROUP_H, GROUP_W, UNITS } from "./testimonials-data";
+import { GROUP_H, GROUP_W, REVEAL, UNITS } from "./testimonials-data";
+import { onTestimonialsRevealStart } from "./testimonials-reveal";
 
 /**
  * The four testimonials rocks as REAL 3D meshes — the "floating 3D rock" the
@@ -46,16 +47,15 @@ import { GROUP_H, GROUP_W, UNITS } from "./testimonials-data";
  * Heavy-effect contract (CLAUDE.md):
  * - Rides the shared GSAP ticker — frameloop="never" + advance(); NO private
  *   rAF (React-three's own loop is off). The ticker is added only while the
- *   section is in view (`paused` from the wrapper's IntersectionObserver), so
- *   it IDLES TO ZERO off-screen.
+ *   section is in view or mid-reveal (`paused` from the wrapper's ScrollTrigger),
+ *   so it IDLES TO ZERO off-screen.
  * - dpr capped at 1.5. Tier gating + the no-WebGL/reduced-motion/mobile fallback
  *   live in the wrapper (testimonial-rocks.tsx); this file only mounts when 3D
  *   is already chosen.
- * - LOADED AHEAD: the wrapper idle-preloads this chunk + the GLB long before
- *   near-view (ReactDOM.preload + a warm import()), so useGLTF resolves from
- *   cache at mount instead of a cold serial waterfall (chunk → then GLB). Only
- *   the download moved earlier; the render still mounts at near-view and idles
- *   off-screen.
+ * - WARMED AHEAD: the wrapper idle-mounts this canvas (after idle-preloading the
+ *   GLB) long before the section is on screen, so useGLTF resolves from cache and
+ *   the shader/PMREM/geometry upload happen on a calm main thread. The single
+ *   warm frame paints at opacity 0; then zero frames until the reveal fades it in.
  */
 
 useGLTF.preload("/rocks/testimonial-rock.v1.glb");
@@ -129,6 +129,11 @@ function useRockAsset() {
     material.envMapIntensity = 0.6;
     material.normalScale?.set(1.4, 1.4); // deepen surface relief
     material.side = THREE.DoubleSide;
+    // Start invisible: the reveal fades opacity 0 → 1 (Scene). transparent stays
+    // on (depthWrite is still true, so faces occlude normally — no ghosting at
+    // rest); the 4 rocks don't overlap, so the blend cost is negligible.
+    material.transparent = true;
+    material.opacity = 0;
     material.needsUpdate = true;
 
     return { geometry, material, env };
@@ -164,6 +169,9 @@ function Rock({
   const baseX = unit.cx - GROUP_W / 2;
   const baseY = -(unit.cy - GROUP_H / 2);
 
+  // The rock sits at its base position and slowly orbits + tumbles (the "float").
+  // The reveal is a fade (opacity, on the shared material — Scene), so there's no
+  // per-rock entrance motion here; it's simply always at home.
   useEffect(() => {
     return register((t) => {
       const a = motion.orbitPhase + t * (TAU / motion.orbitDur) * motion.orbitDir;
@@ -201,17 +209,88 @@ function Scene({ paused }: { paused: boolean }) {
     };
   }, []);
 
-  // Drive the render off the shared GSAP ticker (LenisProvider's one loop) — no
-  // private rAF. Added only while in view, so it idles to zero off-screen.
+  // The render pump. frameloop="never", so a frame paints only when this calls
+  // advance(). It rides the shared GSAP ticker (LenisProvider's one loop) — no
+  // private rAF — which keeps ticking DURING scroll, so the reveal animates as
+  // you scroll in.
+  //
+  // ⚠️ Why this is imperative, not a plain `if (paused) …` effect: the reveal
+  // must START the pump the instant the shared gate fires, and that happens
+  // SYNCHRONOUSLY inside the scroll's IntersectionObserver callback. A React
+  // effect keyed on the `paused` prop is a PASSIVE effect — deferred while the
+  // main thread is busy scrolling — so the pump (and the rocks) only appeared
+  // once you STOPPED scrolling, while the rings (plain GSAP, fired in the same
+  // IO callback) revealed on time. So the gate turns the pump on synchronously
+  // (renders mid-scroll, in lockstep with the rings); `paused` only governs
+  // idling to zero once the reveal is over.
+  const pump = useCallback(
+    (t: number) => {
+      for (const fn of updaters.current) fn(t);
+      advance(t * 1000);
+    },
+    [advance],
+  );
+
+  const pausedRef = useRef(paused);
+  const revealingRef = useRef(false);
+  const addedRef = useRef(false);
+  const sync = useCallback(() => {
+    const want = !pausedRef.current || revealingRef.current;
+    if (want && !addedRef.current) {
+      gsap.ticker.add(pump);
+      addedRef.current = true;
+    } else if (!want && addedRef.current) {
+      gsap.ticker.remove(pump);
+      addedRef.current = false;
+    }
+  }, [pump]);
+
   useEffect(() => {
-    if (paused) return;
-    const tick = (time: number) => {
-      for (const fn of updaters.current) fn(time);
-      advance(time * 1000);
+    pausedRef.current = paused;
+    sync();
+  }, [paused, sync]);
+
+  useEffect(() => {
+    if (!asset) return;
+    const mat = asset.material;
+    const revealTotal = REVEAL.rockFadeDur + 0.3;
+    let done: gsap.core.Tween | undefined;
+    let fade: gsap.core.Tween | undefined;
+    const unsub = onTestimonialsRevealStart(() => {
+      revealingRef.current = true;
+      sync(); // synchronous — pump starts mid-scroll, so the fade renders live
+      // Fade the rocks in (shared material → all four together); the rings then
+      // draw in around them (DOM, testimonials-drift.tsx, timed off REVEAL).
+      fade = gsap.to(mat, {
+        opacity: 1,
+        duration: REVEAL.rockFadeDur,
+        ease: REVEAL.rockFadeEase,
+      });
+      done = gsap.delayedCall(revealTotal, () => {
+        revealingRef.current = false;
+        sync();
+      });
+    });
+    return () => {
+      unsub();
+      done?.kill();
+      fade?.kill();
+      if (addedRef.current) {
+        gsap.ticker.remove(pump);
+        addedRef.current = false;
+      }
     };
-    gsap.ticker.add(tick);
-    return () => gsap.ticker.remove(tick);
-  }, [paused, advance]);
+  }, [sync, pump, asset]);
+
+  // Warm the pipeline before the section arrives (Option A): one render compiles
+  // the shader program and uploads geometry/textures NOW, at the wide-margin
+  // mount, so the reveal later is pure animation — nothing left to load or
+  // compile. A single paint, not a loop; the material starts at opacity 0, so
+  // this warm frame is invisible even though the rocks are at their positions.
+  useEffect(() => {
+    if (!asset) return;
+    advance(performance.now());
+  }, [asset, advance]);
 
   if (!asset) return null;
 

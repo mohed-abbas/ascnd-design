@@ -3,12 +3,24 @@
 import { useEffect } from "react";
 import gsap from "gsap";
 import { useQuality } from "@/lib/perf/use-quality";
+import { REVEAL } from "./testimonials-data";
+import {
+  onTestimonialsRevealArm,
+  onTestimonialsRevealStart,
+} from "./testimonials-reveal";
 
 /**
- * The ring dots' slow revolve. Each ring outline is a circle (symmetric), so
- * spinning it only appears to move its dot — "the ring rotates" reads as the dot
- * travelling around the centre. Directions alternate and durations differ so no
- * two units sync. The rocks' own orbit + 3D tumble live in the GLB canvas
+ * The DOM rings: their one-time REVEAL and their ongoing dot revolve.
+ *
+ * Reveal — when the 3D rocks fly in (the shared gate is armed), each ring is
+ * snapped hidden up front, then drawn in the instant its rock lands (timed off
+ * the shared REVEAL constants, so it stays in lockstep with the canvas). Not
+ * armed → rings just render visible and only the revolve runs.
+ *
+ * Revolve — each ring outline is a circle (symmetric), so spinning it only
+ * appears to move its dot — "the ring rotates" reads as the dot travelling
+ * around the centre. Directions alternate and durations differ so no two units
+ * sync. The rocks' own fly-in + orbit + 3D tumble live in the GLB canvas
  * (testimonial-rocks-canvas.tsx); this only drives the DOM rings.
  *
  * Renders nothing — drives the [data-tm-ring] layers in testimonials.tsx.
@@ -45,6 +57,30 @@ export default function TestimonialsDrift() {
     const rings = gsap.utils.toArray<HTMLElement>("[data-tm-ring]", section);
     if (rings.length === 0) return;
 
+    // Ring reveal — only when the 3D rocks are doing their fly-in (armed). Snap
+    // each ring hidden NOW (the section is still off-screen, so no flash), then
+    // draw it in the instant its rock lands (REVEAL.ringDelay is rock-landing
+    // time). Not armed (flat fallback / low tier / reduced-motion) → rings stay
+    // visible and only the revolve below runs, exactly as before. Rotation vs
+    // scale/opacity are independent props, so the revolve and reveal compose.
+    const revealTweens: gsap.core.Tween[] = [];
+    const unArm = onTestimonialsRevealArm(() => {
+      gsap.set(rings, { opacity: 0, scale: 0.6 });
+    });
+    const unStart = onTestimonialsRevealStart(() => {
+      rings.forEach((ring, i) => {
+        revealTweens.push(
+          gsap.to(ring, {
+            opacity: 1,
+            scale: 1,
+            duration: REVEAL.ringDur,
+            delay: REVEAL.ringDelay(i),
+            ease: REVEAL.ringEase,
+          }),
+        );
+      });
+    });
+
     const tweens = rings.map((ring, i) => {
       const m = RING[i % RING.length];
       return gsap.to(ring, {
@@ -69,9 +105,12 @@ export default function TestimonialsDrift() {
     io.observe(section);
 
     return () => {
+      unArm();
+      unStart();
       io.disconnect();
       for (const t of tweens) t.kill();
-      gsap.set(rings, { clearProps: "transform" });
+      for (const t of revealTweens) t.kill();
+      gsap.set(rings, { clearProps: "transform,opacity" });
     };
   }, [testimonialsDrift]);
 

@@ -25,6 +25,23 @@ export const GROUP_H = 595.775;
  */
 export const ROCK_SCALE = 1.34;
 
+/**
+ * Reveal choreography — shared by the 3D rocks (canvas) and the DOM rings so
+ * they stay in lockstep across the two render systems. The rocks FADE IN in
+ * place over `rockFadeDur`; once they're up, each ring draws in around its rock
+ * (staggered by `ringStagger`). Both sides start from ONE shared signal
+ * (testimonials-reveal.ts), so identical timing here === visual sync.
+ */
+export const REVEAL = {
+  rockFadeDur: 0.7,
+  rockFadeEase: "power2.out",
+  ringDur: 0.5,
+  ringEase: "back.out(1.8)",
+  ringStagger: 0.09,
+  /** When ring i starts, relative to the shared reveal start (secs). */
+  ringDelay: (i: number) => REVEAL.rockFadeDur + REVEAL.ringStagger * i,
+} as const;
+
 export type Unit = {
   /** Shared centre of the rock + ring, in the group's px space. */
   cx: number;

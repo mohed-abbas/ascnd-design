@@ -4,8 +4,15 @@ import dynamic from "next/dynamic";
 import Image from "next/image";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import ReactDOM from "react-dom";
+import gsap from "gsap";
+import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { useQuality } from "@/lib/perf/use-quality";
 import { ROCK_SCALE, UNITS } from "./testimonials-data";
+import {
+  armTestimonialsReveal,
+  isTestimonialsRevealArmed,
+  startTestimonialsReveal,
+} from "./testimonials-reveal";
 
 // The WebGL canvas is client-only; ssr:false must live in a Client Component.
 const RocksCanvas = dynamic(() => import("./testimonial-rocks-canvas"), {
@@ -53,13 +60,20 @@ const noopSubscribe = () => () => {};
  * the flat fallback (canvas eligibility is unknowable on the server), then swap
  * after hydration — like CloudLayer.
  *
- * The 3D canvas is lazy: it MOUNTS only once the section nears the viewport
- * (IntersectionObserver, expanded margin) and pauses when it scrolls away, so
- * the GPU loop idles off-screen. But mounting is NOT when we start downloading:
- * once an eligible device hydrates we idle-preload the canvas chunk + the GLB
- * (see the effect below) long before near-view, so the mount resolves from
- * cache instead of a cold serial waterfall (chunk → then GLB) racing the user's
- * arrival. Only the *downloads* move earlier; the render still idles off-screen.
+ * The 3D canvas is warmed EARLY, not lazily on scroll. Once an eligible device
+ * hydrates we idle-preload the chunk + GLB AND mount the canvas (both in the one
+ * idle callback below), so the costly first render — WebGL context, GLTF resolve,
+ * PMREM bake, shader compile — finishes on a calm main thread long before the
+ * user arrives. The canvas is `frameloop="never"`, so once that single warm frame
+ * is painted (invisibly, at opacity 0) it renders ZERO frames until the reveal —
+ * it idles to zero while mounted, satisfying the heavy-effect contract.
+ *
+ * ⚠️ Why mount is NOT gated on IntersectionObserver: IO callbacks are spec'd
+ * low-priority and get starved during continuous scroll on a heavy page, so a
+ * mount gated on IO only fired once you STOPPED scrolling — which is exactly why
+ * the rocks used to appear only on scroll-stop while the rings (ScrollTrigger,
+ * scroll-frame-synced) revealed on time. Mounting at idle removes that last
+ * scroll-timing dependency entirely; the reveal itself is ScrollTrigger-driven.
  */
 export default function TestimonialRocks() {
   const eligible = useSyncExternalStore(subscribe, getSnapshot, () => false);
@@ -67,35 +81,71 @@ export default function TestimonialRocks() {
   const hydrated = useSyncExternalStore(noopSubscribe, () => true, () => false);
 
   const wrapRef = useRef<HTMLDivElement>(null);
-  const [nearView, setNearView] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const [inView, setInView] = useState(false);
 
+  // The reveal + in-view gate. ScrollTrigger, NOT IntersectionObserver: IO
+  // callbacks are throttled/deferred during continuous scroll, so anything gated
+  // on IO only fires once you STOP. ScrollTrigger is evaluated every scroll frame
+  // off the shared Lenis→GSAP loop, so it fires mid-scroll — the rocks reveal in
+  // lockstep with the rings, no scroll-stop needed. (The canvas MOUNT is warmed
+  // at idle, not here — see the idle effect below — so by the time this fires the
+  // canvas is already up and the reveal is pure animation.)
   useEffect(() => {
     const el = wrapRef.current;
     if (!el) return;
-    const io = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) setNearView(true);
-        setInView(entry.isIntersecting);
+
+    // Trigger on the ROCK CLUSTER (el), not the section. The section is
+    // min-h-dvh with the rocks centred in it, so "section top enters the
+    // viewport" fires while the rocks are still ~half a viewport BELOW the fold —
+    // the fade-in-place would play entirely off-screen and finish (rocks already
+    // opaque) before you ever scrolled them into view, reading as "no fade". Off
+    // the cluster's centre reaching the viewport bottom, the fade starts as the
+    // rocks actually enter view, so it's SEEN. (The old fly-in fired early on
+    // purpose — a fade-in-place is the opposite: it must play while on screen.)
+    gsap.registerPlugin(ScrollTrigger);
+    const st = ScrollTrigger.create({
+      trigger: el,
+      start: "center bottom", // fade as the rock cluster enters from the bottom
+      end: "bottom top",
+      onToggle: (self) => setInView(self.isActive),
+      onEnter: () => {
+        if (isTestimonialsRevealArmed()) startTestimonialsReveal();
       },
-      { rootMargin: "40%" },
-    );
-    io.observe(el);
-    return () => io.disconnect();
+      onEnterBack: () => {
+        if (isTestimonialsRevealArmed()) startTestimonialsReveal();
+      },
+    });
+
+    return () => {
+      st.kill();
+    };
   }, []);
 
   const use3D = hydrated && eligible && testimonialsDrift;
 
-  // Warm the 3D chunk + GLB during idle, long before near-view, so the canvas
-  // mounts from cache instead of cold-loading a serial waterfall (chunk → then
-  // GLB) exactly as the user arrives. Only eligible 3D devices pay this; the
-  // PNG-fallback path never triggers it. The mount stays near-view gated below,
-  // so GPU work still idles off-screen — we move only the *downloads* earlier.
+  // Arm the reveal the moment we know this device will do the 3D version, so the
+  // rings snap to their hidden pre-reveal state before the section is ever on
+  // screen (no flash). Not armed → the flat fallback + static rings render as-is
+  // and the reveal gate stays dormant.
+  useEffect(() => {
+    if (use3D) armTestimonialsReveal();
+  }, [use3D]);
+
+  // Warm the 3D canvas during idle, long before the section is on screen: preload
+  // the GLB, then MOUNT the canvas so its costly first render (context, GLTF
+  // resolve, PMREM bake, shader compile) happens now, on a calm main thread. The
+  // canvas is frameloop="never" and starts at opacity 0, so this is one invisible
+  // warm frame then zero frames until the reveal — it idles to zero while mounted.
+  // Mounting here (not on a scroll-driven IntersectionObserver) is what removes
+  // the scroll-stop dependency: by the time the ScrollTrigger reveal fires, the
+  // rocks are already up and only need to fade in. Only eligible 3D devices pay
+  // this; the PNG-fallback path never triggers it.
   useEffect(() => {
     if (!use3D) return;
     const run = () => {
       // GLB bytes start downloading in parallel with the chunk parse. Same
-      // FileLoader request the canvas later makes (same-origin, credentials
+      // FileLoader request the canvas makes (same-origin, credentials
       // "same-origin"), so crossOrigin="anonymous" matches and the preload is
       // consumed — not double-fetched (cf. the font preload in layout.tsx).
       ReactDOM.preload("/rocks/testimonial-rock.v1.glb", {
@@ -103,9 +153,10 @@ export default function TestimonialRocks() {
         crossOrigin: "anonymous",
       });
       // ...and the chunk downloads + parses, its module scope firing
-      // useGLTF.preload() → the GLB decodes into drei's cache, so the later
-      // near-view mount resolves synchronously and the load-in plays clean.
+      // useGLTF.preload() → the GLB decodes into drei's cache, so the mount
+      // resolves synchronously and the warm render is clean. Then mount.
       void import("./testimonial-rocks-canvas");
+      setMounted(true);
     };
     // Safari only shipped requestIdleCallback in 16.4 (our floor), but guard
     // anyway and fall back to a short timeout so the preload always fires. The
@@ -128,7 +179,10 @@ export default function TestimonialRocks() {
       className="pointer-events-none absolute inset-0"
     >
       {use3D
-        ? nearView && (
+        ? mounted && (
+            // Canvas fills the group box — the rocks fade in at their home
+            // positions (no off-screen fly-in), so it needn't exceed the box.
+            // Mounted at idle (warm), paused off-screen so it idles to zero.
             <div className="absolute inset-0">
               <RocksCanvas paused={!inView} />
             </div>
