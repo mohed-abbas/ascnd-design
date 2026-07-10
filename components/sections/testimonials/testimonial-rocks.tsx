@@ -95,20 +95,36 @@ export default function TestimonialRocks() {
     const el = wrapRef.current;
     if (!el) return;
 
-    // Trigger on the ROCK CLUSTER (el), not the section. The section is
-    // min-h-dvh with the rocks centred in it, so "section top enters the
-    // viewport" fires while the rocks are still ~half a viewport BELOW the fold —
-    // the fade-in-place would play entirely off-screen and finish (rocks already
-    // opaque) before you ever scrolled them into view, reading as "no fade". Off
-    // the cluster's centre reaching the viewport bottom, the fade starts as the
-    // rocks actually enter view, so it's SEEN. (The old fly-in fired early on
-    // purpose — a fade-in-place is the opposite: it must play while on screen.)
     gsap.registerPlugin(ScrollTrigger);
-    const st = ScrollTrigger.create({
-      trigger: el,
-      start: "center bottom", // fade as the rock cluster enters from the bottom
+
+    // TWO independent gates on the rock cluster (el) — DON'T fold them into one:
+    //
+    //  • VISIBILITY (pause/resume) — WIDE, anchored to the whole SECTION (not the
+    //    cluster). The render pump drives the rocks' orbit + tumble, and it runs
+    //    the whole time ANY part of the section is on screen; it only freezes once
+    //    the FULL section has left the viewport, and resumes as it comes back.
+    //    Anchoring this to the smaller cluster froze the rocks while the section
+    //    was still partly visible (they read as static images). "top bottom →
+    //    bottom top" on the section is the widest sensible window.
+    //
+    //  • REVEAL (one-shot fly-in) — fires once the cluster is well into view. The
+    //    rocks launch from beyond the screen edges, so the cluster has to be far
+    //    enough in that those start points are actually off-screen; "center 60%"
+    //    (cluster centre 60% down the viewport) fires as the section settles into
+    //    view. The reveal singleton makes onEnter/onEnterBack idempotent.
+    //
+    // Both are ScrollTrigger (scroll-frame-synced), so neither the rotation nor
+    // the reveal depends on the scroll stopping.
+    const section = el.closest<HTMLElement>("[data-testimonials]") ?? el;
+    const visibility = ScrollTrigger.create({
+      trigger: section,
+      start: "top bottom",
       end: "bottom top",
       onToggle: (self) => setInView(self.isActive),
+    });
+    const reveal = ScrollTrigger.create({
+      trigger: el,
+      start: "center 60%",
       onEnter: () => {
         if (isTestimonialsRevealArmed()) startTestimonialsReveal();
       },
@@ -118,7 +134,8 @@ export default function TestimonialRocks() {
     });
 
     return () => {
-      st.kill();
+      visibility.kill();
+      reveal.kill();
     };
   }, []);
 
@@ -180,10 +197,12 @@ export default function TestimonialRocks() {
     >
       {use3D
         ? mounted && (
-            // Canvas fills the group box — the rocks fade in at their home
-            // positions (no off-screen fly-in), so it needn't exceed the box.
+            // Canvas is oversized + centred on the group box so the rocks can fly
+            // in from BEYOND the viewport edges — they start off-screen and ease
+            // to their ring. The section's overflow-hidden clips this to the
+            // viewport, so a rock is invisible until it crosses the screen edge.
             // Mounted at idle (warm), paused off-screen so it idles to zero.
-            <div className="absolute inset-0">
+            <div className="absolute left-1/2 top-1/2 h-[120vh] w-[120vw] -translate-x-1/2 -translate-y-1/2">
               <RocksCanvas paused={!inView} />
             </div>
           )

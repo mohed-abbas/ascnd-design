@@ -27,19 +27,30 @@ export const ROCK_SCALE = 1.34;
 
 /**
  * Reveal choreography — shared by the 3D rocks (canvas) and the DOM rings so
- * they stay in lockstep across the two render systems. The rocks FADE IN in
- * place over `rockFadeDur`; once they're up, each ring draws in around its rock
- * (staggered by `ringStagger`). Both sides start from ONE shared signal
- * (testimonials-reveal.ts), so identical timing here === visual sync.
+ * they stay in lockstep across the two render systems. The rocks FLY IN from
+ * off-screen: each starts at base × `flyFactor` (well outside the viewport,
+ * along its own outward radial → the four arrive from four directions) and eases
+ * to its home position over `flyDur`, staggered by `flyStagger`. Once a rock
+ * lands, its ring draws in around it (`ringDelay` = that rock's landing time).
+ * Both sides start from ONE shared signal (testimonials-reveal.ts), so identical
+ * timing here === visual sync.
+ *
+ * These are the tunable knobs: `flyFactor` sets how far off-screen (and thus how
+ * much on-screen travel you see — smaller = the rock enters closer to home);
+ * `flyEase`/`flyDur` shape the landing.
  */
 export const REVEAL = {
-  rockFadeDur: 0.7,
-  rockFadeEase: "power2.out",
+  /** Rock fly-in start position = base × flyFactor (off-screen), tween → base. */
+  flyFactor: 3.5,
+  flyDur: 0.85,
+  flyEase: "power3.out",
+  flyStagger: 0.08,
   ringDur: 0.5,
   ringEase: "back.out(1.8)",
-  ringStagger: 0.09,
-  /** When ring i starts, relative to the shared reveal start (secs). */
-  ringDelay: (i: number) => REVEAL.rockFadeDur + REVEAL.ringStagger * i,
+  /** When rock i launches, relative to the shared reveal start (secs). */
+  flyDelay: (i: number) => REVEAL.flyStagger * i,
+  /** When ring i draws in — just after rock i lands. */
+  ringDelay: (i: number) => REVEAL.flyDelay(i) + REVEAL.flyDur + 0.05,
 } as const;
 
 export type Unit = {

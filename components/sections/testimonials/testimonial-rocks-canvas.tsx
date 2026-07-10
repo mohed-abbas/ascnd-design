@@ -129,9 +129,10 @@ function useRockAsset() {
     material.envMapIntensity = 0.6;
     material.normalScale?.set(1.4, 1.4); // deepen surface relief
     material.side = THREE.DoubleSide;
-    // Start invisible: the reveal fades opacity 0 → 1 (Scene). transparent stays
-    // on (depthWrite is still true, so faces occlude normally — no ghosting at
-    // rest); the 4 rocks don't overlap, so the blend cost is negligible.
+    // Start invisible + (via Rock) off-screen: the fly-in reveal snaps the shared
+    // material visible (opacity → 1, Scene) and eases each rock in from beyond the
+    // viewport. transparent stays on (depthWrite is still true, so faces occlude
+    // normally — no ghosting); the 4 rocks don't overlap, so blend cost is nil.
     material.transparent = true;
     material.opacity = 0;
     material.needsUpdate = true;
@@ -154,12 +155,14 @@ function useRockAsset() {
 function Rock({
   unit,
   motion,
+  index,
   geometry,
   material,
   register,
 }: {
   unit: (typeof UNITS)[number];
   motion: Motion;
+  index: number;
   geometry: THREE.BufferGeometry;
   material: THREE.Material;
   register: (fn: (t: number) => void) => () => void;
@@ -169,15 +172,22 @@ function Rock({
   const baseX = unit.cx - GROUP_W / 2;
   const baseY = -(unit.cy - GROUP_H / 2);
 
-  // The rock sits at its base position and slowly orbits + tumbles (the "float").
-  // The reveal is a fade (opacity, on the shared material — Scene), so there's no
-  // per-rock entrance motion here; it's simply always at home.
+  // Fly-in offset (px), added to the orbit position by the pump each frame. It
+  // starts at base × (flyFactor − 1) — so the rock begins at base × flyFactor,
+  // well outside the viewport, along its own outward radial (the four thus arrive
+  // from four directions) — and the reveal eases it to 0, landing on the ring.
+  const offset = useRef({
+    x: baseX * (REVEAL.flyFactor - 1),
+    y: baseY * (REVEAL.flyFactor - 1),
+  });
+
+  // The float: a slow orbit + 3D tumble about the base, plus the fly-in offset.
   useEffect(() => {
     return register((t) => {
       const a = motion.orbitPhase + t * (TAU / motion.orbitDur) * motion.orbitDir;
       orbit.current?.position.set(
-        baseX + Math.cos(a) * motion.orbitR,
-        baseY + Math.sin(a) * motion.orbitR,
+        baseX + Math.cos(a) * motion.orbitR + offset.current.x,
+        baseY + Math.sin(a) * motion.orbitR + offset.current.y,
         0,
       );
       tumble.current?.rotation.set(
@@ -187,6 +197,26 @@ function Rock({
       );
     });
   }, [register, motion, baseX, baseY]);
+
+  // Fly in from off-screen when the shared gate fires: ease the offset → 0. The
+  // pump (already running for the reveal) renders every frame of it. Subscribing
+  // means a rock that mounts AFTER the gate fired (anchor-jump) still flies in.
+  useEffect(() => {
+    let tween: gsap.core.Tween | undefined;
+    const unsub = onTestimonialsRevealStart(() => {
+      tween = gsap.to(offset.current, {
+        x: 0,
+        y: 0,
+        duration: REVEAL.flyDur,
+        delay: REVEAL.flyDelay(index),
+        ease: REVEAL.flyEase,
+      });
+    });
+    return () => {
+      unsub();
+      tween?.kill();
+    };
+  }, [index]);
 
   return (
     <group ref={orbit} position={[baseX, baseY, 0]}>
@@ -253,19 +283,18 @@ function Scene({ paused }: { paused: boolean }) {
   useEffect(() => {
     if (!asset) return;
     const mat = asset.material;
-    const revealTotal = REVEAL.rockFadeDur + 0.3;
+    // Keep the pump alive until the last rock has landed (+ a little slack).
+    const revealTotal = REVEAL.flyDelay(UNITS.length - 1) + REVEAL.flyDur + 0.4;
     let done: gsap.core.Tween | undefined;
     let fade: gsap.core.Tween | undefined;
     const unsub = onTestimonialsRevealStart(() => {
       revealingRef.current = true;
-      sync(); // synchronous — pump starts mid-scroll, so the fade renders live
-      // Fade the rocks in (shared material → all four together); the rings then
-      // draw in around them (DOM, testimonials-drift.tsx, timed off REVEAL).
-      fade = gsap.to(mat, {
-        opacity: 1,
-        duration: REVEAL.rockFadeDur,
-        ease: REVEAL.rockFadeEase,
-      });
+      sync(); // synchronous — pump starts mid-scroll, so the fly-in renders live
+      // Snap the shared material visible (all four at once). The rocks are still
+      // off-screen at this instant, so this quick fade is essentially unseen — it
+      // only softens the edge as each rock crosses into view. The per-rock fly-in
+      // lives in Rock; the rings draw in after (testimonials-drift.tsx).
+      fade = gsap.to(mat, { opacity: 1, duration: 0.3, ease: "none" });
       done = gsap.delayedCall(revealTotal, () => {
         revealingRef.current = false;
         sync();
@@ -282,11 +311,11 @@ function Scene({ paused }: { paused: boolean }) {
     };
   }, [sync, pump, asset]);
 
-  // Warm the pipeline before the section arrives (Option A): one render compiles
-  // the shader program and uploads geometry/textures NOW, at the wide-margin
-  // mount, so the reveal later is pure animation — nothing left to load or
-  // compile. A single paint, not a loop; the material starts at opacity 0, so
-  // this warm frame is invisible even though the rocks are at their positions.
+  // Warm the pipeline before the section arrives: one render compiles the shader
+  // program and uploads geometry/textures NOW, at the idle mount, so the reveal
+  // later is pure animation — nothing left to load or compile. A single paint,
+  // not a loop; the material starts at opacity 0 (and the rocks off-screen), so
+  // this warm frame is invisible.
   useEffect(() => {
     if (!asset) return;
     advance(performance.now());
@@ -309,6 +338,7 @@ function Scene({ paused }: { paused: boolean }) {
           key={i}
           unit={u}
           motion={MOTION3D[i % MOTION3D.length]}
+          index={i}
           geometry={asset.geometry}
           material={asset.material}
           register={register}
