@@ -112,7 +112,7 @@ export type Testimonial = {
 };
 
 /** Seconds each quote holds before cycling to the next (quote-reveal driver). */
-export const QUOTE_CYCLE_SECS = 5;
+export const QUOTE_CYCLE_SECS = 2.5;
 
 /**
  * The rotating pull-quotes. SSR renders [0]; the quote-reveal driver then
@@ -140,7 +140,7 @@ export const TESTIMONIALS: Testimonial[] = [
   {
     id: "stopped-explaining",
     quote: [
-      { text: "“we stopped explaining the product in meetings — the new site " },
+      { text: "“we stopped explaining the product in meetings, the new site " },
       { text: "does it for us", serif: true },
       { text: ", better than we ever did.”" },
     ],
