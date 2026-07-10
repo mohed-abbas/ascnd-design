@@ -385,3 +385,146 @@ html[data-custom-cursor="on"] * {
     display: none;
   }
 }
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Portfolio depth-gallery — color-spec label overlay
+   1:1 port of codrops "Atmospheric Depth Gallery" (src/css/canvas.css label
+   rules). The engine (components/sections/portfolio/engine/label.ts) builds this
+   DOM imperatively and appends it to the section container. Changes from source:
+   position:fixed → absolute (scoped to the pinned section, not the page), and the
+   mono UI font maps to this project's --font-mono. Debug/FPS/velocity styles and
+   the codrops frame-header rules are intentionally not ported.
+   ──────────────────────────────────────────────────────────────────────────── */
+.plane-label-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 80;
+  pointer-events: none;
+  transition: opacity 260ms ease;
+  color: rgba(244, 244, 244, 0.92);
+  font-family: var(--font-mono), "SFMono-Regular", Menlo, Monaco, monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.plane-label-overlay__left {
+  position: absolute;
+  left: clamp(2.5rem, 8vw, 12rem);
+  top: 50%;
+  transform: none;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.plane-label-overlay__index {
+  margin: 0;
+  font-size: 9px;
+  opacity: 1;
+}
+
+.plane-label-overlay__chip {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  display: inline-block;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.14);
+}
+
+.plane-label-overlay__right {
+  position: absolute;
+  right: clamp(2.5rem, 7vw, 10rem);
+  top: 50%;
+  transform: none;
+}
+
+.plane-label-card {
+  width: min(28vw, 360px);
+  display: grid;
+  grid-template-columns: 1fr;
+  align-items: start;
+  pointer-events: none;
+  opacity: 1;
+  color: inherit;
+  line-height: 1.15;
+}
+
+.plane-label-card__word {
+  margin: 0;
+  font-size: clamp(9px, 0.78vw, 11px);
+  white-space: nowrap;
+}
+
+.plane-label-card__specs {
+  margin: 0;
+  display: grid;
+  gap: 0.25rem;
+}
+
+.plane-label-card__row {
+  margin: 0;
+  display: grid;
+  grid-template-columns: 3.5rem 1fr;
+  align-items: baseline;
+  gap: 0.8rem;
+}
+
+.plane-label-card__row dt,
+.plane-label-card__row dd {
+  margin: 0;
+}
+
+.plane-label-card__row dt {
+  font-size: 9px;
+  opacity: 1;
+}
+
+.plane-label-card__value {
+  font-size: clamp(9px, 0.72vw, 11px);
+  opacity: 1;
+}
+
+@media (max-width: 53em) {
+  .plane-label-overlay {
+    inset: auto 0 max(6.25rem, env(safe-area-inset-bottom)) 0;
+    display: grid;
+    grid-template-columns: auto auto;
+    justify-content: space-between;
+    align-items: start;
+    column-gap: 1.5rem;
+    row-gap: 0.55rem;
+    padding: 0 max(1rem, env(safe-area-inset-right)) 0 max(1rem, env(safe-area-inset-left));
+  }
+
+  .plane-label-overlay__left {
+    position: static;
+    transform: none;
+    gap: 0.5rem;
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .plane-label-overlay__right {
+    position: static;
+    transform: none;
+    grid-column: 2;
+    grid-row: 2;
+  }
+
+  .plane-label-card {
+    width: auto;
+    max-width: min(58vw, 270px);
+  }
+
+  .plane-label-card__word {
+    font-size: 10px;
+  }
+
+  .plane-label-card__row {
+    grid-template-columns: 2.8rem 1fr;
+    gap: 0.6rem;
+  }
+
+  .plane-label-card__value {
+    font-size: 9px;
+  }
+}

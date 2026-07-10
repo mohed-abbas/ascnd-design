@@ -3,6 +3,7 @@ import Comparison from "@/components/sections/comparison/comparison";
 import Hero from "@/components/sections/hero/hero";
 import IntroLoader from "@/components/sections/intro/intro-loader";
 import Pills from "@/components/sections/pills/pills";
+import Portfolio from "@/components/sections/portfolio/portfolio";
 import Pricing from "@/components/sections/pricing/pricing";
 import Tagline from "@/components/sections/tagline/tagline";
 import Testimonials from "@/components/sections/testimonials/testimonials";
@@ -43,6 +44,16 @@ export default function Home() {
           with thin orbit outlines ("testimonials"), over the shared sky. Sits
           before pricing. */}
       <Testimonials />
+      {/* Depth-scroll WebGL gallery (1:1 port of Codrops "Atmospheric Depth
+          Gallery"): camera flies through depth-stacked image planes, each with
+          its own mood-morphing background. Sits between testimonials and pricing.
+          Wrapped in a plain block div ON PURPOSE — same reason as WhyStay above:
+          <body> is a flex column and ScrollTrigger can't add pin-spacing to a
+          direct flex child, so the pinned gallery needs normal block flow to grow
+          its pin-spacer into. Don't remove the wrapper. */}
+      <div className="shrink-0">
+        <Portfolio />
+      </div>
       {/* Two-tier pricing ("simple pricing, pause anytime"): subscription +
           fixed-sprint glass cards joined by a dashed connector, over the shared
           sky. Last section for now. */}
