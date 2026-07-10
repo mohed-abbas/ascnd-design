@@ -57,7 +57,7 @@ export default function Pricing() {
             plan={SUBSCRIPTION}
             cta="start your subscription"
             ctaVariant="solid"
-            className="left-0 top-[79px] h-[626px] backdrop-blur-[2.9px]"
+            className="left-0 top-[79px] backdrop-blur-[2.9px]"
             price={
               <p className="min-w-full">
                 <span className="text-[61px] leading-normal tracking-[-3.05px]">
@@ -87,7 +87,7 @@ export default function Pricing() {
             plan={FIXED_SPRINT}
             cta="book a 15-min intro call"
             ctaVariant="clear"
-            className="left-[591px] top-[169.54px] h-[603px] backdrop-blur-[9.6px]"
+            className="left-[591px] top-[169.54px] backdrop-blur-[9.6px]"
             price={
               <p className="text-center">
                 <span className="text-[20px] leading-normal">from </span>
@@ -131,6 +131,12 @@ export default function Pricing() {
  * divider → description + ticked features. Only the price render, CTA and
  * wrapper position/blur vary between the two plans, so those come in as props
  * while the column geometry (408px, centred, gap-30) lives here once.
+ *
+ * Card height is content-driven: the column's `py-[18px]` (+1.5px border =
+ * 19.5px visible gap) replaces the Figma frames' fixed heights, which left the
+ * two plans with unequal leftover space above/below the centred content
+ * (11.5px vs 19.5px). The sprint card keeps its Figma 603px exactly; the
+ * subscription card grows 626px → 642px to match the gap.
  */
 function PlanCard({
   plan,
@@ -155,7 +161,7 @@ function PlanCard({
       className={`absolute w-[555px] overflow-clip rounded-[20px] border-[1.5px] border-solid border-white/30 bg-gradient-to-b from-black/10 to-black/5 ${className ?? ""}`}
       {...rest}
     >
-      <div className="absolute left-1/2 top-1/2 flex w-[408px] -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-[30px]">
+      <div className="mx-auto flex w-[408px] flex-col items-center gap-[30px] py-[18px]">
         <h3 className="font-instrument text-[31px] text-white">{plan.title}</h3>
 
         <div className="flex w-[307px] flex-col items-center gap-[10px] text-center text-white">
