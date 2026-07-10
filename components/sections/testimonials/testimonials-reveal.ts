@@ -1,64 +1,54 @@
 /**
  * The testimonials reveal gate — one shared signal the rocks (R3F canvas) and
  * the rings (DOM) both read, so a reveal that spans two render systems stays in
- * lockstep. It's the same "shared animation gate" idea as intro-state.ts.
+ * lockstep. Same "shared animation gate" idea as intro-state.ts, but REPLAYABLE:
  *
- * Two phases:
- *  - ARM   — fired once the section decides it WILL do the 3D reveal (a capable
- *            device, tier on). Consumers use it to snap to the hidden pre-reveal
- *            state (rings invisible) BEFORE the section is ever on screen, so
- *            nothing flashes. Not armed → the section renders its resting pose
- *            (flat rocks, static rings) and this gate stays dormant.
- *  - START — fired once the section actually enters view. Both sides create
- *            their GSAP tweens in the same synchronous broadcast, so identical
- *            timing constants (REVEAL, testimonials-data.ts) === frame-sync.
+ *  - PLAY  — the section is ~half in the viewport (from either direction). Both
+ *            sides create their GSAP tweens in the same synchronous broadcast,
+ *            so identical timing constants (REVEAL, testimonials-data.ts) ===
+ *            frame-sync. Fires on EVERY pass through the section.
+ *  - RESET — the section has fully left the viewport. Both sides snap back to
+ *            their parked pre-reveal state (rocks off-screen + invisible, rings
+ *            hidden) so the next pass plays the entrance again.
  *
- * Module singleton on purpose: the reveal plays once per page load. Subscribers
- * that mount after a phase already fired get called immediately (the anchor-jump
- * case, where warm-mount and enter-view collapse together).
+ * Module singleton on purpose: the canvas and the DOM drivers live in different
+ * subtrees, and this keeps them on one clock without prop-drilling. `played`
+ * lets late mounts (context-loss canvas remount mid-view) skip the entrance and
+ * appear directly at rest.
  */
 
 type Cb = () => void;
 
-let armed = false;
-let started = false;
-const armSubs = new Set<Cb>();
-const startSubs = new Set<Cb>();
+let played = false;
+const playSubs = new Set<Cb>();
+const resetSubs = new Set<Cb>();
 
-export function armTestimonialsReveal() {
-  if (armed) return;
-  armed = true;
-  for (const cb of armSubs) cb();
+export function playTestimonialsReveal() {
+  played = true;
+  for (const cb of playSubs) cb();
 }
 
-export function startTestimonialsReveal() {
-  if (started) return;
-  started = true;
-  for (const cb of startSubs) cb();
+export function resetTestimonialsReveal() {
+  played = false;
+  for (const cb of resetSubs) cb();
 }
 
-export function isTestimonialsRevealArmed() {
-  return armed;
+export function isTestimonialsRevealPlayed() {
+  return played;
 }
 
-export function isTestimonialsRevealStarted() {
-  return started;
-}
-
-/** Subscribe to ARM; fires immediately if already armed. Returns an unsubscribe. */
-export function onTestimonialsRevealArm(cb: Cb) {
-  armSubs.add(cb);
-  if (armed) cb();
+/** Subscribe to PLAY (every pass). Returns an unsubscribe. */
+export function onTestimonialsRevealPlay(cb: Cb) {
+  playSubs.add(cb);
   return () => {
-    armSubs.delete(cb);
+    playSubs.delete(cb);
   };
 }
 
-/** Subscribe to START; fires immediately if already started. Returns an unsubscribe. */
-export function onTestimonialsRevealStart(cb: Cb) {
-  startSubs.add(cb);
-  if (started) cb();
+/** Subscribe to RESET (section fully left). Returns an unsubscribe. */
+export function onTestimonialsRevealReset(cb: Cb) {
+  resetSubs.add(cb);
   return () => {
-    startSubs.delete(cb);
+    resetSubs.delete(cb);
   };
 }

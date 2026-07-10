@@ -6,12 +6,10 @@ import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import ReactDOM from "react-dom";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
-import { useQuality } from "@/lib/perf/use-quality";
 import { ROCK_SCALE, UNITS } from "./testimonials-data";
 import {
-  armTestimonialsReveal,
-  isTestimonialsRevealArmed,
-  startTestimonialsReveal,
+  playTestimonialsReveal,
+  resetTestimonialsReveal,
 } from "./testimonials-reveal";
 
 // The WebGL canvas is client-only; ssr:false must live in a Client Component.
@@ -53,12 +51,17 @@ const noopSubscribe = () => () => {};
 
 /**
  * The rock layer for the testimonials section. When the device can take it
- * (WebGL · not reduced-motion · desktop) AND the quality tier allows
- * (`testimonialsDrift`, off on low), it mounts the 3D GLB canvas; otherwise it
- * renders the flat PNG rocks at rest — the same silhouettes, so the fallback is
- * a faithful still of the 3D version. Server + first client render always use
+ * (WebGL · not reduced-motion · desktop) it mounts the 3D GLB canvas; otherwise
+ * it renders the flat PNG rocks at rest — the same silhouettes, so the fallback
+ * is a faithful still of the 3D version. Server + first client render always use
  * the flat fallback (canvas eligibility is unknowable on the server), then swap
  * after hydration — like CloudLayer.
+ *
+ * ⚠️ Deliberately NOT gated on the quality tier (feature-first, CLAUDE.md): the
+ * frame watchdog steps the tier down mid-session under load, and a tier-gated
+ * mount SWAPPED the live canvas for the PNG stills while the user was looking at
+ * it ("the rocks turned into static images" bug). Eligibility here is static per
+ * device; nothing about this layer changes after mount.
  *
  * The 3D canvas is warmed EARLY, not lazily on scroll. Once an eligible device
  * hydrates we idle-preload the chunk + GLB AND mount the canvas (both in the one
@@ -77,14 +80,13 @@ const noopSubscribe = () => () => {};
  */
 export default function TestimonialRocks() {
   const eligible = useSyncExternalStore(subscribe, getSnapshot, () => false);
-  const { testimonialsDrift } = useQuality();
   const hydrated = useSyncExternalStore(noopSubscribe, () => true, () => false);
 
   const wrapRef = useRef<HTMLDivElement>(null);
   const [mounted, setMounted] = useState(false);
   const [inView, setInView] = useState(false);
 
-  // The reveal + in-view gate. ScrollTrigger, NOT IntersectionObserver: IO
+  // The reveal + in-view gates. ScrollTrigger, NOT IntersectionObserver: IO
   // callbacks are throttled/deferred during continuous scroll, so anything gated
   // on IO only fires once you STOP. ScrollTrigger is evaluated every scroll frame
   // off the shared Lenis→GSAP loop, so it fires mid-scroll — the rocks reveal in
@@ -96,41 +98,35 @@ export default function TestimonialRocks() {
     if (!el) return;
 
     gsap.registerPlugin(ScrollTrigger);
-
-    // TWO independent gates on the rock cluster (el) — DON'T fold them into one:
-    //
-    //  • VISIBILITY (pause/resume) — WIDE, anchored to the whole SECTION (not the
-    //    cluster). The render pump drives the rocks' orbit + tumble, and it runs
-    //    the whole time ANY part of the section is on screen; it only freezes once
-    //    the FULL section has left the viewport, and resumes as it comes back.
-    //    Anchoring this to the smaller cluster froze the rocks while the section
-    //    was still partly visible (they read as static images). "top bottom →
-    //    bottom top" on the section is the widest sensible window.
-    //
-    //  • REVEAL (one-shot fly-in) — fires once the cluster is well into view. The
-    //    rocks launch from beyond the screen edges, so the cluster has to be far
-    //    enough in that those start points are actually off-screen; "center 60%"
-    //    (cluster centre 60% down the viewport) fires as the section settles into
-    //    view. The reveal singleton makes onEnter/onEnterBack idempotent.
-    //
-    // Both are ScrollTrigger (scroll-frame-synced), so neither the rotation nor
-    // the reveal depends on the scroll stopping.
     const section = el.closest<HTMLElement>("[data-testimonials]") ?? el;
+
+    // TWO independent gates on the SECTION — DON'T fold them into one:
+    //
+    //  • VISIBILITY (pause/resume + reset) — WIDE. The render pump drives the
+    //    rocks' orbit + tumble, and it runs the whole time ANY part of the
+    //    section is on screen; it only idles once the FULL section has left, and
+    //    resumes as it comes back. Leaving completely (either direction) also
+    //    RESETS the reveal — rocks re-park off-screen, rings hide — so the
+    //    entrance replays on the next pass.
+    //
+    //  • REVEAL (plays EVERY pass) — fires when the section is ~half in the
+    //    viewport, from either direction: "top 50%" going down (section top
+    //    crosses the viewport's midline), "bottom 50%" coming back up. The rocks
+    //    fly in from beyond the screen edges each time.
     const visibility = ScrollTrigger.create({
       trigger: section,
       start: "top bottom",
       end: "bottom top",
       onToggle: (self) => setInView(self.isActive),
+      onLeave: resetTestimonialsReveal,
+      onLeaveBack: resetTestimonialsReveal,
     });
     const reveal = ScrollTrigger.create({
-      trigger: el,
-      start: "center 60%",
-      onEnter: () => {
-        if (isTestimonialsRevealArmed()) startTestimonialsReveal();
-      },
-      onEnterBack: () => {
-        if (isTestimonialsRevealArmed()) startTestimonialsReveal();
-      },
+      trigger: section,
+      start: "top 50%",
+      end: "bottom 50%",
+      onEnter: playTestimonialsReveal,
+      onEnterBack: playTestimonialsReveal,
     });
 
     return () => {
@@ -139,15 +135,9 @@ export default function TestimonialRocks() {
     };
   }, []);
 
-  const use3D = hydrated && eligible && testimonialsDrift;
-
-  // Arm the reveal the moment we know this device will do the 3D version, so the
-  // rings snap to their hidden pre-reveal state before the section is ever on
-  // screen (no flash). Not armed → the flat fallback + static rings render as-is
-  // and the reveal gate stays dormant.
-  useEffect(() => {
-    if (use3D) armTestimonialsReveal();
-  }, [use3D]);
+  // Deliberately tier-free (see the component doc): eligibility is static per
+  // device, so the canvas can never be swapped out from under the user.
+  const use3D = hydrated && eligible;
 
   // Warm the 3D canvas during idle, long before the section is on screen: preload
   // the GLB, then MOUNT the canvas so its costly first render (context, GLTF

@@ -1,12 +1,16 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useMemo, useRef } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Canvas, useThree } from "@react-three/fiber";
 import { useGLTF } from "@react-three/drei";
 import * as THREE from "three";
 import gsap from "gsap";
 import { GROUP_H, GROUP_W, REVEAL, UNITS } from "./testimonials-data";
-import { onTestimonialsRevealStart } from "./testimonials-reveal";
+import {
+  isTestimonialsRevealPlayed,
+  onTestimonialsRevealPlay,
+  onTestimonialsRevealReset,
+} from "./testimonials-reveal";
 
 /**
  * The four testimonials rocks as REAL 3D meshes — the "floating 3D rock" the
@@ -129,12 +133,14 @@ function useRockAsset() {
     material.envMapIntensity = 0.6;
     material.normalScale?.set(1.4, 1.4); // deepen surface relief
     material.side = THREE.DoubleSide;
-    // Start invisible + (via Rock) off-screen: the fly-in reveal snaps the shared
-    // material visible (opacity → 1, Scene) and eases each rock in from beyond the
-    // viewport. transparent stays on (depthWrite is still true, so faces occlude
-    // normally — no ghosting); the 4 rocks don't overlap, so blend cost is nil.
+    // Start invisible + (via Rock) off-screen: each PLAY snaps the shared
+    // material visible (opacity → 1, Scene) and eases the rocks in from beyond
+    // the viewport; each RESET re-hides it. transparent stays on (depthWrite is
+    // still true, so faces occlude normally — no ghosting); the 4 rocks don't
+    // overlap, so blend cost is nil. If the reveal already played (context-loss
+    // canvas remount mid-view), build it visible — the rocks reappear at rest.
     material.transparent = true;
-    material.opacity = 0;
+    material.opacity = isTestimonialsRevealPlayed() ? 1 : 0;
     material.needsUpdate = true;
 
     return { geometry, material, env };
@@ -172,14 +178,20 @@ function Rock({
   const baseX = unit.cx - GROUP_W / 2;
   const baseY = -(unit.cy - GROUP_H / 2);
 
-  // Fly-in offset (px), added to the orbit position by the pump each frame. It
-  // starts at base × (flyFactor − 1) — so the rock begins at base × flyFactor,
-  // well outside the viewport, along its own outward radial (the four thus arrive
-  // from four directions) — and the reveal eases it to 0, landing on the ring.
-  const offset = useRef({
-    x: baseX * (REVEAL.flyFactor - 1),
-    y: baseY * (REVEAL.flyFactor - 1),
-  });
+  // Fly-in offset (px), added to the orbit position by the pump each frame.
+  // Parked at base × (flyFactor − 1) — so the rock sits at base × flyFactor,
+  // well outside the viewport, along its own outward radial (the four thus
+  // arrive from four directions) — and each PLAY eases it to 0, landing on the
+  // ring; each RESET re-parks it so the entrance replays on the next pass. If
+  // the reveal already played (context-loss canvas remount mid-view), start at
+  // rest — the rock reappears in place, it doesn't re-fly.
+  const parkedX = baseX * (REVEAL.flyFactor - 1);
+  const parkedY = baseY * (REVEAL.flyFactor - 1);
+  const offset = useRef(
+    isTestimonialsRevealPlayed()
+      ? { x: 0, y: 0 }
+      : { x: parkedX, y: parkedY },
+  );
 
   // The float: a slow orbit + 3D tumble about the base, plus the fly-in offset.
   useEffect(() => {
@@ -198,12 +210,16 @@ function Rock({
     });
   }, [register, motion, baseX, baseY]);
 
-  // Fly in from off-screen when the shared gate fires: ease the offset → 0. The
-  // pump (already running for the reveal) renders every frame of it. Subscribing
-  // means a rock that mounts AFTER the gate fired (anchor-jump) still flies in.
+  // PLAY: re-park off-screen, then ease the offset → 0 (the fly-in). The pump
+  // (running whenever the section is visible) renders every frame of it.
+  // RESET (section fully left): kill any live tween and re-park, ready for the
+  // next pass. Replays every time the section is passed through.
   useEffect(() => {
     let tween: gsap.core.Tween | undefined;
-    const unsub = onTestimonialsRevealStart(() => {
+    const unPlay = onTestimonialsRevealPlay(() => {
+      tween?.kill();
+      offset.current.x = parkedX;
+      offset.current.y = parkedY;
       tween = gsap.to(offset.current, {
         x: 0,
         y: 0,
@@ -212,11 +228,17 @@ function Rock({
         ease: REVEAL.flyEase,
       });
     });
+    const unReset = onTestimonialsRevealReset(() => {
+      tween?.kill();
+      offset.current.x = parkedX;
+      offset.current.y = parkedY;
+    });
     return () => {
-      unsub();
+      unPlay();
+      unReset();
       tween?.kill();
     };
-  }, [index]);
+  }, [index, parkedX, parkedY]);
 
   return (
     <group ref={orbit} position={[baseX, baseY, 0]}>
@@ -287,9 +309,13 @@ function Scene({ paused }: { paused: boolean }) {
     const revealTotal = REVEAL.flyDelay(UNITS.length - 1) + REVEAL.flyDur + 0.4;
     let done: gsap.core.Tween | undefined;
     let fade: gsap.core.Tween | undefined;
-    const unsub = onTestimonialsRevealStart(() => {
+    // (A canvas that (re)mounts AFTER the reveal already played builds its
+    // material visible — see useRockAsset — so there's no entrance to replay.)
+    const unPlay = onTestimonialsRevealPlay(() => {
       revealingRef.current = true;
       sync(); // synchronous — pump starts mid-scroll, so the fly-in renders live
+      fade?.kill();
+      done?.kill();
       // Snap the shared material visible (all four at once). The rocks are still
       // off-screen at this instant, so this quick fade is essentially unseen — it
       // only softens the edge as each rock crosses into view. The per-rock fly-in
@@ -300,8 +326,18 @@ function Scene({ paused }: { paused: boolean }) {
         sync();
       });
     });
+    const unReset = onTestimonialsRevealReset(() => {
+      // Section fully left — park invisible for the next pass. No tween needed:
+      // nothing is on screen to see the snap.
+      fade?.kill();
+      done?.kill();
+      revealingRef.current = false;
+      sync();
+      mat.opacity = 0;
+    });
     return () => {
-      unsub();
+      unPlay();
+      unReset();
       done?.kill();
       fade?.kill();
       if (addedRef.current) {
@@ -348,9 +384,75 @@ function Scene({ paused }: { paused: boolean }) {
   );
 }
 
+/**
+ * WebGL context-loss safety net (frameloop="never" variant of the cloud canvas'
+ * ContextWatchdog). THREE handles lost/restored internally; here we only (a) push
+ * one advance() after a restore (this canvas never free-runs, so nothing else
+ * repaints it — without this it'd stay stuck on its last frame, reading as a
+ * static image) and (b) if a restore never arrives within a few seconds, ask the
+ * parent to remount the <Canvas> with a fresh context. This matters on Firefox,
+ * which caps simultaneous WebGL contexts far lower than Chrome and evicts the
+ * least-recently-used one — so scrolling away to another canvas-bearing section
+ * can silently drop this one. All listeners/timers are cleaned up.
+ */
+function ContextWatchdog({ onUnrecoverable }: { onUnrecoverable: () => void }) {
+  const gl = useThree((s) => s.gl);
+  const advance = useThree((s) => s.advance);
+
+  useEffect(() => {
+    const canvas = gl.domElement;
+    let mounted = true;
+    let restoreTimer: ReturnType<typeof setTimeout> | undefined;
+
+    const onLost = () => {
+      // THREE already preventDefaults + restores recoverable losses on its own.
+      // Arm a fallback remount only for a loss that never restores.
+      if (restoreTimer) clearTimeout(restoreTimer);
+      restoreTimer = setTimeout(() => {
+        // Only remount a genuinely unrecoverable loss on a still-live, visible
+        // canvas — skips R3F's force-context-loss during unmount (canvas is
+        // detached by then) and stale timers from a prior Fast Refresh instance.
+        if (
+          mounted &&
+          canvas.isConnected &&
+          document.visibilityState === "visible"
+        ) {
+          onUnrecoverable();
+        }
+      }, 3000);
+    };
+    const onRestored = () => {
+      if (restoreTimer) clearTimeout(restoreTimer);
+      restoreTimer = undefined;
+      advance(performance.now()); // frameloop="never" — repaint explicitly
+    };
+
+    canvas.addEventListener("webglcontextlost", onLost, false);
+    canvas.addEventListener("webglcontextrestored", onRestored, false);
+
+    return () => {
+      mounted = false;
+      if (restoreTimer) clearTimeout(restoreTimer);
+      canvas.removeEventListener("webglcontextlost", onLost, false);
+      canvas.removeEventListener("webglcontextrestored", onRestored, false);
+    };
+  }, [gl, advance, onUnrecoverable]);
+
+  return null;
+}
+
 export default function TestimonialRocksCanvas({ paused }: { paused: boolean }) {
+  // Bumping this remounts the <Canvas> with a fresh GL context — the last-resort
+  // recovery when a lost context never restores (see ContextWatchdog). The
+  // remount rebuilds everything (context, PMREM env map, geometry, material);
+  // if the reveal already played, Rock/Scene read isTestimonialsRevealPlayed()
+  // and reappear at rest rather than re-playing the fly-in.
+  const [canvasKey, setCanvasKey] = useState(0);
+  const remount = useCallback(() => setCanvasKey((k) => k + 1), []);
+
   return (
     <Canvas
+      key={canvasKey}
       orthographic
       dpr={[1, 1.5]}
       frameloop="never"
@@ -369,6 +471,7 @@ export default function TestimonialRocksCanvas({ paused }: { paused: boolean }) 
       <Suspense fallback={null}>
         <Scene paused={paused} />
       </Suspense>
+      <ContextWatchdog onUnrecoverable={remount} />
     </Canvas>
   );
 }
