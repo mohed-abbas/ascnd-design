@@ -30,6 +30,7 @@ class Gallery {
   mobileXSpreadFactor: number;
   mobileBreakpoint: number;
   planeConfig: GalleryPlaneDatum[];
+  planeAspect: number;
   moodSampleOffset: number;
   planeFadeSampleOffset: number;
   planeFadeSmoothing: number;
@@ -72,6 +73,10 @@ class Gallery {
     this.mobileXSpreadFactor = 0.25;
     this.mobileBreakpoint = 768;
     this.planeConfig = galleryPlaneData;
+    // Target plane shape is LANDSCAPE (3:2). The source photos are 3:4 portrait,
+    // so they're cover-fit into this frame (center-cropped top/bottom) via
+    // applyCoverFit — the plane's geometry aspect, not the image's.
+    this.planeAspect = 3 / 2;
     this.moodSampleOffset = 1;
     this.planeFadeSampleOffset = 1;
     this.planeFadeSmoothing = 0.14;
@@ -131,8 +136,11 @@ class Gallery {
       const textureImage = texture?.image as { width?: number; height?: number } | undefined;
       const textureWidth = textureImage?.width ?? 0;
       const textureHeight = textureImage?.height ?? 0;
-      const aspectRatio =
+      const imageAspect =
         textureWidth > 0 && textureHeight > 0 ? textureWidth / textureHeight : 1;
+      // Cover-fit the image into the landscape plane: crop, never stretch.
+      this.applyCoverFit(texture, imageAspect);
+      const aspectRatio = this.planeAspect;
       const fallbackColor = plane.fallbackColor || "#ffffff";
       const accentColor = plane.accentColor || fallbackColor;
       const backgroundColor = plane.backgroundColor || fallbackColor;
@@ -160,6 +168,29 @@ class Gallery {
       scene.add(planeMesh);
       this.planes.push(planeMesh);
     });
+  }
+
+  /**
+   * "Cover"-fit a texture into the landscape plane (`this.planeAspect`) by
+   * adjusting its UV repeat/offset so the image fills the frame and is
+   * center-cropped on the overflowing axis — never stretched. For our 3:4
+   * portrait photos in a 3:2 plane, this crops the top/bottom and shows the
+   * middle band. Each plane owns a distinct texture, so mutating repeat/offset
+   * here is safe (no shared-texture aliasing).
+   */
+  applyCoverFit(texture: THREE.Texture | null, imageAspect: number) {
+    if (!texture) return;
+    const planeAspect = this.planeAspect;
+
+    if (planeAspect > imageAspect) {
+      // Plane is wider than the image → fit width, crop top/bottom.
+      texture.repeat.set(1, imageAspect / planeAspect);
+    } else {
+      // Plane is taller than the image → fit height, crop left/right.
+      texture.repeat.set(planeAspect / imageAspect, 1);
+    }
+    texture.offset.set((1 - texture.repeat.x) / 2, (1 - texture.repeat.y) / 2);
+    texture.needsUpdate = true;
   }
 
   getPlaneLabelData(planeDefinition: GalleryPlaneDatum, index: number) {
