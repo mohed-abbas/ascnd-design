@@ -111,6 +111,15 @@ export type Testimonial = {
   quote: QuoteSegment[];
 };
 
+/** Seconds each quote holds before cycling to the next (quote-reveal driver). */
+export const QUOTE_CYCLE_SECS = 5;
+
+/**
+ * The rotating pull-quotes. SSR renders [0]; the quote-reveal driver then
+ * cycles through the rest every QUOTE_CYCLE_SECS with the shared word-by-word
+ * blur-rise. Varied lengths on purpose (one-liners to three-liners) so the
+ * rotation doesn't read as a template.
+ */
 export const TESTIMONIALS: Testimonial[] = [
   {
     id: "already-raised",
@@ -118,6 +127,62 @@ export const TESTIMONIALS: Testimonial[] = [
       { text: "“they made us look like a company that " },
       { text: "already raised", serif: true },
       { text: ", three weeks before we pitched.”" },
+    ],
+  },
+  {
+    id: "investors-asked",
+    quote: [
+      { text: "“our investors asked who did the rebrand. " },
+      { text: "twice", serif: true },
+      { text: ".”" },
+    ],
+  },
+  {
+    id: "stopped-explaining",
+    quote: [
+      { text: "“we stopped explaining the product in meetings — the new site " },
+      { text: "does it for us", serif: true },
+      { text: ", better than we ever did.”" },
+    ],
+  },
+  {
+    id: "first-draft",
+    quote: [
+      { text: "“the first draft looked better than what our old agency shipped after " },
+      { text: "six weeks", serif: true },
+      { text: " and three kickoff calls.”" },
+    ],
+  },
+  {
+    id: "design-on-tap",
+    quote: [
+      { text: "“it’s design " },
+      { text: "on tap", serif: true },
+      { text: ". we open the tap, things ship.”" },
+    ],
+  },
+  {
+    id: "same-week",
+    quote: [
+      { text: "“same-week turnarounds, every single week. i still don’t know " },
+      { text: "how they do it", serif: true },
+      { text: ".”" },
+    ],
+  },
+  {
+    id: "paused-came-back",
+    quote: [
+      { text: "“we paused over the summer, came back in september, and it felt like they’d " },
+      { text: "never left", serif: true },
+      { text: ". zero friction, zero re-onboarding.”" },
+    ],
+  },
+  {
+    id: "conversion-doubled",
+    quote: [
+      { text: "“conversion " },
+      { text: "doubled", serif: true },
+      { text: " the week the new landing page went live.”" },
     ],
   },
 ];
