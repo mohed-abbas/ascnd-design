@@ -75,8 +75,23 @@ export default function LenisProvider({
     gsap.ticker.add(update);
     gsap.ticker.lagSmoothing(0);
 
+    // Keep Lenis' cached scroll limit in sync when ScrollTrigger changes the
+    // document height. Lenis derives its max scroll from content scrollHeight but
+    // only recomputes via a ResizeObserver that watches element *box* size — which
+    // does NOT change when ScrollTrigger injects a pin-spacer (that grows
+    // scrollHeight via padding, not the box). Without this, a section pinned after
+    // Lenis' initial measurement (e.g. the dynamically-imported portfolio gallery)
+    // leaves Lenis clamping wheel/touch input to the pre-pin page bottom, walling
+    // the page partway through the pin. Recompute after each refresh; deferred one
+    // frame because ScrollTrigger removes and restores pin-spacers mid-refresh, so
+    // a synchronous read would capture the transient spacer-less height.
+    const syncLenisToLayout = () =>
+      requestAnimationFrame(() => lenisRef.current?.lenis?.resize());
+    ScrollTrigger.addEventListener("refresh", syncLenisToLayout);
+
     return () => {
       gsap.ticker.remove(update);
+      ScrollTrigger.removeEventListener("refresh", syncLenisToLayout);
       bound?.off("scroll", ScrollTrigger.update);
     };
   }, []);

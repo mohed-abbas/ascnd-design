@@ -43,9 +43,56 @@ export default function PortfolioCanvas() {
     let disposed = false;
     let inView = false;
     let tickerFn: ((time: number) => void) | null = null;
-    let st: ScrollTrigger | null = null;
-    let resizeObserver: ResizeObserver | null = null;
-    let intersectionObserver: IntersectionObserver | null = null;
+    let resizeRaf = 0;
+
+    // Create the pin SYNCHRONOUSLY on mount — independent of the async texture
+    // preload below — so the pin-spacer is part of the page's initial
+    // ScrollTrigger layout instead of being injected late (which jammed scroll
+    // around the first plane on cold loads). `setProgress` is safe pre-init; the
+    // engine just stores it and skips rendering until initialized.
+    const st = ScrollTrigger.create({
+      trigger: section,
+      start: "top top",
+      end: () => "+=" + window.innerHeight * PIN_SCREENS,
+      pin: true,
+      scrub: SCRUB,
+      invalidateOnRefresh: true,
+      onUpdate: (self) => engine.setProgress(self.progress),
+      onRefresh: (self) => engine.setProgress(self.progress),
+    });
+
+    const intersectionObserver = new IntersectionObserver(
+      (entries) => {
+        inView = entries[0]?.isIntersecting ?? false;
+      },
+      { rootMargin: "200px" },
+    );
+    intersectionObserver.observe(section);
+
+    // Resize on real VIEWPORT changes only (debounced). A ResizeObserver on the
+    // wrapper also fires when the pin toggles the section to `position: fixed`,
+    // and calling ScrollTrigger.refresh() on each of those mid-scroll fires
+    // created a refresh storm that walled scrolling ~1/3 through the pin. A
+    // window-resize listener is both faithful to the source engine and immune to
+    // that self-triggering. (dvh/URL-bar changes are handled by ST's own refresh.)
+    const onResize = () => {
+      if (resizeRaf) cancelAnimationFrame(resizeRaf);
+      resizeRaf = requestAnimationFrame(() => {
+        engine.resize();
+        ScrollTrigger.refresh();
+      });
+    };
+    window.addEventListener("resize", onResize);
+
+    // Pinning this (dynamically-imported) section grows the document by the
+    // pin-spacer's height after Lenis already measured the page. Refresh once now
+    // that the pin-spacer exists so ScrollTrigger recalculates AND — via
+    // LenisProvider's refresh→resize sync — Lenis re-reads the taller page;
+    // otherwise Lenis clamps wheel/touch input to the pre-pin page bottom and the
+    // page walls partway through the pin. Repeated once more for late-settling
+    // layout above (fonts/images shifting the section's start).
+    ScrollTrigger.refresh();
+    const settleTimer = window.setTimeout(() => ScrollTrigger.refresh(), 500);
 
     engine
       .init()
@@ -54,41 +101,14 @@ export default function PortfolioCanvas() {
           engine.dispose();
           return;
         }
-
         // Render on the shared ticker; skip frames while off-screen.
         tickerFn = (time: number) => {
           if (!inView) return;
           engine.tick(time * 1000);
         };
         gsap.ticker.add(tickerFn);
-
-        // Pin the section and scrub camera depth from scroll progress.
-        st = ScrollTrigger.create({
-          trigger: section,
-          start: "top top",
-          end: () => "+=" + window.innerHeight * PIN_SCREENS,
-          pin: true,
-          scrub: SCRUB,
-          onUpdate: (self) => engine.setProgress(self.progress),
-          onRefresh: (self) => engine.setProgress(self.progress),
-        });
-
-        intersectionObserver = new IntersectionObserver(
-          (entries) => {
-            inView = entries[0]?.isIntersecting ?? false;
-          },
-          { rootMargin: "200px" },
-        );
-        intersectionObserver.observe(section);
-
-        resizeObserver = new ResizeObserver(() => {
-          engine.resize();
-          ScrollTrigger.refresh();
-        });
-        resizeObserver.observe(wrapper);
-
         engine.resize();
-        ScrollTrigger.refresh();
+        engine.setProgress(st.progress);
       })
       .catch((error) => {
         console.error("PortfolioEngine init failed", error);
@@ -97,9 +117,11 @@ export default function PortfolioCanvas() {
     return () => {
       disposed = true;
       if (tickerFn) gsap.ticker.remove(tickerFn);
-      st?.kill();
-      resizeObserver?.disconnect();
-      intersectionObserver?.disconnect();
+      window.removeEventListener("resize", onResize);
+      if (resizeRaf) cancelAnimationFrame(resizeRaf);
+      window.clearTimeout(settleTimer);
+      st.kill();
+      intersectionObserver.disconnect();
       engine.dispose();
     };
   }, []);
