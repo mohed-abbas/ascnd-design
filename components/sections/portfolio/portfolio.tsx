@@ -20,13 +20,17 @@
  *
  * NOTE — no CSS background and z-index left at `auto` (below the site's front
  * cloud layer at `z-[61]`) ON PURPOSE, so the sky/cloud atmosphere reads through.
+ *
+ * The section now hosts TWO designs behind a glass selector (PortfolioVariants):
+ * the original depth gallery ("depth") and V2's horizontal cloud-drift
+ * ("cloudline"). Only one mounts at a time; both stay transparent over the sky.
  */
-import PortfolioScene from "./portfolio-scene";
+import PortfolioVariants from "./portfolio-variants";
 
 export default function Portfolio() {
   return (
     <section data-portfolio className="relative min-h-dvh w-full overflow-hidden">
-      <PortfolioScene />
+      <PortfolioVariants />
     </section>
   );
 }

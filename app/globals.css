@@ -462,6 +462,29 @@ html[data-custom-cursor="on"] * {
   overflow: hidden;
 }
 
+/* V3 carousel reuses the project-label styles but centres the card at the
+   bottom (the active still sits centre-stage, so a right-rail card would collide
+   with it). */
+.plane-label-overlay--carousel .plane-label {
+  right: auto;
+  top: auto;
+  left: 50%;
+  bottom: clamp(2rem, 7vh, 5.5rem);
+  transform: translateX(-50%);
+  width: min(92vw, 600px);
+  justify-items: center;
+  text-align: center;
+}
+
+.plane-label-overlay--carousel .plane-label__tags {
+  justify-content: center;
+}
+
+.plane-label-overlay--carousel .plane-label__desc {
+  max-width: 46ch;
+  margin-inline: auto;
+}
+
 @media (max-width: 53em) {
   .plane-label {
     top: auto;
@@ -480,5 +503,119 @@ html[data-custom-cursor="on"] * {
   .plane-label__desc {
     font-size: 0.85rem;
     max-width: none;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Portfolio V2 — "Cloudline" horizontal drift
+   Stills drift across the sky like the volumetric clouds behind them. Depth is
+   real size (near = large, far = small) plus a feathered mask that dissolves the
+   frame edges into the sky, so each project reads as a window opening in the
+   cloudbank. GSAP scrubs the track X + per-lane parallax (cloudline-scene.tsx);
+   these rules own the look. The section is NOT an ancestor of the fixed sky
+   layers, so filter/backdrop-filter here is safe.
+   ──────────────────────────────────────────────────────────────────────────── */
+.cloudline-track {
+  will-change: transform;
+  padding-inline: clamp(8vw, 14vw, 18vw);
+  gap: clamp(4vw, 8vw, 11vw);
+}
+
+.cloudline-card {
+  flex: 0 0 auto;
+  display: grid;
+  justify-items: center;
+  gap: 1rem;
+  will-change: transform;
+}
+
+.cloudline-frame {
+  position: relative;
+  width: var(--frame-w);
+  aspect-ratio: 3 / 2;
+  overflow: hidden;
+  border-radius: 16px;
+  /* Feathered "cloud window" — the frame's edges dissolve into the sky. The
+     solid core shrinks with depth (far = softer). */
+  -webkit-mask-image: radial-gradient(
+    125% 118% at 50% 50%,
+    #000 var(--feather-core, 60%),
+    transparent 100%
+  );
+  mask-image: radial-gradient(
+    125% 118% at 50% 50%,
+    #000 var(--feather-core, 60%),
+    transparent 100%
+  );
+  transition: transform 520ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.cloudline-card[data-depth="near"] {
+  --frame-w: clamp(340px, 42vw, 640px);
+}
+.cloudline-card[data-depth="mid"] {
+  --frame-w: clamp(260px, 32vw, 500px);
+}
+.cloudline-card[data-depth="far"] {
+  --frame-w: clamp(200px, 24vw, 380px);
+}
+
+.cloudline-card[data-depth="mid"] .cloudline-frame {
+  --feather-core: 54%;
+  opacity: 0.94;
+}
+.cloudline-card[data-depth="far"] .cloudline-frame {
+  --feather-core: 46%;
+  opacity: 0.84;
+}
+
+.cloudline-card:hover .cloudline-frame {
+  transform: scale(1.02);
+}
+
+/* House-glass caption — same recipe as the navbar / mode rail. */
+.cloudline-caption {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.7rem;
+  max-width: var(--frame-w);
+  padding: 0.5rem 0.95rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.1);
+  box-shadow: inset 0 0 28.3px 0 rgba(255, 255, 255, 0.25);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  color: #fff;
+}
+
+.cloudline-caption__name {
+  font-family: var(--font-sans);
+  font-size: clamp(0.95rem, 1.1vw, 1.15rem);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.cloudline-caption__dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.5;
+  flex: 0 0 auto;
+}
+
+.cloudline-caption__tags {
+  font-family: var(--font-mono), "SFMono-Regular", Menlo, Monaco, monospace;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  opacity: 0.72;
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cloudline-frame {
+    transition: none;
   }
 }
