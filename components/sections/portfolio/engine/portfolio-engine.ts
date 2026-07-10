@@ -46,13 +46,18 @@ class PortfolioEngine {
     // Scroll (external-progress rewrite)
     this.scroll = new ScrollInput(this.camera, this.experience.gallery);
 
-    // Renderer
+    // Renderer. `alpha: true` + a transparent clear color make the canvas
+    // composite over the site's sky/cloud background instead of the source's
+    // opaque mood shader — the image planes (and trail/particles) float in the
+    // principal site's atmosphere. The mood Background pass is skipped in tick().
     this.renderer = new THREE.WebGLRenderer({
       canvas: this.canvas,
       antialias: true,
+      alpha: true,
     });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+    this.renderer.setClearColor(0x000000, 0);
     this.renderer.autoClear = false;
   }
 
@@ -118,9 +123,11 @@ class PortfolioEngine {
     this.scroll.update();
     this.experience.update(timeMs, this.camera, this.scroll);
 
+    // Clear to transparent and render only the planes/trail/particles — the mood
+    // Background quad is intentionally NOT rendered so the site's sky + clouds
+    // show through. (Background still updates its mood/velocity state harmlessly;
+    // re-enable the pass here if a self-contained opaque look is ever wanted.)
     this.renderer.clear(true, true, true);
-    this.experience.background.render(this.renderer);
-    this.renderer.clearDepth();
     this.renderer.render(this.scene, this.camera);
     this.experience.label.render();
   }

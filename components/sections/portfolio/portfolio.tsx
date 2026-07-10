@@ -9,24 +9,23 @@
  * by the shared gsap.ticker and a pinned + scroll-scrubbed ScrollTrigger so it
  * lives as a normal section inside the Lenis page.
  *
- * Unlike the site's other sections (transparent over the global sky), this one is
- * intentionally OPAQUE — the depth gallery draws its own mood background, which is
- * core to the effect and fully covers the sky/clouds while pinned.
+ * Like the site's other sections, this one is now TRANSPARENT over the global
+ * sky: the depth gallery's own mood-background shader pass is disabled (see
+ * portfolio-engine.ts `tick()`) and the WebGL canvas is `alpha: true`, so the
+ * image planes / trail / particles float over the principal site's sky + cloud
+ * background instead of a self-contained opaque world.
  *
  * Slots ABOVE pricing on the home page. The pin lives here, so page.tsx wraps this
  * section in a `shrink-0` block (see the note there).
  *
- * The `bg-[#fffaf0]` is a first-paint fallback matching the first plane's mood
- * background, so there's no flash before the WebGL canvas takes over.
+ * NOTE — no CSS background and z-index left at `auto` (below the site's front
+ * cloud layer at `z-[61]`) ON PURPOSE, so the sky/cloud atmosphere reads through.
  */
 import PortfolioScene from "./portfolio-scene";
 
 export default function Portfolio() {
   return (
-    <section
-      data-portfolio
-      className="relative min-h-dvh w-full overflow-hidden bg-[#fffaf0]"
-    >
+    <section data-portfolio className="relative min-h-dvh w-full overflow-hidden">
       <PortfolioScene />
     </section>
   );
