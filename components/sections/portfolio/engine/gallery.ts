@@ -68,7 +68,7 @@ class Gallery {
     this.texturesBySource = new Map();
     this.useTextures = true;
     this.planeGap = 5;
-    this.desktopPlaneScale = 1;
+    this.desktopPlaneScale = 0.85;
     this.mobilePlaneScale = 0.65;
     this.mobileXSpreadFactor = 0.25;
     this.mobileBreakpoint = 768;
@@ -195,15 +195,17 @@ class Gallery {
 
   getPlaneLabelData(planeDefinition: GalleryPlaneDatum, index: number) {
     const fallback = {
-      word: `tone ${String(index + 1).padStart(2, "0")}`,
-      pms: "N/A",
+      name: `Project ${String(index + 1).padStart(2, "0")}`,
+      tags: [] as string[],
+      description: "",
       color: "",
     };
     const label = planeDefinition.label || fallback;
 
     return {
-      word: label.word || fallback.word,
-      pms: label.pms || fallback.pms,
+      name: label.name || fallback.name,
+      tags: label.tags && label.tags.length ? label.tags : fallback.tags,
+      description: label.description || fallback.description,
       color: label.color || fallback.color,
     };
   }

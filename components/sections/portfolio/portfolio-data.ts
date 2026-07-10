@@ -12,8 +12,13 @@
  */
 
 export interface GalleryLabel {
-  word: string;
-  pms: string;
+  /** Project name (headline of the overlay card). */
+  name: string;
+  /** Short tags rendered as pills. */
+  tags: string[];
+  /** Two-line project blurb. */
+  description: string;
+  /** Overlay text colour, tuned per plane for contrast over the image. */
   color: string;
 }
 
@@ -38,9 +43,11 @@ export const galleryPlaneData: GalleryPlaneDatum[] = [
     blob1Color: "#ffdf94",
     blob2Color: "#fce7c4",
     label: {
-      word: "golden",
-      pms: "PMS 135 C",
-      color: "#2e2e2e",
+      name: "Aurora Commerce",
+      tags: ["Branding", "E-commerce"],
+      description:
+        "A headless storefront rebuilt for speed. Placeholder copy standing in for the real project summary.",
+      color: "#ffffff",
     },
   },
   {
@@ -52,9 +59,11 @@ export const galleryPlaneData: GalleryPlaneDatum[] = [
     blob1Color: "#d29a41",
     blob2Color: "#bb96af",
     label: {
-      word: "violet",
-      pms: "PMS 4985 C",
-      color: "#2e2e2e",
+      name: "Meridian Finance",
+      tags: ["Product", "Web App"],
+      description:
+        "A dashboard that makes complex data feel calm. Placeholder copy here until the real write-up lands.",
+      color: "#ffffff",
     },
   },
   {
@@ -66,9 +75,11 @@ export const galleryPlaneData: GalleryPlaneDatum[] = [
     blob1Color: "#f88b8d",
     blob2Color: "#cfbbdd",
     label: {
-      word: "afterglow",
-      pms: "PMS 170 C",
-      color: "#f4f4f4",
+      name: "Lumen Health",
+      tags: ["Mobile", "Design System"],
+      description:
+        "A patient app built around clarity and trust. Placeholder copy filling in for the real project details.",
+      color: "#ffffff",
     },
   },
   {
@@ -80,9 +91,11 @@ export const galleryPlaneData: GalleryPlaneDatum[] = [
     blob1Color: "#ffaa00",
     blob2Color: "#00e1ff",
     label: {
-      word: "cobalt",
-      pms: "PMS 660 C",
-      color: "#f4f4f4",
+      name: "Cobalt Studio",
+      tags: ["Identity", "Motion"],
+      description:
+        "A bold visual identity with kinetic type. Placeholder text describing the work in roughly two lines.",
+      color: "#ffffff",
     },
   },
   {
@@ -94,9 +107,11 @@ export const galleryPlaneData: GalleryPlaneDatum[] = [
     blob1Color: "#fdd895",
     blob2Color: "#a5b599",
     label: {
-      word: "meadow",
-      pms: "PMS 7507 C",
-      color: "#f4f4f4",
+      name: "Meadow Labs",
+      tags: ["Web", "3D"],
+      description:
+        "An immersive product site with WebGL scenes. Placeholder copy to be swapped for the real summary.",
+      color: "#ffffff",
     },
   },
 ];
