@@ -1,22 +1,24 @@
 import Image from "next/image";
 import FooterReveal from "./footer-reveal";
+import FooterGlass from "./footer-glass";
 
 /**
- * Footer — the closing mountain range (Figma frame 539:466, mountains only).
+ * Footer — the closing mountain range with the live liquid-glass "ascnd" wordmark
+ * (Figma frame 539:466), the same glass used in the welcome intro.
  *
- * The terminal section: a full-bleed photographic mountain range rises from the
- * bottom of the page. Just the peaks — no wordmark, no mist overlays — as a clean
- * cutout (transparent sky, opaque rock) exported from the design source.
+ * The scene box is the design's proportion (~1512:1243) so there's sky headroom
+ * for the wordmark above the peaks. Two layers stack in it:
+ *  - a bottom-anchored mountain <img> — the FALLBACK (SSR / no-JS / mobile /
+ *    reduced-motion), a clean cutout with a transparent sky so the shared DOM sky
+ *    + live clouds show through above the ridgeline;
+ *  - <FooterGlass> — a transparent WebGL overlay (desktop only) that re-draws the
+ *    mountains as a plane and lays the refracting glass "ascnd" across the peaks
+ *    ("naive Option B": the glass refracts the real, aligned mountains). Its
+ *    mountain plane covers the fallback <img>, so eligible devices see the glass
+ *    and everyone else still sees the mountains.
  *
- * Like every other section it stays TRANSPARENT over the shared sky: the cutout's
- * sky is transparent, so the fixed <Background/> (fill → grain) shows through and
- * the live volumetric <CloudLayer/> drifts through the open sky above the peaks.
- *
- * Full-bleed: the range bleeds edge-to-edge (w-full), the image's own aspect ratio
- * sets the section height, and the mountains meet the very bottom of the page.
- *
- * The range fades up on scroll-in (footer-reveal.tsx → the shared blur-rise);
- * markup renders FINISHED (SSR / no-JS / reduced-motion show it in place).
+ * Full-bleed (w-full); the mountains meet the very bottom of the page. The scene
+ * resolves into focus on scroll-in (footer-reveal.tsx → the shared blur-rise).
  */
 export default function Footer() {
   return (
@@ -24,22 +26,26 @@ export default function Footer() {
       {/* Blur-rise on scroll-in (see footer-reveal.tsx). */}
       <FooterReveal />
 
-      {/* Mountain cutout, transparent above the ridgeline so the shared sky +
-          clouds show through. Never the LCP (it's the last thing on the page) →
-          lazy, off the critical path. `unoptimized` skips Next's re-encode: the
-          WebP is already a tuned master. Decorative → empty alt. */}
-      <Image
-        data-footer-scene
-        src="/footer/footer-scene.webp"
-        alt=""
-        aria-hidden
-        width={3168}
-        height={1344}
-        unoptimized
-        loading="lazy"
-        sizes="100vw"
-        className="pointer-events-none block h-auto w-full select-none"
-      />
+      {/* Scene box — design proportion, so the wordmark clears the peaks. */}
+      <div data-footer-scene className="relative w-full aspect-[1512/1243]">
+        {/* Mountain cutout, bottom-anchored — the fallback layer. Never the LCP
+            (last thing on the page) → lazy. `unoptimized` skips Next's re-encode
+            (already a tuned master). Decorative → empty alt. */}
+        <Image
+          src="/footer/footer-scene.webp"
+          alt=""
+          aria-hidden
+          width={3168}
+          height={1344}
+          unoptimized
+          loading="lazy"
+          sizes="100vw"
+          className="pointer-events-none absolute inset-x-0 bottom-0 block h-auto w-full select-none"
+        />
+
+        {/* Live liquid-glass overlay (desktop/WebGL only). */}
+        <FooterGlass />
+      </div>
     </footer>
   );
 }
