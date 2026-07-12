@@ -25,6 +25,13 @@
  * | components/sections/intro/intro-scene.tsx  | mtm*, text3d* (mount snapshot),          |
  * |                                            | heavyEffectFpsCap() (IntroFrameCap),     |
  * |                                            | makeCappedInvalidate (ScrollRig)         |
+ * | components/sections/footer/                | mtm*, text3d* (mount snapshot) — reuses  |
+ * |   footer-glass-scene.tsx                   | the intro's glass. makeCappedInvalidate  |
+ * |                                            | (PaintGate shimmer pump). Mounts lazily  |
+ * |                                            | (footer-scene.tsx IO, ~1vp early) and    |
+ * |                                            | idles to zero off-screen; dpr≤1.5.       |
+ * |                                            | No-WebGL/reduced-motion/mobile → baked-  |
+ * |                                            | glass composite image fallback.          |
  * | components/ui/glass-surface.tsx            | NONE (2026-07-03, Decision 6): reads no   |
  * |                                            | tier knob. Its consumer (why-stay pill)   |
  * |                                            | now passes chromatic={false} on EVERY     |

@@ -7,7 +7,7 @@ import {
   Text3D,
   useTexture,
 } from "@react-three/drei";
-import { Suspense, useEffect, useMemo } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import * as THREE from "three";
 import gsap from "gsap";
 import { GlassEnvironment } from "@/components/sections/intro/intro-scene";
@@ -30,11 +30,15 @@ import { PALETTES } from "@/lib/theme/palette";
  * sky + live clouds, and the glass's `background` sky colour fills the transmission
  * where the letters sit over open sky.
  *
- * PHASE 1 (feature-first): renders on demand with a mount burst + an on-screen
- * repaint gate for the shimmer — enough that the heaviest shader in the app doesn't
- * run while the footer is off-screen, but NOT the full tier/eligibility gating and
- * static fallback (that's Phase 2). Placement is self-sized off the viewport and
- * driven by the TUNING constants below — eyeball + adjust.
+ * Renders on demand: a mount burst covers the multi-frame build, then the shimmer
+ * only repaints while the footer is on screen (PaintGate) so the heaviest shader in
+ * the app idles to zero off-screen. Eligibility + a DEFERRED mount (the context is
+ * created only as the footer nears the viewport) + the static fallback live one
+ * level up in footer-scene.tsx; the mtm + text3d tier knobs come from
+ * getQualityConfig and the repaint cap from makeCappedInvalidate. dpr capped 1.5.
+ *
+ * Placement is self-sized off the viewport and driven by the TUNING constants below
+ * — eyeball + adjust.
  */
 
 const FONT = "/fonts/product-sans-medium.typeface.json";
@@ -210,9 +214,63 @@ function PaintGate() {
   return null;
 }
 
+/**
+ * WebGL context-loss safety net (mirrors cloud-canvas's watchdog). THREE handles
+ * lost/restored internally; here we (a) repaint after a restore (demand mode needs
+ * an explicit frame) and (b) if a restore never arrives within a few seconds
+ * (unrecoverable driver reset) on a still-live, visible canvas, ask the parent to
+ * remount the <Canvas> with a fresh context. All listeners/timers are cleaned up.
+ */
+function ContextWatchdog({ onUnrecoverable }: { onUnrecoverable: () => void }) {
+  const gl = useThree((s) => s.gl);
+  const invalidate = useThree((s) => s.invalidate);
+
+  useEffect(() => {
+    const canvas = gl.domElement;
+    let mounted = true;
+    let restoreTimer: ReturnType<typeof setTimeout> | undefined;
+
+    const onLost = () => {
+      if (restoreTimer) clearTimeout(restoreTimer);
+      restoreTimer = setTimeout(() => {
+        if (
+          mounted &&
+          canvas.isConnected &&
+          document.visibilityState === "visible"
+        ) {
+          onUnrecoverable();
+        }
+      }, 4000);
+    };
+    const onRestored = () => {
+      if (restoreTimer) clearTimeout(restoreTimer);
+      restoreTimer = undefined;
+      invalidate();
+    };
+
+    canvas.addEventListener("webglcontextlost", onLost, false);
+    canvas.addEventListener("webglcontextrestored", onRestored, false);
+
+    return () => {
+      mounted = false;
+      if (restoreTimer) clearTimeout(restoreTimer);
+      canvas.removeEventListener("webglcontextlost", onLost, false);
+      canvas.removeEventListener("webglcontextrestored", onRestored, false);
+    };
+  }, [gl, invalidate, onUnrecoverable]);
+
+  return null;
+}
+
 export default function FooterGlassScene() {
+  // Bumping this remounts the <Canvas> with a fresh GL context — last resort when
+  // a lost context never restores. See <ContextWatchdog>.
+  const [canvasKey, setCanvasKey] = useState(0);
+  const remount = useCallback(() => setCanvasKey((k) => k + 1), []);
+
   return (
     <Canvas
+      key={canvasKey}
       frameloop="demand"
       dpr={[1, 1.5]}
       gl={{ antialias: true, alpha: true }}
@@ -232,6 +290,7 @@ export default function FooterGlassScene() {
         <directionalLight position={[3, 5, 6]} intensity={1.2} />
         <ambientLight intensity={0.4} />
         <PaintGate />
+        <ContextWatchdog onUnrecoverable={remount} />
       </Suspense>
     </Canvas>
   );
