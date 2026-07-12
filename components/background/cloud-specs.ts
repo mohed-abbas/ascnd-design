@@ -158,6 +158,33 @@ export const SKY_CLOUDS: CloudSpec[] = [
   },
   // data-working-with
 
+  // Final CTA ("let's get you off the ground") — two corner banks that frame the
+  // centred heading + buttons diagonally: one top-left, one bottom-right. These
+  // are FIELD clouds (anchorVh), NOT section-bound: a section-bound cloud slides
+  // into rest over a fixed 0.7vh then HOLDS motionless (a visibly pinned feel),
+  // whereas anchorVh parallaxes continuously — it drifts slowly up, passes
+  // through its rest spot as the CTA centres, and keeps floating out. Both share
+  // the same anchorVh so they rest together when the section is on screen.
+  {
+    key: "finalcta-tl",
+    ndc: [-0.85, 0.78],
+    dist: 22,
+    seed: 4,
+    bounds: [4, 1.2, 1],
+    volume: 4,
+    anchorVh: 13.5,
+    perspectiveScroll: false,
+  },
+  {
+    key: "finalcta-br",
+    ndc: [0.85, -0.8],
+    dist: 22,
+    seed: 11,
+    bounds: [5, 1.3, 1],
+    volume: 5,
+    anchorVh: 13.5,
+    perspectiveScroll: false,
+  },
 ];
 
 // Rock-base banks — a WIDE, SHALLOW strip that just skirts the foot of each
