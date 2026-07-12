@@ -190,6 +190,31 @@ export const SKY_CLOUDS: CloudSpec[] = [
     section: { trigger: "[data-final-cta]" },
     perspectiveScroll: false,
   },
+  // Footer ("ascnd" mountain range) — a soft bank low on the LEFT that sits
+  // BEHIND the mountains (SKY layer, -z-10, behind page content), so only its top
+  // wisps crest the ridgeline / show through the gaps while its body stays hidden
+  // behind the opaque rock. The matching thin cloud IN FRONT of the peaks is
+  // footer-br-front in ROCK_CLOUDS.
+  //
+  // `travel` / `ndc` are coupled here. A section cloud parks `travel` BELOW its
+  // rest spot while its section is off-screen below; `travel` must be big enough
+  // that this parked point clears the screen bottom, or the cloud pokes up through
+  // the transparent sky at the foot of EVERY section (it's on the fixed layer).
+  // But the footer is the LAST section and never scroll-centres (SectionRig
+  // progress caps ~0.4 at page end), so the cloud only ever reaches ~0.3·travel
+  // below rest — the `ndc` rest is therefore set HIGH (above the visible target)
+  // to compensate, and the cloud settles into view at the page bottom without ever
+  // touching rest. Shrinking `travel` re-parks it on-screen — don't.
+  {
+    key: "footer-bl-behind",
+    ndc: [-0.7, -0.24],
+    dist: 24,
+    seed: 11,
+    bounds: [5, 1.6, 1],
+    volume: 6,
+    section: { trigger: "[data-footer]", travel: 0.7 },
+    perspectiveScroll: false,
+  },
 ];
 
 // Rock-base banks — a WIDE, SHALLOW strip that just skirts the foot of each
@@ -201,4 +226,19 @@ export const SKY_CLOUDS: CloudSpec[] = [
 export const ROCK_CLOUDS: CloudSpec[] = [
   { key: "rock-left", ndc: [-0.88, -1.02], dist: 22, seed: 7, bounds: [6.5, 0.45, 1], volume: 8, anchorVh: 0, perspectiveScroll: false },
   { key: "rock-right", ndc: [0.88, -1.02], dist: 22, seed: 3, bounds: [6.5, 0.45, 1], volume: 8, anchorVh: 0, perspectiveScroll: false },
+  // Footer ("ascnd" mountain range) — a THIN wisp low on the RIGHT that rides IN
+  // FRONT of the peaks (this ROCK layer renders at z-[61], above page content),
+  // the counterpart to footer-bl-behind. Wide + shallow bounds = a thin band, not
+  // a puff. Section-bound to the footer; small `travel` for the same page-end
+  // reason as its sibling (see footer-bl-behind in SKY_CLOUDS).
+  {
+    key: "footer-br-front",
+    ndc: [0.8, -0.8],
+    dist: 22,
+    seed: 7,
+    bounds: [3.5, 0.4, 1],
+    volume: 4,
+    section: { trigger: "[data-footer]", travel: 0.35 },
+    perspectiveScroll: false,
+  },
 ];
