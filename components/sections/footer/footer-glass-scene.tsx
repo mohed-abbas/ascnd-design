@@ -5,6 +5,7 @@ import {
   Center,
   MeshTransmissionMaterial,
   Text3D,
+  useFont,
   useTexture,
 } from "@react-three/drei";
 import {
@@ -70,6 +71,13 @@ const FONT = "/fonts/product-sans-medium.typeface.json";
 const MOUNTAIN_SRC = "/footer/footer-scene.webp";
 const MOUNTAIN_ASPECT = 3168 / 1344; // intrinsic w/h of the mountain cutout
 
+// Prime the heavyweight payloads the moment this chunk arrives — footer-scene
+// warms the chunk itself well ahead of arrival (warmFooterGlass), so by the time
+// the canvas mounts, both are cache hits. The font is already cached when the
+// intro played; this covers intro-skipped loads.
+useTexture.preload(MOUNTAIN_SRC);
+useFont.preload(FONT);
+
 // Glass "ascnd" width ≈ 2.55 × Text3D `size` (advances + tracking) — same as intro.
 const WIDTH_PER_SIZE = 2.55;
 
@@ -123,6 +131,10 @@ const MTM_TEMPORAL_DISTORTION = 0;
 // textures and compiles the MTM shader over several frames, so a single frame
 // can paint blank (same lesson as cloud-canvas's InvalidateOnReady burst).
 const MOUNT_BURST_FRAMES = 30;
+// How many painted frames count as "the scene is genuinely on screen" — past the
+// env-map build and shader settle. RenderPump fires onReady here, releasing the
+// baked poster that covers the spin-up (footer-scene.tsx).
+const READY_FRAMES = 6;
 // ─────────────────────────────────────────────────────────────────────────────
 
 const clamp01 = (v: number) => (v < 0 ? 0 : v > 1 ? 1 : v);
@@ -382,23 +394,27 @@ function RevealRig({ revealRef }: { revealRef: React.RefObject<number> }) {
  * (LenisProvider's one loop), which keeps ticking through a scroll — so
  * scroll-driven changes paint DURING the scroll. A demand canvas + invalidate()
  * did NOT do this: the paint was deferred until the scroll settled. And because
- * only REQUESTED frames paint, a settled scene costs zero GPU even while visible
- * (the canvas keeps showing its last painted frame).
- *
- * ⚠️ The pump is toggled SYNCHRONOUSLY inside the IntersectionObserver callback —
- * NOT via a React effect keyed on a prop. A passive effect is deferred while the
- * main thread is busy scrolling (that deferral once stranded the reveal until the
- * scroll stopped). Paints are capped by heavyEffectFpsCap so a 120 Hz panel
+ * only REQUESTED frames paint, a settled scene costs zero GPU (the canvas keeps
+ * showing its last painted frame) — so the pump rides the ticker permanently
+ * while mounted: a tick with nothing pending is a no-op, and the old
+ * IntersectionObserver on/off gate was pure complexity (scroll rigs only fire
+ * in range anyway). Paints are capped by heavyEffectFpsCap so a 120 Hz panel
  * doesn't pay double for the heavy MTM.
  *
- * A warm advance at mount + a MOUNT_BURST covers drei's multi-frame build (shader
- * compile, texture upload) so the first visible frame isn't blank; a resize
- * relayouts (Center re-centres) and repaints; a tab re-show repaints once.
+ * A warm advance at mount + a MOUNT_BURST covers drei's multi-frame build
+ * (shader compile, texture upload, env PMREM) — and since the canvas mounts
+ * viewports ahead of arrival (footer-scene), the burst finishes the warm-up
+ * BEFORE the footer is reached. Once READY_FRAMES real frames have painted,
+ * `onReady` fires and footer-scene fades its baked poster off the live canvas.
+ * A resize relayouts (Center re-centres) and repaints; a tab re-show repaints.
  */
-function RenderPump() {
+function RenderPump({ onReady }: { onReady?: () => void }) {
   const advance = useThree((s) => s.advance);
-  const gl = useThree((s) => s.gl);
   const size = useThree((s) => s.size);
+  const onReadyRef = useRef(onReady);
+  useEffect(() => {
+    onReadyRef.current = onReady;
+  }, [onReady]);
 
   // Resize → re-render at the new proportions (also fires at mount, where it
   // merges into the mount burst below).
@@ -408,10 +424,11 @@ function RenderPump() {
 
   useEffect(() => {
     // Warm the pipeline synchronously (compile MTM/Text3D shaders, upload
-    // geometry), then burst a few frames — drei finishes building async.
+    // geometry), then burst frames — drei finishes building async.
     advance(performance.now());
     requestPaint(MOUNT_BURST_FRAMES);
 
+    let painted = 1; // the warm advance above
     let last = 0;
     const pump = (t: number) => {
       if (paint.pending <= 0) return;
@@ -420,34 +437,10 @@ function RenderPump() {
       last = t;
       paint.pending -= 1;
       advance(t * 1000);
+      painted += 1;
+      if (painted === READY_FRAMES) onReadyRef.current?.();
     };
-
-    let running = false;
-    const start = () => {
-      if (running) return;
-      gsap.ticker.add(pump);
-      running = true;
-    };
-    const stop = () => {
-      if (!running) return;
-      gsap.ticker.remove(pump);
-      running = false;
-    };
-
-    const io = new IntersectionObserver(
-      ([entry]) => {
-        // SYNCHRONOUS toggle — see the ⚠️ note above. Requests accrued while
-        // off-screen (theme change, scroll restore) paint on re-entry.
-        if (entry.isIntersecting) {
-          requestPaint();
-          start();
-        } else {
-          stop();
-        }
-      },
-      { rootMargin: "10% 0px" },
-    );
-    io.observe(gl.domElement);
+    gsap.ticker.add(pump);
 
     const onVisible = () => {
       if (document.visibilityState === "visible") requestPaint();
@@ -455,11 +448,10 @@ function RenderPump() {
     document.addEventListener("visibilitychange", onVisible);
 
     return () => {
-      stop();
-      io.disconnect();
+      gsap.ticker.remove(pump);
       document.removeEventListener("visibilitychange", onVisible);
     };
-  }, [advance, gl]);
+  }, [advance]);
 
   return null;
 }
@@ -512,7 +504,12 @@ function ContextWatchdog({ onUnrecoverable }: { onUnrecoverable: () => void }) {
   return null;
 }
 
-export default function FooterGlassScene() {
+export default function FooterGlassScene({
+  onReady,
+}: {
+  /** Fired once the scene has painted real frames — releases the poster. */
+  onReady?: () => void;
+}) {
   // Bumping this remounts the <Canvas> with a fresh GL context — last resort when
   // a lost context never restores. See <ContextWatchdog>.
   const [canvasKey, setCanvasKey] = useState(0);
@@ -600,7 +597,7 @@ export default function FooterGlassScene() {
         <directionalLight position={[3, 5, 6]} intensity={1.2} />
         <ambientLight intensity={0.4} />
         {FOOTER_GLASS.glassReveal && <RevealRig revealRef={revealRef} />}
-        <RenderPump />
+        <RenderPump onReady={onReady} />
         <ContextWatchdog onUnrecoverable={remount} />
       </Suspense>
     </Canvas>

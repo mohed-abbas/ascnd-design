@@ -27,8 +27,9 @@
  * |                                            | makeCappedInvalidate (ScrollRig)         |
  * | components/sections/footer/                | mtm*, text3d* (mount snapshot) — reuses  |
  * |   footer-glass-scene.tsx                   | the intro's glass. heavyEffectFpsCap()   |
- * |                                            | (RenderPump paint cap). Mounts lazily    |
- * |                                            | (footer-scene.tsx IO, ~3vp early); paint |
+ * |                                            | (RenderPump paint cap). Pre-warmed after |
+ * |                                            | the intro, mounted ~6vp early, poster-   |
+ * |                                            | covered until first real frames; paint   |
  * |                                            | is request-driven (frameloop="never"),   |
  * |                                            | so it idles to ZERO at rest, on-screen   |
  * |                                            | or off; dpr≤1.5.                         |
