@@ -35,10 +35,11 @@ export type CloudSpec = {
    */
   anchorVh?: number;
   /**
-   * SECTION clouds: bind the cloud to a section so it SLIDES into its `ndc` rest
-   * spot as the section enters, HOLDS there while the section is on screen (the
-   * hold spans any pin automatically), then SLIDES out as it leaves — instead of
-   * parallaxing continuously. Mutually exclusive with `anchorVh`. See <SectionRig>.
+   * SECTION clouds: bind the cloud to a section so it drifts continuously through
+   * its `ndc` rest spot over that section's scroll crossing — reaching rest as the
+   * section centres, then floating on out — WITHOUT counting viewport-heights (the
+   * `anchorVh` alternative). Mutually exclusive with `anchorVh`. Motion is Option
+   * B (constant-velocity drift, no hold); see <SectionRig>.
    */
   section?: SectionBind;
   /**
@@ -58,12 +59,17 @@ export type SectionBind = {
   /** CSS selector for the section element (e.g. "[data-cards]"). */
   trigger: string;
   /**
-   * Fixed distance (in viewport-heights) the cloud spends sliding IN and sliding
-   * OUT of its rest spot (default 0.7). Fixed — not a fraction of the crossing —
-   * so a pinned section (longer crossing) slides the same and just holds longer.
+   * RESERVED for the future docking mode (Option C): the fixed distance (in
+   * viewport-heights) a cloud would spend sliding in/out before HOLDING at rest.
+   * Unused by the current continuous-drift motion (Option B). See <SectionRig>
+   * and docs/cloud-rendering-research.md § "Section-cloud motion".
    */
   slide?: number;
-  /** How far (in viewport-heights) the cloud slides in/out of its rest spot (default 1). */
+  /**
+   * How far (in viewport-heights) the cloud sweeps to EACH side of its rest spot
+   * across the crossing (default 1): `travel` below rest at section-enter, rest at
+   * section-centre, `travel` above at section-exit. Bigger = a longer, slower drift.
+   */
   travel?: number;
 };
 
@@ -128,22 +134,22 @@ export const SKY_CLOUDS: CloudSpec[] = [
   },
   {
     key: "workingwith-right-bottom",
-    ndc: [0.90, -2.5],
+    ndc: [0.90, 0.5],
     dist: 24,
     seed: 11,
     bounds: [4, 1, 1],
     volume: 3,
-    anchorVh: 7,
+    section: { trigger: "[data-working-with]" },
     perspectiveScroll: false,
   },
   {
     key: "testimonials-right-top",
-    ndc: [0.90, -1.55],
+    ndc: [0.90, 0.55],
     dist: 24,
     seed: 11,
     bounds: [4, 1.4, 1],
     volume: 4,
-    anchorVh: 8.5,
+    section: { trigger: "[data-testimonials]" },
     perspectiveScroll: false,
   },
   {
@@ -153,18 +159,17 @@ export const SKY_CLOUDS: CloudSpec[] = [
     seed: 11,
     bounds: [7, 1.4, 1],
     volume: 4,
-    anchorVh: 10,
+    section: { trigger: "[data-testimonials]" },
     perspectiveScroll: false,
   },
   // data-working-with
 
   // Final CTA ("let's get you off the ground") — two corner banks that frame the
-  // centred heading + buttons diagonally: one top-left, one bottom-right. These
-  // are FIELD clouds (anchorVh), NOT section-bound: a section-bound cloud slides
-  // into rest over a fixed 0.7vh then HOLDS motionless (a visibly pinned feel),
-  // whereas anchorVh parallaxes continuously — it drifts slowly up, passes
-  // through its rest spot as the CTA centres, and keeps floating out. Both share
-  // the same anchorVh so they rest together when the section is on screen.
+  // centred heading + buttons diagonally: one top-left, one bottom-right. Bound
+  // to the section (not anchorVh) so they drift continuously through their corner
+  // rest spots as the CTA crosses the viewport — reaching rest as it centres, then
+  // floating on out (SectionRig Option B, no hold). The bind needs no viewport-
+  // height counting, so it stays correct as sections are added/reordered above.
   {
     key: "finalcta-tl",
     ndc: [-0.85, 0.78],
@@ -172,7 +177,7 @@ export const SKY_CLOUDS: CloudSpec[] = [
     seed: 4,
     bounds: [4, 1.2, 1],
     volume: 4,
-    anchorVh: 13.5,
+    section: { trigger: "[data-final-cta]" },
     perspectiveScroll: false,
   },
   {
@@ -182,7 +187,7 @@ export const SKY_CLOUDS: CloudSpec[] = [
     seed: 11,
     bounds: [5, 1.3, 1],
     volume: 5,
-    anchorVh: 13.5,
+    section: { trigger: "[data-final-cta]" },
     perspectiveScroll: false,
   },
 ];
