@@ -3,6 +3,7 @@
 import { useEffect, useLayoutEffect } from "react";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
+import { FOOTER_GLASS, useFooterGlassEligible } from "./footer-glass-config";
 
 gsap.registerPlugin(ScrollTrigger);
 
@@ -17,7 +18,12 @@ const REDUCE_MOTION = "(prefers-reduced-motion: reduce)";
  * Footer-scene reveal (Figma 539:466) — the closing mountain range. It rises a
  * touch, fades in and clears from a soft blur to crisp, once, as the footer
  * scrolls in — the same blur-rise FAMILY the section headings use, applied to the
- * mountain image.
+ * [data-footer-scene] box.
+ *
+ * This is the entrance for the FALLBACK / no-reveal paths. When the live glass runs
+ * WITH its in-scene reveal (footer-glass-config: eligible && glassReveal), that
+ * reveal owns the entrance (mountains up, glass rising a beat later) — so this box
+ * blur-rise steps aside to avoid double-animating the canvas.
  *
  * Renders nothing — drives [data-footer-scene].
  *
@@ -27,7 +33,12 @@ const REDUCE_MOTION = "(prefers-reduced-motion: reduce)";
  * markup) — it's hidden only once we know we'll animate.
  */
 export default function FooterReveal() {
+  const eligible = useFooterGlassEligible();
+
   useIsomorphicLayoutEffect(() => {
+    // The live glass's in-scene reveal owns the entrance — don't also blur-rise.
+    if (eligible && FOOTER_GLASS.glassReveal) return;
+
     const section = document.querySelector<HTMLElement>("[data-footer]");
     if (!section) return;
     if (window.matchMedia(REDUCE_MOTION).matches) return;
@@ -60,7 +71,7 @@ export default function FooterReveal() {
       // Drop the pre-build hide so the resting scene shows if we never animated.
       gsap.set(scene, { clearProps: "opacity,visibility" });
     };
-  }, []);
+  }, [eligible]);
 
   return null;
 }

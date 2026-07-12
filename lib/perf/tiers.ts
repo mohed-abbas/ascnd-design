@@ -26,10 +26,12 @@
  * |                                            | heavyEffectFpsCap() (IntroFrameCap),     |
  * |                                            | makeCappedInvalidate (ScrollRig)         |
  * | components/sections/footer/                | mtm*, text3d* (mount snapshot) — reuses  |
- * |   footer-glass-scene.tsx                   | the intro's glass. makeCappedInvalidate  |
- * |                                            | (PaintGate shimmer pump). Mounts lazily  |
- * |                                            | (footer-scene.tsx IO, ~1vp early) and    |
- * |                                            | idles to zero off-screen; dpr≤1.5.       |
+ * |   footer-glass-scene.tsx                   | the intro's glass. heavyEffectFpsCap()   |
+ * |                                            | (RenderPump paint cap). Mounts lazily    |
+ * |                                            | (footer-scene.tsx IO, ~3vp early); paint |
+ * |                                            | is request-driven (frameloop="never"),   |
+ * |                                            | so it idles to ZERO at rest, on-screen   |
+ * |                                            | or off; dpr≤1.5.                         |
  * |                                            | No-WebGL/reduced-motion/mobile → baked-  |
  * |                                            | glass composite image fallback.          |
  * | components/ui/glass-surface.tsx            | NONE (2026-07-03, Decision 6): reads no   |

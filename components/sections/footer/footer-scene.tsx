@@ -2,55 +2,13 @@
 
 import dynamic from "next/dynamic";
 import Image from "next/image";
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useFooterGlassEligible } from "./footer-glass-config";
 
 // The WebGL scene is client-only; ssr:false must live in a Client Component.
 const FooterGlassScene = dynamic(() => import("./footer-glass-scene"), {
   ssr: false,
 });
-
-// WebGL support is static per device — detect once and cache.
-let webglSupport: boolean | null = null;
-function hasWebGL() {
-  if (webglSupport !== null) return webglSupport;
-  try {
-    const c = document.createElement("canvas");
-    const gl = c.getContext("webgl2") || c.getContext("webgl");
-    webglSupport = !!gl;
-    gl?.getExtension("WEBGL_lose_context")?.loseContext();
-  } catch {
-    webglSupport = false;
-  }
-  return webglSupport;
-}
-
-const REDUCE_MOTION = "(prefers-reduced-motion: reduce)";
-const SMALL_SCREEN = "(max-width: 768px)";
-
-function subscribe(callback: () => void) {
-  const mqs = [window.matchMedia(REDUCE_MOTION), window.matchMedia(SMALL_SCREEN)];
-  mqs.forEach((mq) => mq.addEventListener("change", callback));
-  return () => mqs.forEach((mq) => mq.removeEventListener("change", callback));
-}
-
-function getSnapshot() {
-  return (
-    hasWebGL() &&
-    !window.matchMedia(REDUCE_MOTION).matches &&
-    !window.matchMedia(SMALL_SCREEN).matches
-  );
-}
-
-/**
- * Resolve whether the live glass canvas should mount: desktop, WebGL, motion
- * allowed. Same useSyncExternalStore pattern as cloud-layer — server snapshot is
- * `false`, so SSR (and the ineligible path) render the baked-glass fallback image
- * and there's no hydration mismatch; it re-evaluates + reacts to motion/breakpoint
- * changes after hydration.
- */
-function useEligible() {
-  return useSyncExternalStore(subscribe, getSnapshot, () => false);
-}
 
 /**
  * Footer scene controller — decides what fills the footer box:
@@ -66,7 +24,7 @@ function useEligible() {
  *    off-screen via the scene's own gate).
  */
 export default function FooterScene() {
-  const eligible = useEligible();
+  const eligible = useFooterGlassEligible();
   const [near, setNear] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -81,8 +39,11 @@ export default function FooterScene() {
           io.disconnect();
         }
       },
-      // Mount ~one viewport early so the glass is warm by the time it's on screen.
-      { rootMargin: "100% 0px" },
+      // Mount ~3 viewports early: the WebGL scene takes a few hundred ms to spin
+      // up (chunk + drei build), so a 1-viewport lead let a fast scroll outrun it
+      // and the reveal only played once you stopped. 3vp gives it ample runway
+      // while still not creating the context at page load.
+      { rootMargin: "300% 0px" },
     );
     io.observe(el);
     return () => io.disconnect();

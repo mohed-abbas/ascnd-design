@@ -1,20 +1,31 @@
 "use client";
 
-import { Canvas, useThree } from "@react-three/fiber";
+import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import {
   Center,
   MeshTransmissionMaterial,
   Text3D,
   useTexture,
 } from "@react-three/drei";
-import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import {
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import * as THREE from "three";
+import type { Group } from "three";
 import gsap from "gsap";
+import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { GlassEnvironment } from "@/components/sections/intro/intro-scene";
-import { getQualityConfig } from "@/lib/perf/quality-store";
-import { makeCappedInvalidate } from "@/lib/perf/capped-invalidate";
+import { getQualityConfig, heavyEffectFpsCap } from "@/lib/perf/quality-store";
 import { useMode } from "@/lib/theme/use-mode";
-import { PALETTES } from "@/lib/theme/palette";
+import { CROSSFADE, PALETTES, type ThemeMode } from "@/lib/theme/palette";
+import { FOOTER_GLASS } from "./footer-glass-config";
+
+gsap.registerPlugin(ScrollTrigger);
 
 /**
  * Footer liquid-glass "ascnd" — the SAME glass as the welcome intro, reused as the
@@ -27,15 +38,28 @@ import { PALETTES } from "@/lib/theme/palette";
  * Perspective camera (z=10, fov=45 — the lab/glass + cloud convention) so the glass
  * refracts/disperses richly. Transparent canvas (alpha): the mountain plane's sky
  * is transparent, so above the ridgeline the canvas shows through to the shared DOM
- * sky + live clouds, and the glass's `background` sky colour fills the transmission
- * where the letters sit over open sky.
+ * sky. SURROUNDINGS AWARENESS: the transmission `background` is a gradient texture
+ * of the real sky stops (makeSkyBackdrop — not a flat colour), retinted with the
+ * theme mode, so the glass shows the actual graded sky. (No invented elements: the
+ * glass refracts only what the footer really has — sky + mountains. DOM-layer
+ * clouds can't appear in the refraction; MTM only sees its own scene.) Canvas is
+ * mounted IN-FLOW by footer-scene, so the mountains scroll with the page (the DOM
+ * clouds drift on their fixed layers) — the parallax is preserved.
  *
- * Renders on demand: a mount burst covers the multi-frame build, then the shimmer
- * only repaints while the footer is on screen (PaintGate) so the heaviest shader in
- * the app idles to zero off-screen. Eligibility + a DEFERRED mount (the context is
- * created only as the footer nears the viewport) + the static fallback live one
- * level up in footer-scene.tsx; the mtm + text3d tier knobs come from
- * getQualityConfig and the repaint cap from makeCappedInvalidate. dpr capped 1.5.
+ * Three optional flourishes, each behind a switch in footer-glass-config.ts:
+ * pointer tilt, an in-scene reveal (the wordmark slides up from BEHIND the
+ * ridgeline — the mountain plane occludes it), and a themed-backdrop tween.
+ *
+ * Painting is REQUEST-DRIVEN (frameloop="never"): anything that changes visible
+ * state calls requestPaint(), and the RenderPump drains those requests off the
+ * shared GSAP ticker (capped by heavyEffectFpsCap) while the footer is on screen —
+ * so scroll-driven changes paint DURING the scroll, and when nothing changes the
+ * heaviest shader in the app renders NOTHING, on-screen or off. Temporal
+ * distortion is deliberately 0: any nonzero value animates forever and would force
+ * a permanent repaint loop (the static distortion keeps the liquid look).
+ * Eligibility + a DEFERRED mount + the static fallback live one level up in
+ * footer-scene.tsx; the mtm + text3d tier knobs come from getQualityConfig.
+ * dpr capped 1.5.
  *
  * Placement is self-sized off the viewport and driven by the TUNING constants below
  * — eyeball + adjust.
@@ -64,56 +88,245 @@ const MOUNTAIN_Z = -1.2;
 const INTRO_GLASS_SIZE = 4.6;
 const BEVEL_THICKNESS_RATIO = 0.175 / INTRO_GLASS_SIZE;
 const BEVEL_SIZE_RATIO = 0.095 / INTRO_GLASS_SIZE;
+
+// Letters that sit IN FRONT of the peaks — x-bands as fractions of the wordmark
+// width (0 = left edge of "ascnd", 1 = right edge). The mountain occluder skips
+// these columns, so "c" and "d" ride in front of the ridge while a/s/n tuck
+// behind it. Eyeball against the silhouette.
+const FRONT_LETTER_BANDS = [
+  [0.36, 0.62], // c
+  [0.78, 1.04], // d
+] as const;
+
+// Reveal (when FOOTER_GLASS.glassReveal): the glass parks this fraction of the view
+// height below its rest — tucked behind the ridgeline — and slides up to rest as
+// the footer scrolls in (scrubbed, reversible). Keep it modest: the visible part
+// of the slide is only the stretch above the silhouette, so a deep tuck spends the
+// whole scrub hidden and the letters "pop" at the very end.
+const REVEAL_RISE_FRAC = 0.2;
+// The scrub window: starts when this fraction down the scene box reaches the
+// viewport bottom (≈ when the ridge zone shows up), ends at the page bottom.
+const REVEAL_START_FRAC = 0.5;
+// Ease-out exponent on the scrub progress (1 = linear). >1 front-loads the rise so
+// the letters crest the ridge through the middle of the window, not all at the end.
+const REVEAL_EASE_POW = 2;
+// Pointer tilt (when FOOTER_GLASS.pointerTilt): max radians + follow easing.
+const TILT_X = 0.1;
+const TILT_Y = 0.16;
+const TILT_LERP = 0.06;
+// The liquid distortion is STATIC (see header): 0.28 (the intro's value) wobbled
+// permanently — "too much" — and forced a permanent repaint loop.
+const MTM_TEMPORAL_DISTORTION = 0;
+
+// ── Sky backdrop (what the letters refract over open sky) ────────────────────
+// The transmission `background` is a tiny vertical-gradient texture mirroring
+// background.tsx's SKY_GRADIENT (top 0% → mid 55% → bottom 100%) — the REAL sky,
+// not a flat colour, so two-tone modes (sunrise/sunset) read through the glass.
+const SKY_MID_STOP = 0.55;
+// Frames to paint after mount / context restore: drei builds geometry, uploads
+// textures and compiles the MTM shader over several frames, so a single frame
+// can paint blank (same lesson as cloud-canvas's InvalidateOnReady burst).
+const MOUNT_BURST_FRAMES = 30;
 // ─────────────────────────────────────────────────────────────────────────────
 
+const clamp01 = (v: number) => (v < 0 ? 0 : v > 1 ? 1 : v);
+
 /**
- * The mountain range as a textured plane behind the glass — the glass's refraction
- * source. Full view width (compensated for its depth so it still fills the frame),
- * bottom-anchored to the view edge, its transparent sky letting the canvas show
- * through to the shared DOM sky above the peaks. Unlit basic material (toneMapped
- * off) so it reads as the flat photo it is.
+ * Paint scheduler (frameloop="never"): state-changers request frames, the
+ * RenderPump drains them off the shared ticker while the footer is on screen.
+ * `pending` is a high-water mark, not a queue — concurrent requesters coalesce to
+ * one advance per ticker frame. Zero pending = zero GPU: this is how the app's
+ * heaviest shader satisfies the "idles to zero" contract even while visible.
+ * Module scope (one live canvas; a remount inherits any pending burst, which is
+ * harmless — at worst it repaints the same settled frame).
+ */
+const paint = { pending: 0 };
+const requestPaint = (frames = 1) => {
+  paint.pending = Math.max(paint.pending, frames);
+};
+
+/**
+ * The sky backdrop the letters refract, as a stable object mutated in place on a
+ * theme change (redraw() re-uploads the gradient). The gradient mirrors
+ * background.tsx's stops, so the glass shows the real graded sky.
+ */
+function makeSkyBackdrop(mode: ThemeMode) {
+  const canvas = document.createElement("canvas");
+  canvas.width = 2;
+  canvas.height = 256;
+  const ctx = canvas.getContext("2d")!;
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  const p = PALETTES[mode];
+  const stops = {
+    top: new THREE.Color(p.sky.top),
+    mid: new THREE.Color(p.sky.mid),
+    bottom: new THREE.Color(p.sky.bottom),
+  };
+  const redraw = () => {
+    const g = ctx.createLinearGradient(0, 0, 0, canvas.height);
+    g.addColorStop(0, `#${stops.top.getHexString()}`);
+    g.addColorStop(SKY_MID_STOP, `#${stops.mid.getHexString()}`);
+    g.addColorStop(1, `#${stops.bottom.getHexString()}`);
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    texture.needsUpdate = true;
+  };
+  redraw();
+  return { texture, stops, redraw };
+}
+
+/**
+ * The mountain range — the glass's refraction source AND its selective occluder.
+ * Two draws of the same texture:
+ *  - BASE: a full-width plane behind the glass (normal depth). This is what the
+ *    letters refract, and what "c"/"d" ride in front of.
+ *  - OCCLUDER SLICES: the same image re-painted AFTER the glass (renderOrder, depth
+ *    test off) so its opaque pixels cover the letters — but sliced to SKIP the
+ *    FRONT_LETTER_BANDS columns. Result: a/s/n tuck behind the ridgeline (and the
+ *    wordmark slides up from behind it — that occlusion IS the reveal, no fades)
+ *    while c/d stay in front of the peaks for the interleaved depth effect.
+ * In the transmission buffer draw order is irrelevant, so the refraction still sees
+ * one seamless range. Full view width (compensated for depth so it fills the
+ * frame), bottom-anchored, transparent sky showing the DOM sky + clouds through.
  */
 function Mountains() {
   const tex = useTexture(MOUNTAIN_SRC);
   const viewport = useThree((s) => s.viewport);
 
-  // The plane sits at MOUNTAIN_Z (behind the z=0 plane the viewport is measured
-  // at), so scale it up by the depth ratio to still fill the frame edge-to-edge.
   const depth = (CAMERA_Z - MOUNTAIN_Z) / CAMERA_Z;
   const w = viewport.width * depth;
   const h = w / MOUNTAIN_ASPECT;
-  // Bottom edge of the (depth-scaled) view, then lift by half the plane height so
-  // the mountains sit flush to the bottom of the footer.
   const y = (-viewport.height / 2) * depth + h / 2;
 
+  // Occluder slice geometries: the spans BETWEEN the front-letter bands (band
+  // fractions are of the wordmark width at the glass plane, projected out to the
+  // mountain plane by the same depth factor), with UVs remapped so each slice
+  // samples exactly its column of the texture — seamless against the base.
+  const slices = useMemo(() => {
+    const wordW = viewport.width * GLASS_WIDTH_FRAC * depth;
+    const edges: number[] = [-w / 2];
+    for (const [f0, f1] of FRONT_LETTER_BANDS) {
+      edges.push((f0 - 0.5) * wordW, (f1 - 0.5) * wordW);
+    }
+    edges.push(w / 2);
+    const out: { geom: THREE.PlaneGeometry; x: number }[] = [];
+    for (let i = 0; i < edges.length; i += 2) {
+      const x0 = Math.max(edges[i], -w / 2);
+      const x1 = Math.min(edges[i + 1], w / 2);
+      if (x1 - x0 <= 0) continue;
+      const geom = new THREE.PlaneGeometry(x1 - x0, h);
+      const uv = geom.attributes.uv as THREE.BufferAttribute;
+      for (let j = 0; j < uv.count; j++) {
+        uv.setX(j, (x0 + uv.getX(j) * (x1 - x0)) / w + 0.5);
+      }
+      out.push({ geom, x: (x0 + x1) / 2 });
+    }
+    return out;
+  }, [viewport.width, depth, w, h]);
+
+  useEffect(() => {
+    return () => slices.forEach((s) => s.geom.dispose());
+  }, [slices]);
+
   return (
-    <mesh position={[0, y, MOUNTAIN_Z]}>
-      <planeGeometry args={[w, h]} />
-      <meshBasicMaterial map={tex} transparent toneMapped={false} />
-    </mesh>
+    <>
+      <mesh position={[0, y, MOUNTAIN_Z]}>
+        <planeGeometry args={[w, h]} />
+        <meshBasicMaterial map={tex} transparent toneMapped={false} />
+      </mesh>
+      {slices.map((s, i) => (
+        <mesh
+          key={i}
+          geometry={s.geom}
+          position={[s.x, y, MOUNTAIN_Z]}
+          renderOrder={2}
+        >
+          <meshBasicMaterial
+            map={tex}
+            transparent
+            depthTest={false}
+            depthWrite={false}
+            toneMapped={false}
+          />
+        </mesh>
+      ))}
+    </>
   );
 }
 
 /**
- * The glass wordmark — the intro's exact Text3D + MeshTransmissionMaterial. Sized
- * so it spans GLASS_WIDTH_FRAC of the view and sits at GLASS_Y_FRAC down the frame,
- * across the peaks. Static here (no intro reveal/dock) — the living shimmer comes
- * from the material's temporalDistortion, pumped by the paint gate below.
+ * The glass wordmark — the intro's exact Text3D + MeshTransmissionMaterial. Sized so
+ * it spans GLASS_WIDTH_FRAC of the view and sits at GLASS_Y_FRAC down the frame,
+ * across the peaks. Optional flourishes (all switched in footer-glass-config):
+ *  - pointer tilt: the group eases toward a cursor-driven tilt every painted frame;
+ *  - reveal: the group slides up from behind the ridgeline (the Mountains plane
+ *    occludes it — no fade), driven by the shared `reveal` scrub.
+ * `background` is the sky-gradient backdrop texture (see makeSkyBackdrop) — it
+ * fills the transmission where the letters sit over open sky; the theme effect in
+ * FooterGlassScene retints it in place.
  */
-function Glass() {
+function Glass({
+  revealRef,
+  background,
+}: {
+  revealRef: React.RefObject<number>;
+  background: THREE.Texture;
+}) {
   const viewport = useThree((s) => s.viewport);
-  const mode = useMode();
-  // Fills the transmission where the letters sit over open sky (no plane behind),
-  // tied to the current sky mode so it matches a themed backdrop. day.mid === #62abff.
-  const sky = useMemo(() => new THREE.Color(PALETTES[mode].sky.mid), [mode]);
+
   // Snapshot the quality tier once (MTM FBO cost knobs) — same as the intro.
   const q = useMemo(() => getQualityConfig(), []);
 
+  const groupRef = useRef<Group>(null);
+  const tilt = useRef({ x: 0, y: 0 });
+
   const size = (viewport.width * GLASS_WIDTH_FRAC) / WIDTH_PER_SIZE;
-  const y = viewport.height * GLASS_Y_FRAC;
+  const restY = viewport.height * GLASS_Y_FRAC;
+  const rise = viewport.height * REVEAL_RISE_FRAC;
+
+  // Pointer tilt: track the cursor in normalised viewport coords. Each move
+  // requests a frame; the useFrame easing below keeps requesting until settled.
+  useEffect(() => {
+    if (!FOOTER_GLASS.pointerTilt) return;
+    const onMove = (e: PointerEvent) => {
+      const nx = (e.clientX / window.innerWidth) * 2 - 1;
+      const ny = -((e.clientY / window.innerHeight) * 2 - 1);
+      tilt.current.x = ny * TILT_X;
+      tilt.current.y = nx * TILT_Y;
+      requestPaint();
+    };
+    window.addEventListener("pointermove", onMove);
+    return () => window.removeEventListener("pointermove", onMove);
+  }, []);
+
+  useFrame(() => {
+    const g = groupRef.current;
+    if (!g) return;
+
+    // Reveal: slide up from behind the ridge (glassReveal off → parked at rest).
+    // No opacity — the Mountains occluder IS the reveal. Ease-out front-loads the
+    // rise so the crest happens mid-window instead of bunching at the end.
+    const gp = FOOTER_GLASS.glassReveal
+      ? 1 - Math.pow(1 - clamp01(revealRef.current), REVEAL_EASE_POW)
+      : 1;
+    g.position.set(0, restY - (1 - gp) * rise, 0);
+    // Fully tucked → skip drawing the expensive glass mesh entirely.
+    g.visible = gp > 0.001;
+
+    // Pointer tilt: ease the group toward the cursor-driven target, requesting
+    // frames until the lerp settles (self-sustaining, then back to zero).
+    if (FOOTER_GLASS.pointerTilt) {
+      const dx = tilt.current.x - g.rotation.x;
+      const dy = tilt.current.y - g.rotation.y;
+      g.rotation.x += dx * TILT_LERP;
+      g.rotation.y += dy * TILT_LERP;
+      if (Math.abs(dx) > 1e-3 || Math.abs(dy) > 1e-3) requestPaint();
+    }
+  });
 
   return (
-    <group position={[0, y, 0]}>
+    <group ref={groupRef} position={[0, restY, 0]}>
       <Center key={size}>
         <Text3D
           font={FONT}
@@ -129,7 +342,7 @@ function Glass() {
         >
           ascnd
           <MeshTransmissionMaterial
-            background={sky}
+            background={background}
             transmission={1}
             thickness={0.3}
             roughness={0.31}
@@ -138,7 +351,7 @@ function Glass() {
             anisotropicBlur={0.28}
             distortion={0.2}
             distortionScale={0.4}
-            temporalDistortion={0.28}
+            temporalDistortion={MTM_TEMPORAL_DISTORTION}
             samples={q.mtmSamples}
             resolution={q.mtmResolution}
             backside={q.mtmBackside}
@@ -156,60 +369,131 @@ function Glass() {
 }
 
 /**
- * Demand-mode paint gate. drei's MTM + Text3D build over several frames, so we
- * burst invalidate() after mount (plus a few delayed nudges for texture/HDR decode)
- * to guarantee a painted glass. Then, ONLY while the footer canvas is on screen, we
- * pump the demand loop off GSAP's shared ticker (capped) so the material's shimmer
- * lives — and stop entirely when it scrolls away, so the app's heaviest shader
- * idles to zero off-screen (rides the "one loop" mandate; no private rAF loop for
- * the steady state). Repaints once more on tab re-show.
+ * In-scene reveal driver (when FOOTER_GLASS.glassReveal). A scrub ScrollTrigger on
+ * the footer scene box maps its scroll-in DIRECTLY to `reveal` 0..1: the wordmark
+ * slides up from behind the ridgeline in step with the mountains riding into view,
+ * and tucks back behind them on reverse — fully scroll-bound, both directions,
+ * never waiting for a scroll to stop. It only WRITES the progress; the RenderPump
+ * (frameloop="never" + advance() on the shared ticker) paints it every frame
+ * DURING the scroll. The window starts at REVEAL_START_FRAC down the box (≈ when
+ * the ridge zone reaches the viewport — earlier progress would slide the glass
+ * while its region is still off-screen, which reads as a pop at the end) and ends
+ * as the box bottom meets the page bottom, so the reveal completes exactly as the
+ * scroll settles. onRefresh seeds the progress for deep links / scroll restores.
  */
-function PaintGate() {
-  const invalidate = useThree((s) => s.invalidate);
+function RevealRig({ revealRef }: { revealRef: React.RefObject<number> }) {
+  useEffect(() => {
+    const box = document.querySelector<HTMLElement>("[data-footer-scene]");
+    if (!box) {
+      revealRef.current = 1;
+      return;
+    }
+
+    const st = ScrollTrigger.create({
+      trigger: box,
+      start: `${REVEAL_START_FRAC * 100}% bottom`,
+      end: "bottom bottom",
+      scrub: true,
+      onUpdate: (self) => {
+        revealRef.current = self.progress;
+        requestPaint();
+      },
+      onRefresh: (self) => {
+        revealRef.current = self.progress;
+        requestPaint();
+      },
+    });
+
+    return () => st.kill();
+  }, [revealRef]);
+
+  return null;
+}
+
+/**
+ * Render pump — drains requestPaint() requests (see the paint scheduler at the
+ * top) by advance()-ing the frameloop="never" canvas off the shared GSAP ticker
+ * (LenisProvider's one loop), which keeps ticking through a scroll — so
+ * scroll-driven changes paint DURING the scroll. A demand canvas + invalidate()
+ * did NOT do this: the paint was deferred until the scroll settled. And because
+ * only REQUESTED frames paint, a settled scene costs zero GPU even while visible
+ * (the canvas keeps showing its last painted frame).
+ *
+ * ⚠️ The pump is toggled SYNCHRONOUSLY inside the IntersectionObserver callback —
+ * NOT via a React effect keyed on a prop. A passive effect is deferred while the
+ * main thread is busy scrolling (that deferral once stranded the reveal until the
+ * scroll stopped). Paints are capped by heavyEffectFpsCap so a 120 Hz panel
+ * doesn't pay double for the heavy MTM.
+ *
+ * A warm advance at mount + a MOUNT_BURST covers drei's multi-frame build (shader
+ * compile, texture upload) so the first visible frame isn't blank; a resize
+ * relayouts (Center re-centres) and repaints; a tab re-show repaints once.
+ */
+function RenderPump() {
+  const advance = useThree((s) => s.advance);
   const gl = useThree((s) => s.gl);
+  const size = useThree((s) => s.size);
+
+  // Resize → re-render at the new proportions (also fires at mount, where it
+  // merges into the mount burst below).
+  useEffect(() => {
+    requestPaint(3);
+  }, [size]);
 
   useEffect(() => {
-    // Mount burst — cover the multi-frame geometry/texture build.
-    let raf = 0;
-    let frames = 0;
-    const pump = () => {
-      invalidate();
-      if (++frames < 10) raf = requestAnimationFrame(pump);
-    };
-    pump();
-    const timers = [100, 300, 600].map((ms) => setTimeout(invalidate, ms));
+    // Warm the pipeline synchronously (compile MTM/Text3D shaders, upload
+    // geometry), then burst a few frames — drei finishes building async.
+    advance(performance.now());
+    requestPaint(MOUNT_BURST_FRAMES);
 
-    // On-screen shimmer pump, gated by visibility of the canvas element.
-    const capped = makeCappedInvalidate(invalidate);
-    let onScreen = false;
-    const tick = () => {
-      if (onScreen) capped();
+    let last = 0;
+    const pump = (t: number) => {
+      if (paint.pending <= 0) return;
+      const cap = heavyEffectFpsCap();
+      if (cap !== 0 && t - last < 1 / cap) return;
+      last = t;
+      paint.pending -= 1;
+      advance(t * 1000);
     };
-    gsap.ticker.add(tick);
+
+    let running = false;
+    const start = () => {
+      if (running) return;
+      gsap.ticker.add(pump);
+      running = true;
+    };
+    const stop = () => {
+      if (!running) return;
+      gsap.ticker.remove(pump);
+      running = false;
+    };
 
     const io = new IntersectionObserver(
       ([entry]) => {
-        onScreen = entry.isIntersecting;
-        if (onScreen) invalidate(); // repaint immediately on entry
+        // SYNCHRONOUS toggle — see the ⚠️ note above. Requests accrued while
+        // off-screen (theme change, scroll restore) paint on re-entry.
+        if (entry.isIntersecting) {
+          requestPaint();
+          start();
+        } else {
+          stop();
+        }
       },
       { rootMargin: "10% 0px" },
     );
     io.observe(gl.domElement);
 
     const onVisible = () => {
-      if (document.visibilityState === "visible") invalidate();
+      if (document.visibilityState === "visible") requestPaint();
     };
     document.addEventListener("visibilitychange", onVisible);
 
     return () => {
-      cancelAnimationFrame(raf);
-      timers.forEach(clearTimeout);
-      gsap.ticker.remove(tick);
-      capped.cancel();
+      stop();
       io.disconnect();
       document.removeEventListener("visibilitychange", onVisible);
     };
-  }, [invalidate, gl]);
+  }, [advance, gl]);
 
   return null;
 }
@@ -223,7 +507,6 @@ function PaintGate() {
  */
 function ContextWatchdog({ onUnrecoverable }: { onUnrecoverable: () => void }) {
   const gl = useThree((s) => s.gl);
-  const invalidate = useThree((s) => s.invalidate);
 
   useEffect(() => {
     const canvas = gl.domElement;
@@ -245,7 +528,8 @@ function ContextWatchdog({ onUnrecoverable }: { onUnrecoverable: () => void }) {
     const onRestored = () => {
       if (restoreTimer) clearTimeout(restoreTimer);
       restoreTimer = undefined;
-      invalidate();
+      // Fresh context = shaders/textures re-upload over several frames.
+      requestPaint(MOUNT_BURST_FRAMES);
     };
 
     canvas.addEventListener("webglcontextlost", onLost, false);
@@ -257,7 +541,7 @@ function ContextWatchdog({ onUnrecoverable }: { onUnrecoverable: () => void }) {
       canvas.removeEventListener("webglcontextlost", onLost, false);
       canvas.removeEventListener("webglcontextrestored", onRestored, false);
     };
-  }, [gl, invalidate, onUnrecoverable]);
+  }, [gl, onUnrecoverable]);
 
   return null;
 }
@@ -267,11 +551,71 @@ export default function FooterGlassScene() {
   // a lost context never restores. See <ContextWatchdog>.
   const [canvasKey, setCanvasKey] = useState(0);
   const remount = useCallback(() => setCanvasKey((k) => k + 1), []);
+  const mode = useMode();
+
+  // Shared reveal progress (0..1). 1 when the in-scene reveal is off, so the scene
+  // renders fully resolved and the DOM box reveal (footer-reveal) handles entrance.
+  const revealRef = useRef(FOOTER_GLASS.glassReveal ? 0 : 1);
+
+  // Sky-gradient backdrop — a stable object mutated in place on a theme change
+  // (React never re-renders for a retint).
+  const [sky] = useState(() => makeSkyBackdrop(mode));
+  useEffect(() => {
+    return () => sky.texture.dispose();
+  }, [sky]);
+
+  // Theme retint: on a sky-mode change, tween (or snap, per the themeTween
+  // switch) the gradient stops, redrawing the backdrop and requesting a paint per
+  // step. First run is a no-op — the backdrop is built from the mount mode. (A
+  // change while off-screen just accrues pending frames; the pump shows the
+  // settled colours when you next reach the footer.)
+  const firstMode = useRef(true);
+  useEffect(() => {
+    if (firstMode.current) {
+      firstMode.current = false;
+      return;
+    }
+    const target = PALETTES[mode];
+    const to = {
+      top: new THREE.Color(target.sky.top),
+      mid: new THREE.Color(target.sky.mid),
+      bottom: new THREE.Color(target.sky.bottom),
+    };
+    if (!FOOTER_GLASS.themeTween) {
+      sky.stops.top.copy(to.top);
+      sky.stops.mid.copy(to.mid);
+      sky.stops.bottom.copy(to.bottom);
+      sky.redraw();
+      requestPaint();
+      return;
+    }
+    const from = {
+      top: sky.stops.top.clone(),
+      mid: sky.stops.mid.clone(),
+      bottom: sky.stops.bottom.clone(),
+    };
+    const proxy = { p: 0 };
+    const tween = gsap.to(proxy, {
+      p: 1,
+      duration: CROSSFADE.duration,
+      ease: CROSSFADE.ease,
+      onUpdate: () => {
+        sky.stops.top.copy(from.top).lerp(to.top, proxy.p);
+        sky.stops.mid.copy(from.mid).lerp(to.mid, proxy.p);
+        sky.stops.bottom.copy(from.bottom).lerp(to.bottom, proxy.p);
+        sky.redraw();
+        requestPaint();
+      },
+    });
+    return () => {
+      tween.kill();
+    };
+  }, [mode, sky]);
 
   return (
     <Canvas
       key={canvasKey}
-      frameloop="demand"
+      frameloop="never"
       dpr={[1, 1.5]}
       gl={{ antialias: true, alpha: true }}
       camera={{ position: [0, 0, CAMERA_Z], fov: 45 }}
@@ -284,12 +628,13 @@ export default function FooterGlassScene() {
     >
       <Suspense fallback={null}>
         <Mountains />
-        <Glass />
+        <Glass revealRef={revealRef} background={sky.texture} />
         {/* Bevel sheen — the exact studio glints the intro/lab use. */}
         <GlassEnvironment />
         <directionalLight position={[3, 5, 6]} intensity={1.2} />
         <ambientLight intensity={0.4} />
-        <PaintGate />
+        {FOOTER_GLASS.glassReveal && <RevealRig revealRef={revealRef} />}
+        <RenderPump />
         <ContextWatchdog onUnrecoverable={remount} />
       </Suspense>
     </Canvas>

@@ -20,7 +20,10 @@ export default function Footer() {
       {/* Blur-rise on scroll-in (see footer-reveal.tsx). */}
       <FooterReveal />
 
-      {/* Scene box — design proportion, so the wordmark clears the peaks. */}
+      {/* Scene box — design proportion, so the wordmark clears the peaks. The
+          in-scene glass reveal scrubs off THIS box's scroll-in (footer-glass-scene
+          RevealRig → [data-footer-scene]): the wordmark slides up from behind the
+          ridgeline in step with the mountains riding into view. */}
       <div data-footer-scene className="relative w-full aspect-[1512/1243]">
         <FooterScene />
       </div>
