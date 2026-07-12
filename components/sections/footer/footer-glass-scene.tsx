@@ -22,7 +22,8 @@ import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { GlassEnvironment } from "@/components/sections/intro/intro-scene";
 import { getQualityConfig, heavyEffectFpsCap } from "@/lib/perf/quality-store";
 import { useMode } from "@/lib/theme/use-mode";
-import { CROSSFADE, PALETTES, type ThemeMode } from "@/lib/theme/palette";
+import { CROSSFADE, PALETTES } from "@/lib/theme/palette";
+import { makeSkyBackdrop } from "@/lib/theme/sky-backdrop";
 import { FOOTER_GLASS } from "./footer-glass-config";
 
 gsap.registerPlugin(ScrollTrigger);
@@ -118,11 +119,6 @@ const TILT_LERP = 0.06;
 // permanently — "too much" — and forced a permanent repaint loop.
 const MTM_TEMPORAL_DISTORTION = 0;
 
-// ── Sky backdrop (what the letters refract over open sky) ────────────────────
-// The transmission `background` is a tiny vertical-gradient texture mirroring
-// background.tsx's SKY_GRADIENT (top 0% → mid 55% → bottom 100%) — the REAL sky,
-// not a flat colour, so two-tone modes (sunrise/sunset) read through the glass.
-const SKY_MID_STOP = 0.55;
 // Frames to paint after mount / context restore: drei builds geometry, uploads
 // textures and compiles the MTM shader over several frames, so a single frame
 // can paint blank (same lesson as cloud-canvas's InvalidateOnReady burst).
@@ -145,36 +141,6 @@ const requestPaint = (frames = 1) => {
   paint.pending = Math.max(paint.pending, frames);
 };
 
-/**
- * The sky backdrop the letters refract, as a stable object mutated in place on a
- * theme change (redraw() re-uploads the gradient). The gradient mirrors
- * background.tsx's stops, so the glass shows the real graded sky.
- */
-function makeSkyBackdrop(mode: ThemeMode) {
-  const canvas = document.createElement("canvas");
-  canvas.width = 2;
-  canvas.height = 256;
-  const ctx = canvas.getContext("2d")!;
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.colorSpace = THREE.SRGBColorSpace;
-  const p = PALETTES[mode];
-  const stops = {
-    top: new THREE.Color(p.sky.top),
-    mid: new THREE.Color(p.sky.mid),
-    bottom: new THREE.Color(p.sky.bottom),
-  };
-  const redraw = () => {
-    const g = ctx.createLinearGradient(0, 0, 0, canvas.height);
-    g.addColorStop(0, `#${stops.top.getHexString()}`);
-    g.addColorStop(SKY_MID_STOP, `#${stops.mid.getHexString()}`);
-    g.addColorStop(1, `#${stops.bottom.getHexString()}`);
-    ctx.fillStyle = g;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    texture.needsUpdate = true;
-  };
-  redraw();
-  return { texture, stops, redraw };
-}
 
 /**
  * The mountain range — the glass's refraction source AND its selective occluder.

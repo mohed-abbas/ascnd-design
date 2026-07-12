@@ -9,7 +9,14 @@ import {
   Text3D,
   useTexture,
 } from "@react-three/drei";
-import { Suspense, useEffect, useLayoutEffect, useMemo, useRef } from "react";
+import {
+  Suspense,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import * as THREE from "three";
 import type { Group, Mesh } from "three";
 import gsap from "gsap";
@@ -17,7 +24,8 @@ import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { getQualityConfig, heavyEffectFpsCap } from "@/lib/perf/quality-store";
 import { makeCappedInvalidate } from "@/lib/perf/capped-invalidate";
 import { useMode } from "@/lib/theme/use-mode";
-import { PALETTES } from "@/lib/theme/palette";
+import { CROSSFADE, PALETTES } from "@/lib/theme/palette";
+import { makeSkyBackdrop } from "@/lib/theme/sky-backdrop";
 import {
   SHOT_BASE,
   SHOT_FRAME_RADIUS,
@@ -43,8 +51,9 @@ for (const n of [2, 3, 4, 5, 6, 7, 8, 9]) useTexture.preload(`/shots/shot${n}.av
  * 8.284/innerHeight world units at z=0), so positions/sizes still line up with
  * the hero. The canvas is TRANSPARENT — the DOM sky + clouds show through; only
  * the two rock planes (refraction source under 'a'/'d', pixel-matched over the
- * DOM rocks) and the glass live in the scene. The material's `background` sky
- * colour fills the transmission where the scene is empty (open sky).
+ * DOM rocks) and the glass live in the scene. The material's `background` — a
+ * gradient texture of the real sky stops (lib/theme/sky-backdrop, shared with the
+ * footer glass) — fills the transmission where the scene is empty (open sky).
  *
  * Transforms are driven imperatively from <Intro>'s GSAP timeline via the shared
  * `anim` ref; frameloop is "always" for the brief intro.
@@ -828,13 +837,53 @@ function Glass({
   const textRef = useRef<Mesh>(null);
   // Refraction fill where the scene is empty (open sky) — without it the
   // transmission samples the transparent FBO (black) and the glass goes dark.
-  // Tied to the current sky MODE (its mid gradient stop, the dominant tone behind
-  // the glass) so the wordmark refracts a colour consistent with the live sky —
-  // otherwise it stays day-blue over a sunrise/sunset/night backdrop. The intro
-  // canvas repaints continuously while the welcome plays (IntroFrameCap), so a
-  // mode switch updates the glass in place. day.mid === the old #62abff.
+  // A GRADIENT texture of the current mode's real sky stops (lib/theme/
+  // sky-backdrop, shared with the footer glass) — a flat mid colour read wrong
+  // against the graded DOM sky, especially two-tone sunrise/sunset. On a mode
+  // switch the stops tween in lockstep with the site-wide sky CROSSFADE, each
+  // step redrawing the tiny gradient + invalidate()-ing the demand canvas (the
+  // welcome's own frames also pick it up while IntroFrameCap is running).
   const mode = useMode();
-  const sky = useMemo(() => new THREE.Color(PALETTES[mode].sky.mid), [mode]);
+  const invalidate = useThree((s) => s.invalidate);
+  const [sky] = useState(() => makeSkyBackdrop(mode));
+  useEffect(() => {
+    return () => sky.texture.dispose();
+  }, [sky]);
+
+  const firstMode = useRef(true);
+  useEffect(() => {
+    if (firstMode.current) {
+      firstMode.current = false;
+      return;
+    }
+    const target = PALETTES[mode];
+    const to = {
+      top: new THREE.Color(target.sky.top),
+      mid: new THREE.Color(target.sky.mid),
+      bottom: new THREE.Color(target.sky.bottom),
+    };
+    const from = {
+      top: sky.stops.top.clone(),
+      mid: sky.stops.mid.clone(),
+      bottom: sky.stops.bottom.clone(),
+    };
+    const proxy = { p: 0 };
+    const tween = gsap.to(proxy, {
+      p: 1,
+      duration: CROSSFADE.duration,
+      ease: CROSSFADE.ease,
+      onUpdate: () => {
+        sky.stops.top.copy(from.top).lerp(to.top, proxy.p);
+        sky.stops.mid.copy(from.mid).lerp(to.mid, proxy.p);
+        sky.stops.bottom.copy(from.bottom).lerp(to.bottom, proxy.p);
+        sky.redraw();
+        invalidate();
+      },
+    });
+    return () => {
+      tween.kill();
+    };
+  }, [mode, sky, invalidate]);
 
   // Adaptive glass quality (docs/performance-audit.md §6): the MTM is the intro's
   // heaviest frame cost (~3 scene renders/frame with backside on). Snapshot the
@@ -903,7 +952,7 @@ function Glass({
         >
           ascnd
           <MeshTransmissionMaterial
-            background={sky}
+            background={sky.texture}
             transmission={1}
             thickness={0.3}
             roughness={0.31}
