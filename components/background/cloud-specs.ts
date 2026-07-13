@@ -73,6 +73,28 @@ export type SectionBind = {
   travel?: number;
 };
 
+// ── Shared cloud LOOK ────────────────────────────────────────────────────────
+// The material params (tuned in /lab/clouds) + the self-hosted sprite, as PLAIN
+// values so both the DOM cloud canvas (cloud-canvas.tsx) and the footer glass
+// scene (footer-glass-scene.tsx) render the SAME species of cloud from ONE source.
+// Placement and lighting are per-consumer (different cameras/coordinate systems);
+// only the look is shared here.
+//
+// `speed` is the living-morph rate: the DOM canvas pumps it at ~30fps (<MorphRig>);
+// the footer OVERRIDES it to 0 (static — the footer scene idles to zero, so it must
+// not run a morph loop). `segments` (the fill-rate knob) is tiered per-consumer
+// (cloudSegments in lib/perf/tiers.ts), so it's not baked in here.
+export const CLOUD_LOOK = {
+  opacity: 0.8,
+  fade: 10,
+  growth: 4,
+  speed: 0.25,
+  color: "white",
+} as const;
+
+/** Self-hosted cloud sprite — a local copy of drei's detailed puff (never the CDN). */
+export const CLOUD_TEXTURE = "/textures/cloud-puff.png";
+
 export const SKY_CLOUDS: CloudSpec[] = [
   { key: "top-right", ndc: [0.78, 0.72], dist: 22, seed: 4, bounds: [4, 1.2, 1], volume: 4, anchorVh: 0, perspectiveScroll: false },
   // Cards section ("ground to launch in days") — one sky cloud low on the right,
@@ -190,31 +212,13 @@ export const SKY_CLOUDS: CloudSpec[] = [
     section: { trigger: "[data-final-cta]" },
     perspectiveScroll: false,
   },
-  // Footer ("ascnd" mountain range) — a soft bank low on the LEFT that sits
-  // BEHIND the mountains (SKY layer, -z-10, behind page content), so only its top
-  // wisps crest the ridgeline / show through the gaps while its body stays hidden
-  // behind the opaque rock. The matching thin cloud IN FRONT of the peaks is
-  // footer-br-front in ROCK_CLOUDS.
-  //
-  // `travel` / `ndc` are coupled here. A section cloud parks `travel` BELOW its
-  // rest spot while its section is off-screen below; `travel` must be big enough
-  // that this parked point clears the screen bottom, or the cloud pokes up through
-  // the transparent sky at the foot of EVERY section (it's on the fixed layer).
-  // But the footer is the LAST section and never scroll-centres (SectionRig
-  // progress caps ~0.4 at page end), so the cloud only ever reaches ~0.3·travel
-  // below rest — the `ndc` rest is therefore set HIGH (above the visible target)
-  // to compensate, and the cloud settles into view at the page bottom without ever
-  // touching rest. Shrinking `travel` re-parks it on-screen — don't.
-  {
-    key: "footer-bl-behind",
-    ndc: [-0.7, -0.24],
-    dist: 24,
-    seed: 11,
-    bounds: [5, 1.6, 1],
-    volume: 6,
-    section: { trigger: "[data-footer]", travel: 0.7 },
-    perspectiveScroll: false,
-  },
+  // Footer ("ascnd" mountain range) — the soft bank behind the peaks is NO LONGER
+  // a DOM cloud here. It moved INTO the footer glass scene
+  // (footer-glass-scene.tsx → <FooterCloud>): a real in-scene cloud so it's
+  // REFRACTED through the glass wordmark, which a fixed-layer DOM cloud can't be
+  // (MTM only sees its own scene). The thin cloud IN FRONT of the peaks is still a
+  // DOM cloud — footer-br-front in ROCK_CLOUDS (a front-layer role the glass scene,
+  // which sits behind that layer, can't fill).
 ];
 
 // Rock-base banks — a WIDE, SHALLOW strip that just skirts the foot of each
@@ -234,11 +238,11 @@ export const ROCK_CLOUDS: CloudSpec[] = [
   {
     key: "footer-br-front",
     ndc: [0.8, -0.8],
-    dist: 22,
+    dist: 35,
     seed: 7,
     bounds: [3.5, 0.4, 1],
     volume: 4,
-    section: { trigger: "[data-footer]", travel: 0.35 },
+    section: { trigger: "[data-footer]", travel: 0.85 },
     perspectiveScroll: false,
   },
 ];

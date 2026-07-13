@@ -3,6 +3,8 @@
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import {
   Center,
+  Cloud,
+  Clouds,
   MeshTransmissionMaterial,
   Text3D,
   useFont,
@@ -25,6 +27,7 @@ import { getQualityConfig, heavyEffectFpsCap } from "@/lib/perf/quality-store";
 import { useMode } from "@/lib/theme/use-mode";
 import { CROSSFADE, PALETTES } from "@/lib/theme/palette";
 import { makeSkyBackdrop } from "@/lib/theme/sky-backdrop";
+import { CLOUD_LOOK, CLOUD_TEXTURE } from "@/components/background/cloud-specs";
 import { FOOTER_GLASS } from "./footer-glass-config";
 
 gsap.registerPlugin(ScrollTrigger);
@@ -131,6 +134,47 @@ const TILT_LERP = 0.06;
 // permanently — "too much" — and forced a permanent repaint loop.
 const MTM_TEMPORAL_DISTORTION = 0;
 
+// ── Footer cloud (FOOTER_GLASS.cloud) ────────────────────────────────────────
+// One STATIC drei <Cloud> behind the glass so it's refracted through the letters
+// (a real object in the transmission FBO — the same trick the mountains use).
+// Reuses the shared CLOUD_LOOK + sprite (cloud-specs), lit by its OWN key+ambient
+// ISOLATED on CLOUD_LAYER so the glass's dialed-in lighting is untouched. Static
+// (speed 0, no morph pump) → the scene still idles to zero.
+const CLOUD_LAYER = 1;
+// Placement is footer-scene world units, sized off the view at the cloud's depth
+// (like Mountains). Eyeball + adjust; day mode is calibrated first, then re-baked.
+const CLOUD_Z = -1.5; // behind the glass (refracted); a sky element behind the peaks
+const CLOUD_X_FRAC = -0.35; // left of centre (where the old DOM footer-bl-behind sat)
+const CLOUD_Y_FRAC = -0.15; // just above centre — wisps cross the ridge/lower letters
+const CLOUD_SCALE = 1; // group scale — overall size knob
+const CLOUD_SEED = 11; // shape (matches the retired footer-bl-behind seed)
+const CLOUD_BOUNDS: [number, number, number] = [2, 0.6, 1];
+const CLOUD_VOLUME = 4;
+// Footer-local opacity override (shared CLOUD_LOOK.opacity is 0.8, tuned for the
+// DOM clouds over open sky). Lower here for READABILITY: the glass letters are
+// depth-occluding the cloud correctly (letter on top, refracting it), but a bright
+// OPAQUE white cloud refracted through a clear letter reads white-on-white and the
+// letter vanishes. A semi-transparent cloud lets blue sky through the refraction, so
+// the letter's body + bright bevel edges regain contrast and stay legible — while the
+// cloud is still clearly visible through the glass. Raise toward 0.8 for a denser
+// cloud (letters wash out more); lower for more legible letters (fainter cloud).
+const CLOUD_OPACITY = 0.55;
+const CLOUD_SEGMENTS_LIMIT = 20; // <Clouds> instance ceiling (one cloud × ≤20 segs)
+// Key light aimed toward the HEAD-ON footer camera axis (NOT the DOM clouds' 3/4
+// angle): the billboards face the camera, so their Lambert N·L is highest when the
+// key roughly aligns with the view. Colours come per-mode from PALETTES[mode].cloud
+// (shared source); these multipliers scale the palette intensities.
+//
+// CRITICAL — they're WELL under 1 on purpose. This canvas uses NoToneMapping (so the
+// glass/mountains don't grey out), but the palette cloud intensities (day ≈ ambient
+// 1.5 + key 2.6) were tuned for the DOM canvas's ACES roll-off. Fed raw into
+// NoToneMapping they sum past 1.0 and CLIP to flat white — the sprite's painted
+// form is crushed. These bring the lit face just under clipping (~0.9) so the cloud
+// reads as a soft, shaped white puff like the DOM clouds. Day-calibrated.
+const CLOUD_KEY_POSITION: [number, number, number] = [1, 6, 10];
+const CLOUD_KEY_MUL = 0.25;
+const CLOUD_AMBIENT_MUL = 0.22;
+
 // Frames to paint after mount / context restore: drei builds geometry, uploads
 // textures and compiles the MTM shader over several frames, so a single frame
 // can paint blank (same lesson as cloud-canvas's InvalidateOnReady burst).
@@ -233,6 +277,134 @@ function Mountains() {
           />
         </mesh>
       ))}
+    </>
+  );
+}
+
+/**
+ * One static cloud behind the glass (FOOTER_GLASS.cloud). It's a REAL object in the
+ * scene, so the MTM buffer pass renders it into the refraction — the glass wordmark
+ * genuinely bends it (a fixed DOM-layer cloud can't do this; MTM only sees its own
+ * scene). The mountain OCCLUDER slices (drawn last, depthTest off) cover its body
+ * where the peaks are opaque, so only its top wisps crest the ridge / show through
+ * the gaps — the exact look the retired DOM footer-bl-behind had, now refractable.
+ *
+ * Same species as the DOM clouds (shared CLOUD_LOOK + sprite from cloud-specs), but:
+ *  - speed 0, NO morph pump → the scene keeps idling to zero (a drifting cloud would
+ *    force a permanent repaint, like a nonzero temporalDistortion);
+ *  - its key + ambient are ISOLATED on CLOUD_LAYER (set on mount) and the canvas
+ *    camera enables that layer — so these lights hit ONLY the cloud, never the glass
+ *    (Lambert also ignores the glass env map), and the glass lights never wash the
+ *    cloud. Mountains are meshBasicMaterial (unlit), so they're unaffected either way;
+ *  - colours come per-mode from PALETTES[mode].cloud (shared), intensities scaled by
+ *    the footer multipliers and the key aimed at the head-on camera so day reads
+ *    bright-white (see the TUNING note on billboard N·L). Retint tweens over CROSSFADE
+ *    in lockstep with the sky, requesting a paint per step and settling to zero.
+ * segments come from the tier (cloudSegments); dpr is the canvas's 1.5 cap.
+ */
+function FooterCloud() {
+  const viewport = useThree((s) => s.viewport);
+  const mode = useMode();
+  const q = useMemo(() => getQualityConfig(), []);
+
+  const cloudsRef = useRef<THREE.Group>(null);
+  const keyRef = useRef<THREE.DirectionalLight>(null);
+  const ambientRef = useRef<THREE.AmbientLight>(null);
+
+  // Size off the view at the cloud's depth (the Mountains trick), then place it.
+  const depth = (CAMERA_Z - CLOUD_Z) / CAMERA_Z;
+  const x = viewport.width * depth * CLOUD_X_FRAC;
+  const y = viewport.height * depth * CLOUD_Y_FRAC;
+
+  // Init the lights to the MOUNT mode's cloud palette (× footer multipliers), so the
+  // first painted frame is already the right colour/brightness.
+  const [init] = useState(() => PALETTES[mode].cloud);
+
+  // Isolate the cloud + its lights onto CLOUD_LAYER once mounted. drei builds the
+  // <Clouds> InstancedMesh in its own render (committed before this parent effect),
+  // so a single traverse covers it. Repaint the burst so the layered result shows.
+  useEffect(() => {
+    cloudsRef.current?.traverse((o) => o.layers.set(CLOUD_LAYER));
+    keyRef.current?.layers.set(CLOUD_LAYER);
+    ambientRef.current?.layers.set(CLOUD_LAYER);
+    requestPaint(MOUNT_BURST_FRAMES);
+  }, []);
+
+  // Retint on a sky-mode change: tween both lights' colour + intensity from their
+  // current values to PALETTES[mode].cloud (× multipliers) over the shared CROSSFADE,
+  // painting per step. First run is a no-op (lights already init'd). Idles to zero.
+  const firstMode = useRef(true);
+  useEffect(() => {
+    if (firstMode.current) {
+      firstMode.current = false;
+      return;
+    }
+    const key = keyRef.current;
+    const ambient = ambientRef.current;
+    if (!key || !ambient) return;
+
+    const target = PALETTES[mode].cloud;
+    const tk = new THREE.Color(target.key.color);
+    const ta = new THREE.Color(target.ambient.color);
+    const tki = target.key.intensity * CLOUD_KEY_MUL;
+    const tai = target.ambient.intensity * CLOUD_AMBIENT_MUL;
+
+    const k0 = key.color.clone();
+    const ki0 = key.intensity;
+    const a0 = ambient.color.clone();
+    const ai0 = ambient.intensity;
+    const proxy = { p: 0 };
+    const tween = gsap.to(proxy, {
+      p: 1,
+      duration: CROSSFADE.duration,
+      ease: CROSSFADE.ease,
+      onUpdate: () => {
+        key.color.copy(k0).lerp(tk, proxy.p);
+        key.intensity = ki0 + (tki - ki0) * proxy.p;
+        ambient.color.copy(a0).lerp(ta, proxy.p);
+        ambient.intensity = ai0 + (tai - ai0) * proxy.p;
+        requestPaint();
+      },
+    });
+    return () => {
+      tween.kill();
+    };
+  }, [mode]);
+
+  return (
+    <>
+      {/* Cloud-only lights (world-space direction; isolated on CLOUD_LAYER). */}
+      <ambientLight
+        ref={ambientRef}
+        color={init.ambient.color}
+        intensity={init.ambient.intensity * CLOUD_AMBIENT_MUL}
+      />
+      <directionalLight
+        ref={keyRef}
+        color={init.key.color}
+        intensity={init.key.intensity * CLOUD_KEY_MUL}
+        position={CLOUD_KEY_POSITION}
+      />
+      <group position={[x, y, CLOUD_Z]} scale={CLOUD_SCALE}>
+        <Clouds
+          ref={cloudsRef}
+          material={THREE.MeshLambertMaterial}
+          texture={CLOUD_TEXTURE}
+          limit={CLOUD_SEGMENTS_LIMIT}
+          range={CLOUD_SEGMENTS_LIMIT}
+          frustumCulled={false}
+        >
+          <Cloud
+            {...CLOUD_LOOK}
+            opacity={CLOUD_OPACITY}
+            speed={0}
+            segments={q.cloudSegments}
+            seed={CLOUD_SEED}
+            bounds={CLOUD_BOUNDS}
+            volume={CLOUD_VOLUME}
+          />
+        </Clouds>
+      </group>
     </>
   );
 }
@@ -586,15 +758,19 @@ export default function FooterGlassScene({
       dpr={[1, 1.5]}
       gl={{ antialias: true, alpha: true, stencil: false }}
       camera={{ position: [0, 0, CAMERA_Z], fov: 45 }}
-      onCreated={({ gl }) => {
+      onCreated={({ gl, camera }) => {
         // Match the lab/glass render: the bright env carries the white, so no
         // ACES roll-off (which greys the glass + mountains).
         gl.toneMapping = THREE.NoToneMapping;
+        // Render the isolated cloud layer too (its lights + mesh live there so they
+        // don't touch the glass). Harmless when FOOTER_GLASS.cloud is off.
+        camera.layers.enable(CLOUD_LAYER);
       }}
       style={{ position: "absolute", inset: 0, pointerEvents: "none" }}
     >
       <Suspense fallback={null}>
         <Mountains />
+        {FOOTER_GLASS.cloud && <FooterCloud />}
         <Glass revealRef={revealRef} background={sky.texture} />
         {/* Bevel sheen — the exact studio glints the intro/lab use. */}
         <GlassEnvironment />

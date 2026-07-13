@@ -28,7 +28,10 @@
  * | components/sections/footer/                | mtm* (own mtmResolutionFooter — smaller  |
  * |   footer-glass-scene.tsx                   | FBO than the intro; the blur hides it),  |
  * |                                            | text3d* (mount snapshot) — reuses the    |
- * |                                            | intro's glass. heavyEffectFpsCap()       |
+ * |                                            | intro's glass; cloudSegments (mount      |
+ * |                                            | snapshot, <FooterCloud> — one static     |
+ * |                                            | cloud refracted through the glass).      |
+ * |                                            | heavyEffectFpsCap()                      |
  * |                                            | (RenderPump paint cap). Pre-warmed after |
  * |                                            | the intro, mounted ~6vp early, poster-   |
  * |                                            | covered until first real frames; paint   |
@@ -112,12 +115,14 @@ export interface QualityConfig {
   readonly mtmResolution: number;
   /**
    * The FOOTER glass's FBO resolution — deliberately far below the intro's
-   * `mtmResolution`. With roughness 0.31 + anisotropicBlur 0.28 the refraction
-   * is heavily blurred anyway, so a small buffer reads the same while cutting
-   * the per-painted-frame FBO cost ~4× (S2 in
-   * docs/glass-loading-and-performance-2026-07-12.md). Safe to diverge from the
-   * intro: only `samples` is baked into the shader source (compile key), not
-   * resolution, so the browser program cache still sees identical GLSL.
+   * `mtmResolution`. On the high-contrast MOUNTAINS the roughness 0.31 +
+   * anisotropicBlur 0.28 hide a small buffer completely (S2's premise), but a
+   * SOFT refracted cloud (<FooterCloud>) has no detail to hide the low-res
+   * refraction behind, so it read as muddy at 192/160/128 — raised to 256/224/192
+   * (2026-07-13) to sharpen the cloud + mountains while staying below the intro's
+   * 384/320/256. Safe to diverge from the intro: only `samples` is baked into the
+   * shader source (compile key), not resolution, so the browser program cache
+   * still sees identical GLSL.
    */
   readonly mtmResolutionFooter: number;
   /** Second (backside) scene render — the single costliest MTM lever. */
@@ -165,7 +170,7 @@ export const TIERS: Record<TierName, QualityConfig> = {
     // `samples` stays 8 to preserve the refraction-blur sharpness.
     mtmSamples: 8,
     mtmResolution: 384,
-    mtmResolutionFooter: 192,
+    mtmResolutionFooter: 256,
     mtmBackside: false,
     text3dCurveSegments: 32,
     text3dBevelSegments: 12,
@@ -178,7 +183,7 @@ export const TIERS: Record<TierName, QualityConfig> = {
     cloudSegments: 14,
     mtmSamples: 6,
     mtmResolution: 320,
-    mtmResolutionFooter: 160,
+    mtmResolutionFooter: 224,
     mtmBackside: false,
     text3dCurveSegments: 16,
     text3dBevelSegments: 8,
@@ -191,7 +196,7 @@ export const TIERS: Record<TierName, QualityConfig> = {
     cloudSegments: 10,
     mtmSamples: 4,
     mtmResolution: 256,
-    mtmResolutionFooter: 128,
+    mtmResolutionFooter: 192,
     mtmBackside: false,
     text3dCurveSegments: 16,
     text3dBevelSegments: 6,

@@ -7,7 +7,7 @@ import * as THREE from "three";
 import type { Group } from "three";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
-import type { CloudSpec } from "./cloud-specs";
+import { type CloudSpec, CLOUD_LOOK, CLOUD_TEXTURE } from "./cloud-specs";
 import { useQuality } from "@/lib/perf/use-quality";
 import { getQualityConfig } from "@/lib/perf/quality-store";
 import { makeCappedInvalidate } from "@/lib/perf/capped-invalidate";
@@ -62,19 +62,13 @@ import { CROSSFADE, PALETTES } from "@/lib/theme/palette";
  * on restore and remounts the <Canvas> if a real driver reset never restores.
  */
 
-// Shared cloud look (tuned in /lab/clouds; the dev leva panel is gone). Size,
-// seed and placement are per-cloud in the specs. `speed` is small + non-zero so
-// the puffs slowly morph (lively, not churning); <MorphRig> pumps the demand
-// loop at ~30fps so that morph actually advances. To re-tune the look, play in
-// /lab/clouds. `segments` (the fill-rate knob) is tiered — see cloudSegments
-// in lib/perf/tiers.ts, snapshotted at mount in <CloudCanvas>.
-const CLOUD = {
-  opacity: 0.8,
-  fade: 10,
-  growth: 4,
-  speed: 0.25,
-  color: "white",
-} as const;
+// The shared cloud LOOK (material params + sprite) lives in cloud-specs.ts as
+// CLOUD_LOOK / CLOUD_TEXTURE, so the footer glass scene renders the SAME species
+// of cloud from one source. Size/seed/placement are per-cloud in the specs.
+// `speed` (the living-morph rate) is pumped here by <MorphRig> at ~30fps so the
+// puffs slowly morph; the footer overrides it to 0 (static). `segments` (the
+// fill-rate knob) is tiered — see cloudSegments in lib/perf/tiers.ts, snapshotted
+// at mount in <CloudCanvas>.
 // Max cloud SEGMENTS rendered per <Clouds> batch. drei draws
 // count = min(limit, range, totalSegments) sprites, where each <Cloud> expands
 // into `segments` billboards (cloudSegments: 20 on the high tier). So this is a
@@ -794,7 +788,7 @@ export default function CloudCanvas({
   // ref write in a callback it can see, not passed through a helper).
   const cloudBody = (c: CloudSpec) => (
     <Cloud
-      {...CLOUD}
+      {...CLOUD_LOOK}
       segments={cloudSegments}
       seed={c.seed}
       bounds={c.bounds}
@@ -842,7 +836,7 @@ export default function CloudCanvas({
 
       <Clouds
         material={THREE.MeshLambertMaterial}
-        texture="/textures/cloud-puff.png"
+        texture={CLOUD_TEXTURE}
         limit={400}
         range={RANGE}
         frustumCulled={false}

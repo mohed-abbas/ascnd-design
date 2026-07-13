@@ -17,6 +17,11 @@ export const FOOTER_GLASS = {
   glassReveal: false,
   /** Smoothly retint the glass backdrop when the sky mode changes (vs snapping). */
   themeTween: true,
+  /** One static drei <Cloud> INSIDE the glass scene (behind the wordmark), so it's
+   *  refracted through the letters — a look a fixed-layer DOM cloud can't achieve.
+   *  Static (no morph) so the scene still idles to zero. See <FooterCloud> in
+   *  footer-glass-scene.tsx. Flip off to drop it with no other changes. */
+  cloud: true,
 } as const;
 
 // ── Eligibility (shared) ─────────────────────────────────────────────────────
