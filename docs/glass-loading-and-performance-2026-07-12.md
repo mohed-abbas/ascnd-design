@@ -89,8 +89,8 @@ Against "Building Efficient Three.js Scenes" (Codrops, 2025-02-11):
 | Low-poly geometry | ✅ | Text3D curve/bevel segments tier-driven (16–32 / 6–12), built once |
 | Power-of-2 textures | ⚠️ | `footer-scene.webp` is 3168×1344 (NPOT). Correct in WebGL2, but ~17MB+ VRAM — see S1 |
 | `antialias: false` | ⚠️ deliberate | MSAA kept: glass bevel edges over a transparent canvas need it |
-| `alpha:false`, `stencil:false`, `depth:false` | ⚠️ partial | `alpha:true` required (DOM sky shows through); depth required (occluder trick); `stencil:false` unset — free win, see S3 |
-| `powerPreference: "high-performance"` | ❌ unset | Debatable: requests the discrete GPU, costs laptop battery — see S4 |
+| `alpha:false`, `stencil:false`, `depth:false` | ✅ | `alpha:true` required (DOM sky shows through); depth required (occluder trick); `stencil:false` now explicit (S3) — and verified already the default: three r163+ ships `stencil: false` and R3F doesn't override it |
+| `powerPreference: "high-performance"` | ✅ already on | Correction (2026-07-13): R3F's `createRendererInstance` defaults include `powerPreference: 'high-performance'` (verified in the installed fiber source) — every canvas has requested the discrete GPU all along. S4 is therefore about opting *out* for battery, not in |
 | GLB/Draco pipeline · post-processing · physics | N/A | None in the footer |
 | Profiling (r3f-perf, Spector.js) | ✅ practice | `webgl-animation-audit-2026-07-02.md`; those are the tools for the next pass |
 
@@ -98,7 +98,7 @@ Against "Building Efficient Three.js Scenes" (Codrops, 2025-02-11):
 
 | Lever | Guidance | Ours | Verdict |
 |---|---|---|---|
-| `resolution` (FBO) | Default 1024 wasteful; "with roughness, tiny resolutions still look good" | 256–384 by tier | ✅ — headroom remains, see S2 |
+| `resolution` (FBO) | Default 1024 wasteful; "with roughness, tiny resolutions still look good" | Intro 256–384, footer 128–192 by tier (S2, 2026-07-13) | ✅ |
 | `samples` | Default 10; lower = faster | 4–8 by tier | ✅ |
 | `backside` | Costliest single toggle (2nd scene render) | `false` | ✅ |
 | Scene renders/frame | One FBO pass per MTM instance | 1 per canvas | ✅ (2 site-wide only because 2 contexts) |
@@ -114,15 +114,16 @@ Against "Building Efficient Three.js Scenes" (Codrops, 2025-02-11):
 | L1 | **Prefetch after the intro docks** (`warmFooterGlass`: scene chunk → module-scope `useTexture.preload` + `useFont.preload`, + poster image; triggers: `INTRO_REVEAL_EVENT`, 2s timer when no intro, first scroll fallback) | Removes ALL network latency from the arrival path on any normal visit |
 | L2 | **Mount ~6 viewports early** (was ~3) | Context creation + shader compile + warm burst get a multi-second runway; with L1 the runway is spent only on the uncacheable work |
 | L3 | **Poster swap** (baked composite as placeholder; canvas fires `onReady` after `READY_FRAMES` real frames; poster fades 300ms) | The footer *always* looks complete instantly — even End-key jumps and deep links. Converts any residual spin-up from a visible defect into an invisible crossfade. Verified: fresh load + instant bottom-jump shows poster at arrival, live canvas ~2s later (dev build; prod faster) |
+| S2 | **Footer MTM `resolution` dropped to 128–192** (2026-07-13; new per-tier knob `mtmResolutionFooter` = 192/160/128 vs the intro's 384/320/256) | FBO fragments cut ~4× per painted frame; the heavy `roughness`/`anisotropicBlur` makes it visually indistinguishable (pending final eyeball). Safe to diverge from the intro: only `samples` is a shader-compile key, resolution is just buffer size | — |
+| S3 | **`stencil: false` on the footer canvas** (2026-07-13) | Now explicit. Verification note: three r163+ already defaults `stencil: false` and R3F doesn't override it, so this pins existing behaviour rather than changing it | — |
+| L4 | **Per-mode transparent posters** (2026-07-13): one baked still per theme mode (`footer-glass-fallback-{sunrise,day,sunset,night}.webp`, ~365KB each), read back from the live canvas WITH alpha (`toDataURL` under a temporary `preserveDrawingBuffer`), so the sky is transparent and the DOM gradient + clouds show through exactly like the live canvas. `PosterStack` (footer-scene.tsx) shows the current mode's still and crossfades on a theme switch in step with the sky's `CROSSFADE`; only visited modes are in the DOM (no eager 4× download). Kills the last visible artifact: a non-day visitor arriving fast used to see the day-baked poster under their themed sky. Verified live (night mode): poster phase and live phase are visually identical. The mobile/no-WebGL fallback now retints with the theme too | — |
 
 ### Open — recommended next (cheap, incremental)
 
 | # | Solution | Expected impact | Effort / risk |
 |---|---|---|---|
 | S1 | **Downsize + recompress the mountain texture** (3168→2048 wide; optionally KTX2/BasisU) | ~2.5× less VRAM (~17MB→~7MB) and a visibly faster GPU upload during the warm burst; imperceptible through the canvas (the plane is displayed ≤3024px wide and refraction blurs it) | Low / low — one asset swap; keep DOM `<Image>` + refraction twin in sync |
-| S2 | **Drop footer MTM `resolution` to 128–192** | Large reduction in per-painted-frame GPU cost (FBO pass + taps scale with it); with `roughness 0.31` + `anisotropicBlur 0.28` likely indistinguishable | Low / needs an eyeball A/B — tier values live in `lib/perf/tiers.ts` |
-| S3 | **`stencil: false` on the footer canvas `gl` props** | Small fixed memory/bandwidth saving; free | Trivial / none |
-| S4 | **Consider `powerPreference: "high-performance"`** | Faster compile + frames on dual-GPU laptops; **costs battery** by waking the discrete GPU — arguably wrong for a footer | Trivial / product decision, lean NO |
+| S4 | **Consider opting OUT of `powerPreference: "high-performance"`** (correction 2026-07-13: R3F defaults every canvas to high-performance already) | `"low-power"`/`"default"` would spare dual-GPU laptop batteries at the cost of slower compile/frames; today's behaviour = discrete GPU requested | Trivial / product decision, lean keep-as-is |
 
 ### Open — larger, only if justified later
 
@@ -142,8 +143,7 @@ Against "Building Efficient Three.js Scenes" (Codrops, 2025-02-11):
 - Compiled-shader persistence from JS is impossible by web-platform design;
   browsers already give returning visitors that benefit via their own shader
   disk cache.
-- Next cheap wins if wanted: S1 (texture downsize), S2 (lower FBO resolution),
-  S3 (`stencil:false`).
+- Next cheap win if wanted: S1 (texture downsize). S2 + S3 shipped 2026-07-13.
 
 Sources: Codrops "Building Efficient Three.js Scenes" (2025-02-11) ·
 drei MeshTransmissionMaterial docs · three.js forum threads on MTM/transmission
