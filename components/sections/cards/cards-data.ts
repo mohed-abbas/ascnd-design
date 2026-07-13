@@ -33,10 +33,18 @@ export type ShotTile = {
   h: number;
 };
 
-/** Card1 "receive" design-shot collage — 4 tiles in a 594×510 plane. */
+/** Card1 "receive" design-shot collage — 4 tiles in a 594×510 plane. The PNGs
+ *  are the CLEAN inner-shot exports (Figma nodes 348:304 / 393 / 762 / 911) —
+ *  the shots WITHOUT the tile's frame. The earlier .avif set was exported from
+ *  the outer frame node, which baked the frame's translucent mat AND the node's
+ *  rounded corners (both flattened over the artboard sky) into the image as a
+ *  stray blue edge. These are cropped ~18px in from the export so those
+ *  flattened-sky corners are gone entirely — clean opaque rectangles that bleed
+ *  full-frame like the intro conveyor's shots; receive-media.tsx just re-rounds
+ *  them with its plain rounded-[12px] window. Near-identical crop to before. */
 export const SHOT_TILES: ShotTile[] = [
-  { src: "/cards/shot-finance.avif", alt: "Fintech dashboard concept", x: 0, y: 0, w: 295, h: 224 },
-  { src: "/cards/shot-weightloss.avif", alt: "Health app landing page", x: 1, y: 233, w: 294, h: 277 },
-  { src: "/cards/shot-collage.avif", alt: "Eyewear brand photography", x: 307, y: 49, w: 250, h: 234 },
-  { src: "/cards/shot-taskma.avif", alt: "Task manager web app", x: 306, y: 290, w: 288, h: 207 },
+  { src: "/cards/shot-finance.png", alt: "Fintech dashboard concept", x: 0, y: 0, w: 295, h: 224 },
+  { src: "/cards/shot-weightloss.png", alt: "Health app landing page", x: 1, y: 233, w: 294, h: 277 },
+  { src: "/cards/shot-collage.png", alt: "Eyewear brand photography", x: 307, y: 49, w: 250, h: 234 },
+  { src: "/cards/shot-taskma.png", alt: "Task manager web app", x: 306, y: 290, w: 288, h: 207 },
 ];
