@@ -48,6 +48,8 @@ export default function PricingReveal() {
     const cards = gsap.utils.toArray<HTMLElement>("[data-pricing-card]", section);
     const badge = section.querySelector<HTMLElement>("[data-pricing-badge]");
     const arrow = section.querySelector<HTMLElement>("[data-pricing-arrow]");
+    const arrowBrush = section.querySelector<SVGPathElement>("[data-pricing-arrow-brush]");
+    const arrowHead = section.querySelector<SVGPathElement>("[data-pricing-arrow-head]");
     const foot = gsap.utils.toArray<HTMLElement>("[data-pricing-foot]", section);
     if (!head || cards.length === 0) return;
 
@@ -113,19 +115,64 @@ export default function PricingReveal() {
             clearProps: "filter",
           },
           0.35,
-        )
-          .fromTo(
-            [badge, arrow].filter(Boolean) as HTMLElement[],
+        );
+
+        // Badge fades in.
+        if (badge) {
+          tl.fromTo(
+            badge,
             { autoAlpha: 0 },
             { autoAlpha: 1, duration: 0.7, ease: "power2.out" },
             0.7,
-          )
-          .fromTo(
-            foot,
-            { autoAlpha: 0, y: 16 },
-            { autoAlpha: 1, y: 0, duration: 0.7, ease: "power2.out" },
-            0.8,
           );
+        }
+
+        // The connector DRAWS on instead of fading: reveal the (empty-masked) SVG,
+        // wipe the brush's stroke-dashoffset 1→0 so the dashes trace from the badge
+        // down the path, then pop the arrowhead as the line lands. Markup default
+        // is fully drawn, so this parks it empty first (immediateRender).
+        if (arrow) tl.set(arrow, { autoAlpha: 1 }, 0.7);
+        if (arrowBrush) {
+          // Park the mask brush empty (offset 1 = nothing revealed), then ramp it
+          // to 0 to wipe the reveal along the path from the badge to the arrowhead.
+          // Driven through a proxy + onUpdate rather than tweening the SVG property
+          // directly: GSAP won't interpolate `strokeDashoffset` on this masked node
+          // (it snaps 1→0, so the line just appears) — writing the style each frame
+          // ramps it smoothly and the mask re-renders per frame.
+          arrowBrush.style.strokeDashoffset = "1";
+          const draw = { o: 1 };
+          tl.to(
+            draw,
+            {
+              o: 0,
+              duration: 0.85,
+              ease: "power1.inOut",
+              onUpdate: () => {
+                arrowBrush.style.strokeDashoffset = String(draw.o);
+              },
+            },
+            0.7,
+          );
+        }
+        // Arrowhead simply fades in at its fixed spot as the line lands — no
+        // scale/transform (which had it settling off-position); it sits exactly
+        // where the drawn tail ends.
+        if (arrowHead) {
+          tl.fromTo(
+            arrowHead,
+            { autoAlpha: 0 },
+            { autoAlpha: 1, duration: 0.22, ease: "power2.out" },
+            1.4,
+          );
+        }
+
+        // Footer settles last.
+        tl.fromTo(
+          foot,
+          { autoAlpha: 0, y: 16 },
+          { autoAlpha: 1, y: 0, duration: 0.7, ease: "power2.out" },
+          0.9,
+        );
       }, section);
     };
 
