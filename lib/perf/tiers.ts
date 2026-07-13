@@ -25,16 +25,19 @@
  * | components/sections/intro/intro-scene.tsx  | mtm*, text3d* (mount snapshot),          |
  * |                                            | heavyEffectFpsCap() (IntroFrameCap),     |
  * |                                            | makeCappedInvalidate (ScrollRig)         |
- * | components/sections/footer/                | mtm*, text3d* (mount snapshot) — reuses  |
- * |   footer-glass-scene.tsx                   | the intro's glass. heavyEffectFpsCap()   |
+ * | components/sections/footer/                | mtm* (own mtmResolutionFooter — smaller  |
+ * |   footer-glass-scene.tsx                   | FBO than the intro; the blur hides it),  |
+ * |                                            | text3d* (mount snapshot) — reuses the    |
+ * |                                            | intro's glass. heavyEffectFpsCap()       |
  * |                                            | (RenderPump paint cap). Pre-warmed after |
  * |                                            | the intro, mounted ~6vp early, poster-   |
  * |                                            | covered until first real frames; paint   |
  * |                                            | is request-driven (frameloop="never"),   |
  * |                                            | so it idles to ZERO at rest, on-screen   |
  * |                                            | or off; dpr≤1.5.                         |
- * |                                            | No-WebGL/reduced-motion/mobile → baked-  |
- * |                                            | glass composite image fallback.          |
+ * |                                            | No-WebGL/reduced-motion/mobile → per-    |
+ * |                                            | mode baked transparent stills (also the  |
+ * |                                            | eligible-device posters).                |
  * | components/ui/glass-surface.tsx            | NONE (2026-07-03, Decision 6): reads no   |
  * |                                            | tier knob. Its consumer (why-stay pill)   |
  * |                                            | now passes chromatic={false} on EVERY     |
@@ -107,6 +110,16 @@ export interface QualityConfig {
   readonly mtmSamples: number;
   /** MeshTransmissionMaterial FBO resolution (square). */
   readonly mtmResolution: number;
+  /**
+   * The FOOTER glass's FBO resolution — deliberately far below the intro's
+   * `mtmResolution`. With roughness 0.31 + anisotropicBlur 0.28 the refraction
+   * is heavily blurred anyway, so a small buffer reads the same while cutting
+   * the per-painted-frame FBO cost ~4× (S2 in
+   * docs/glass-loading-and-performance-2026-07-12.md). Safe to diverge from the
+   * intro: only `samples` is baked into the shader source (compile key), not
+   * resolution, so the browser program cache still sees identical GLSL.
+   */
+  readonly mtmResolutionFooter: number;
   /** Second (backside) scene render — the single costliest MTM lever. */
   readonly mtmBackside: boolean;
   /** Text3D curve tessellation (one-time CPU geometry build). */
@@ -152,6 +165,7 @@ export const TIERS: Record<TierName, QualityConfig> = {
     // `samples` stays 8 to preserve the refraction-blur sharpness.
     mtmSamples: 8,
     mtmResolution: 384,
+    mtmResolutionFooter: 192,
     mtmBackside: false,
     text3dCurveSegments: 32,
     text3dBevelSegments: 12,
@@ -164,6 +178,7 @@ export const TIERS: Record<TierName, QualityConfig> = {
     cloudSegments: 14,
     mtmSamples: 6,
     mtmResolution: 320,
+    mtmResolutionFooter: 160,
     mtmBackside: false,
     text3dCurveSegments: 16,
     text3dBevelSegments: 8,
@@ -176,6 +191,7 @@ export const TIERS: Record<TierName, QualityConfig> = {
     cloudSegments: 10,
     mtmSamples: 4,
     mtmResolution: 256,
+    mtmResolutionFooter: 128,
     mtmBackside: false,
     text3dCurveSegments: 16,
     text3dBevelSegments: 6,

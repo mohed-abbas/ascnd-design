@@ -331,7 +331,7 @@ function Glass({
             distortionScale={0.4}
             temporalDistortion={MTM_TEMPORAL_DISTORTION}
             samples={q.mtmSamples}
-            resolution={q.mtmResolution}
+            resolution={q.mtmResolutionFooter}
             backside={q.mtmBackside}
             backsideThickness={0.4}
             clearcoat={0}
@@ -580,7 +580,7 @@ export default function FooterGlassScene({
       key={canvasKey}
       frameloop="never"
       dpr={[1, 1.5]}
-      gl={{ antialias: true, alpha: true }}
+      gl={{ antialias: true, alpha: true, stencil: false }}
       camera={{ position: [0, 0, CAMERA_Z], fov: 45 }}
       onCreated={({ gl }) => {
         // Match the lab/glass render: the bright env carries the white, so no
