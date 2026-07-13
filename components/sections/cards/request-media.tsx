@@ -5,6 +5,7 @@ import Image from "next/image";
 import gsap from "gsap";
 import { CheckMark, SendHorizontal } from "@/components/ui/icons";
 import { ACTIVE_REQUEST, REQUEST_QUEUE } from "./cards-data";
+import { onMediaRelease } from "./media-gate";
 
 const REDUCE_MOTION = "(prefers-reduced-motion: reduce)";
 
@@ -287,25 +288,45 @@ export default function RequestMedia() {
         .set(sendBtn, { scale: 1 })
         .set(cursor, { x: CURSOR_OFF_X, y: CURSOR_OFF_Y, scale: 1, autoAlpha: 0 });
 
+      // Held until the card's entrance lands (Option D): CardsReveal releases
+      // this media as the panel finishes blur-rising, so the conveyor starts in
+      // step with the left→right cascade rather than on its own. After release
+      // the observer just pauses/resumes it as the card scrolls out / back in.
+      let released = false;
+      let onScreen = false;
+      const play = () => {
+        tl.play();
+        blink.play();
+        sweep.play();
+        spin.play();
+      };
+      const pause = () => {
+        tl.pause();
+        blink.pause();
+        sweep.pause();
+        spin.pause();
+      };
+
       const io = new IntersectionObserver(
         ([entry]) => {
-          if (entry.isIntersecting) {
-            tl.play();
-            blink.play();
-            sweep.play();
-            spin.play();
-          } else {
-            tl.pause();
-            blink.pause();
-            sweep.pause();
-            spin.pause();
-          }
+          onScreen = entry.isIntersecting;
+          if (!released) return; // hold until the card lands
+          if (onScreen) play();
+          else pause();
         },
         { threshold: 0.15 }
       );
       io.observe(root);
 
-      return () => io.disconnect();
+      const unrelease = onMediaRelease("request", () => {
+        released = true;
+        if (onScreen) play();
+      });
+
+      return () => {
+        io.disconnect();
+        unrelease();
+      };
     }, root);
 
     return () => ctx.revert();

@@ -5,6 +5,7 @@ import Image from "next/image";
 import gsap from "gsap";
 import { CheckMark } from "@/components/ui/icons";
 import { SHOT_TILES } from "./cards-data";
+import { onMediaRelease } from "./media-gate";
 
 const REDUCE_MOTION = "(prefers-reduced-motion: reduce)";
 
@@ -130,21 +131,42 @@ export default function ReceiveMedia() {
           ">-0.05"
         );
 
+      // Held until the card's entrance lands (Option D): CardsReveal releases
+      // this media as the panel finishes blur-rising, so the collage's deliver
+      // loop starts in step with the left→right cascade rather than on its own.
+      // After release the observer just pauses/resumes it as the card scrolls
+      // out of / back into view.
+      let released = false;
+      let onScreen = false;
+      const play = () => {
+        tl.play();
+        sweep.play();
+      };
+      const pause = () => {
+        tl.pause();
+        sweep.pause();
+      };
+
       const io = new IntersectionObserver(
         ([entry]) => {
-          if (entry.isIntersecting) {
-            tl.play();
-            sweep.play();
-          } else {
-            tl.pause();
-            sweep.pause();
-          }
+          onScreen = entry.isIntersecting;
+          if (!released) return; // hold until the card lands
+          if (onScreen) play();
+          else pause();
         },
         { threshold: 0.15 }
       );
       io.observe(root);
 
-      return () => io.disconnect();
+      const unrelease = onMediaRelease("receive", () => {
+        released = true;
+        if (onScreen) play();
+      });
+
+      return () => {
+        io.disconnect();
+        unrelease();
+      };
     }, root);
 
     return () => ctx.revert();

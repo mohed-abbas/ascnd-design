@@ -30,6 +30,7 @@ export default function CardShell({
   return (
     <article
       data-card-shell
+      data-card-id={title}
       className="relative h-[438px] w-[440px] shrink-0 overflow-clip rounded-[20px] border-[1.5px] border-solid border-white/30 bg-gradient-to-b from-black/10 to-black/5 backdrop-blur-[2px]"
     >
       {children}

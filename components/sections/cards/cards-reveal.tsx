@@ -3,6 +3,7 @@
 import { useEffect, useLayoutEffect } from "react";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
+import { releaseMedia } from "./media-gate";
 
 gsap.registerPlugin(ScrollTrigger);
 
@@ -28,7 +29,17 @@ const REDUCE_MOTION = "(prefers-reduced-motion: reduce)";
  * effect, before paint), then reveals on ScrollTrigger enter (once). The card's
  * own backdrop-blur is left untouched; the entrance blur is a foreground filter
  * that clearProps drops once crisp.
+ *
+ * Narrative handoff (Option D): as each shell's blur-rise LANDS it releases that
+ * card's inner media (releaseMedia → media-gate), so the cursor / conveyor /
+ * collage begin in the same left→right order the panels arrive — the entrance
+ * leads the eye through subscribe → request → receive instead of three loops
+ * running independently from the start. One timeline of per-shell tweens (rather
+ * than a single staggered tween) so each landing can fire its own onComplete;
+ * the `i * STAGGER` offset reproduces the same cadence.
  */
+const STAGGER = 0.14;
+
 export default function CardsReveal() {
   useIsomorphicLayoutEffect(() => {
     const shells = gsap.utils.toArray<HTMLElement>("[data-card-shell]");
@@ -37,20 +48,25 @@ export default function CardsReveal() {
     if (window.matchMedia(REDUCE_MOTION).matches) return;
 
     const ctx = gsap.context(() => {
-      gsap.fromTo(
-        shells,
-        { y: 36, autoAlpha: 0, filter: "blur(10px)" },
-        {
-          y: 0,
-          autoAlpha: 1,
-          filter: "blur(0px)",
-          duration: 0.8,
-          ease: "power3.out",
-          stagger: 0.14, // one card after the next, left→right (DOM order)
-          clearProps: "filter", // drop the inline entrance blur once crisp
-          scrollTrigger: { trigger: row, start: "top 80%", once: true },
-        },
-      );
+      const tl = gsap.timeline({
+        scrollTrigger: { trigger: row, start: "top 80%", once: true },
+      });
+      shells.forEach((shell, i) => {
+        tl.fromTo(
+          shell,
+          { y: 36, autoAlpha: 0, filter: "blur(10px)" },
+          {
+            y: 0,
+            autoAlpha: 1,
+            filter: "blur(0px)",
+            duration: 0.8,
+            ease: "power3.out",
+            clearProps: "filter", // drop the inline entrance blur once crisp
+            onComplete: () => releaseMedia(shell.dataset.cardId ?? ""),
+          },
+          i * STAGGER, // left→right (DOM order), same cadence as a stagger
+        );
+      });
     });
 
     return () => ctx.revert(); // kills the tween + its ScrollTrigger, restores the cards
