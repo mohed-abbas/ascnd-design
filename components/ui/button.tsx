@@ -216,7 +216,12 @@ export default function Button({
           ref={glowRef}
           aria-hidden
           className="pointer-events-none absolute -inset-[3px] rounded-[35px]"
-          style={{ background: AURA, filter: "blur(9px)", opacity: 0 }}
+          // `saturate` is load-bearing: blurring a full-spectrum conic gradient
+          // averages its hues toward grey, so a plain blur read as a WHITE halo
+          // hugging the button (worst on low-dpr screens, where the soft edge has
+          // less AA to hide it). Re-saturating after the blur keeps the halo a
+          // colour glow instead of a white border.
+          style={{ background: AURA, filter: "blur(9px) saturate(2.2)", opacity: 0 }}
         />
       )}
       {/* the variant surface (fill) */}
