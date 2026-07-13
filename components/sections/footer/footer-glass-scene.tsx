@@ -69,7 +69,11 @@ gsap.registerPlugin(ScrollTrigger);
 
 const FONT = "/fonts/product-sans-medium.typeface.json";
 const MOUNTAIN_SRC = "/footer/footer-scene.webp";
-const MOUNTAIN_ASPECT = 3168 / 1344; // intrinsic w/h of the mountain cutout
+// Intrinsic w/h of the mountain cutout. Downsized 3168×1344 → 2046×868 (S1,
+// docs/glass-loading-and-performance-2026-07-12.md) — the SAME 33:14 ratio, so
+// the plane geometry is unchanged; ~2.5× less VRAM and a faster warm-burst
+// upload, imperceptible through the refraction (see that doc's S1 rationale).
+const MOUNTAIN_ASPECT = 2046 / 868;
 
 // Prime the heavyweight payloads the moment this chunk arrives — footer-scene
 // warms the chunk itself well ahead of arrival (warmFooterGlass), so by the time

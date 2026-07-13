@@ -117,12 +117,12 @@ Against "Building Efficient Three.js Scenes" (Codrops, 2025-02-11):
 | S2 | **Footer MTM `resolution` dropped to 128–192** (2026-07-13; new per-tier knob `mtmResolutionFooter` = 192/160/128 vs the intro's 384/320/256) | FBO fragments cut ~4× per painted frame; the heavy `roughness`/`anisotropicBlur` makes it visually indistinguishable (pending final eyeball). Safe to diverge from the intro: only `samples` is a shader-compile key, resolution is just buffer size | — |
 | S3 | **`stencil: false` on the footer canvas** (2026-07-13) | Now explicit. Verification note: three r163+ already defaults `stencil: false` and R3F doesn't override it, so this pins existing behaviour rather than changing it | — |
 | L4 | **Per-mode transparent posters** (2026-07-13): one baked still per theme mode (`footer-glass-fallback-{sunrise,day,sunset,night}.webp`, ~365KB each), read back from the live canvas WITH alpha (`toDataURL` under a temporary `preserveDrawingBuffer`), so the sky is transparent and the DOM gradient + clouds show through exactly like the live canvas. `PosterStack` (footer-scene.tsx) shows the current mode's still and crossfades on a theme switch in step with the sky's `CROSSFADE`; only visited modes are in the DOM (no eager 4× download). Kills the last visible artifact: a non-day visitor arriving fast used to see the day-baked poster under their themed sky. Verified live (night mode): poster phase and live phase are visually identical. The mobile/no-WebGL fallback now retints with the theme too | — |
+| S1 | **Downsized + recompressed the mountain texture** (2026-07-13): `footer-scene.webp` 3168×1344 → **2046×868** — the SAME 33:14 ratio (`3168/1344` = `2046/868`), so the plane geometry (`MOUNTAIN_ASPECT`) is unchanged. `sharp` lanczos3 resize, WebP `quality 82` / `alphaQuality 96` (ridgeline silhouette drives the occluder interleave — kept crisp). VRAM **17.0MB → 7.1MB** (width×height×4, exactly the estimate); file **636KB → 219KB**. No DOM twin to sync — the asset is used only as the in-canvas mountain plane (`MOUNTAIN_SRC`). KTX2/BasisU skipped (optional; would need a loader). Verified: old-vs-new composite over the day sky is visually identical, and it's refracted/blurred through the glass in situ | — |
 
 ### Open — recommended next (cheap, incremental)
 
 | # | Solution | Expected impact | Effort / risk |
 |---|---|---|---|
-| S1 | **Downsize + recompress the mountain texture** (3168→2048 wide; optionally KTX2/BasisU) | ~2.5× less VRAM (~17MB→~7MB) and a visibly faster GPU upload during the warm burst; imperceptible through the canvas (the plane is displayed ≤3024px wide and refraction blurs it) | Low / low — one asset swap; keep DOM `<Image>` + refraction twin in sync |
 | S4 | **Consider opting OUT of `powerPreference: "high-performance"`** (correction 2026-07-13: R3F defaults every canvas to high-performance already) | `"low-power"`/`"default"` would spare dual-GPU laptop batteries at the cost of slower compile/frames; today's behaviour = discrete GPU requested | Trivial / product decision, lean keep-as-is |
 
 ### Open — larger, only if justified later
@@ -143,7 +143,9 @@ Against "Building Efficient Three.js Scenes" (Codrops, 2025-02-11):
 - Compiled-shader persistence from JS is impossible by web-platform design;
   browsers already give returning visitors that benefit via their own shader
   disk cache.
-- Next cheap win if wanted: S1 (texture downsize). S2 + S3 shipped 2026-07-13.
+- S1 + S2 + S3 + L4 shipped 2026-07-13; the cheap incremental wins are done.
+  Remaining open items (S4–S7) are either product decisions or larger
+  re-architectures worth doing only if WebGL sections keep multiplying.
 
 Sources: Codrops "Building Efficient Three.js Scenes" (2025-02-11) ·
 drei MeshTransmissionMaterial docs · three.js forum threads on MTM/transmission
