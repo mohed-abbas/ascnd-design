@@ -1,6 +1,6 @@
 import CardShell from "./card-shell";
 import CardsHeading from "./cards-heading";
-import CardTitlesReveal from "./cards-titles-reveal";
+import CardsReveal from "./cards-reveal";
 import ReceiveMedia from "./receive-media";
 import RequestMedia from "./request-media";
 import SubscribeMedia from "./subscribe-media";
@@ -24,9 +24,9 @@ export default function Cards() {
           by word on scroll-in (see cards-heading.tsx). */}
       <CardsHeading />
 
-      {/* Client driver: blur-reveals each card title as the row scrolls in
-          (see cards-titles-reveal.tsx). Renders nothing. */}
-      <CardTitlesReveal />
+      {/* Client driver: blur-reveals each glass card (shell + title + media) as
+          the row scrolls in, left→right (see cards-reveal.tsx). Renders nothing. */}
+      <CardsReveal />
 
       <div
         data-cards-row
