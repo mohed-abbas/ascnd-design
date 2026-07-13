@@ -60,10 +60,10 @@ export default function Pricing() {
             className="left-0 top-[79px] backdrop-blur-[2.9px]"
             price={
               <p className="min-w-full">
-                <span className="text-[61px] leading-normal tracking-[-3.05px]">
+                <span className="text-[61px] leading-[normal] tracking-[-3.05px]">
                   $5,995
                 </span>
-                <span className="text-[20px] leading-normal"> /mo</span>
+                <span className="text-[20px] leading-[normal]"> /mo</span>
               </p>
             }
             priceNote="no contracts. billed monthly, pause whenever."
@@ -88,10 +88,11 @@ export default function Pricing() {
             cta="book a 15-min intro call"
             ctaVariant="clear"
             className="left-[591px] top-[169.54px] backdrop-blur-[9.6px]"
+            columnPadY="py-[48px]"
             price={
               <p className="text-center">
-                <span className="text-[20px] leading-normal">from </span>
-                <span className="text-[61px] leading-normal tracking-[-3.05px]">
+                <span className="text-[20px] leading-[normal]">from </span>
+                <span className="text-[61px] leading-[normal] tracking-[-3.05px]">
                   $10,995
                 </span>
               </p>
@@ -132,11 +133,17 @@ export default function Pricing() {
  * wrapper position/blur vary between the two plans, so those come in as props
  * while the column geometry (408px, centred, gap-30) lives here once.
  *
- * Card height is content-driven: the column's `py-[18px]` (+1.5px border =
- * 19.5px visible gap) replaces the Figma frames' fixed heights, which left the
- * two plans with unequal leftover space above/below the centred content
- * (11.5px vs 19.5px). The sprint card keeps its Figma 603px exactly; the
- * subscription card grows 626px → 642px to match the gap.
+ * Card height is content-driven: the column's `columnPadY` (+1.5px border)
+ * reproduces each Figma frame's breathing room above/below the centred column,
+ * replacing the frames' fixed heights. Figma centres each plan's column in a
+ * differently-sized card, so the padding differs per plan: subscription's 539px
+ * column in a 626px card = 44px (default `py-[42.5px]`, node 458:413); fixed
+ * sprint's shorter 504px column in a 603px card = 49.5px (`py-[48px]`, node
+ * 458:582), so the shorter card doesn't read as stubby next to the taller one.
+ *
+ * Text sits at `leading-[normal]` (CSS auto line-height — what Figma renders),
+ * NOT Tailwind's `leading-normal` (1.5): the 1.5 factor inflated every text
+ * block (61px price 74→91.5, 16px rows 20→24) and threw the vertical rhythm off.
  */
 function PlanCard({
   plan,
@@ -146,6 +153,7 @@ function PlanCard({
   cta,
   ctaVariant,
   className,
+  columnPadY = "py-[42.5px]",
   ...rest
 }: {
   plan: Plan;
@@ -155,18 +163,22 @@ function PlanCard({
   cta: string;
   ctaVariant: ButtonVariant;
   className?: string;
+  /** Column top/bottom padding — differs per plan to match each Figma card. */
+  columnPadY?: string;
 } & React.HTMLAttributes<HTMLDivElement>) {
   return (
     <div
       className={`absolute w-[555px] overflow-clip rounded-[20px] border-[1.5px] border-solid border-white/30 bg-gradient-to-b from-black/10 to-black/5 ${className ?? ""}`}
       {...rest}
     >
-      <div className="mx-auto flex w-[408px] flex-col items-center gap-[30px] py-[18px]">
-        <h3 className="font-instrument text-[31px] text-white">{plan.title}</h3>
+      <div className={`mx-auto flex w-[408px] flex-col items-center gap-[30px] ${columnPadY}`}>
+        <h3 className="font-instrument text-[31px] leading-[normal] text-white">
+          {plan.title}
+        </h3>
 
         <div className="flex w-[307px] flex-col items-center gap-[10px] text-center text-white">
           {price}
-          <p className={`text-[16px] font-light leading-normal ${priceNoteClassName ?? ""}`}>
+          <p className={`text-[16px] font-light leading-[normal] ${priceNoteClassName ?? ""}`}>
             {priceNote}
           </p>
         </div>
@@ -176,14 +188,14 @@ function PlanCard({
         <div aria-hidden className="h-px w-full bg-white/20" />
 
         <div className="flex w-[384px] flex-col items-start gap-[20px]">
-          <p className="w-full text-[16px] leading-normal text-white">
+          <p className="w-full text-[16px] leading-[normal] text-white">
             {plan.description}
           </p>
           <ul className="flex w-[276px] flex-col items-start gap-[15px]">
             {plan.features.map((feature) => (
               <li key={feature} className="flex items-center gap-[7px]">
                 <CheckMark className="size-[20px] shrink-0" />
-                <span className="whitespace-nowrap text-[16px] font-light leading-normal text-white">
+                <span className="whitespace-nowrap text-[16px] font-light leading-[normal] text-white">
                   {feature}
                 </span>
               </li>
