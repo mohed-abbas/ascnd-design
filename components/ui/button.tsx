@@ -110,9 +110,18 @@ export default function Button({
 
     gsap.set([glow, ring], { autoAlpha: 0 });
 
+    // The source of truth for "should the aura be showing". `:hover` is
+    // authoritative — the browser keeps it correct even when a fast cross drops
+    // the pointerleave event — and `:focus-visible` covers keyboard focus without
+    // latching the aura on after a mouse *click* (which focuses but isn't
+    // focus-visible). The handlers below reconcile against this, never against a
+    // private boolean that a missed event could desync.
+    const isActive = () =>
+      root.matches(":hover") || root.matches(":focus-visible");
+
     // Continuous aura orbit — rotate the conic gradient's angle around the rim by
     // driving --aura-angle 0→360 (inherited by both glow + ring off the root), so
-    // the colour travels around the perimeter. Paused until hover, so nothing
+    // the colour travels around the perimeter. Paused until active, so nothing
     // animates at rest (idles to zero). Rides GSAP's shared ticker (LenisProvider),
     // no private rAF. A proxy object + onUpdate keeps GSAP off CSS-var unit
     // guessing — it just writes the plain number each frame.
@@ -123,35 +132,69 @@ export default function Button({
       ease: "none",
       repeat: -1,
       paused: true,
-      onUpdate: () => root.style.setProperty("--aura-angle", String(angle.v)),
+      onUpdate: () => {
+        root.style.setProperty("--aura-angle", String(angle.v));
+        // Self-heal: if we believe we're active but the pointer/focus has really
+        // gone (a fast cross that dropped the pointerleave — the stuck-aura bug),
+        // retract now. This only runs while the sweep plays, so it costs nothing
+        // at rest and the effect still idles to zero.
+        if (shown && !isActive()) show(false);
+      },
     });
 
-    const enter = () => {
-      gsap.to(glow, { autoAlpha: GLOW_OPACITY, duration: 0.25, ease: "power2.out" });
-      gsap.to(ring, { autoAlpha: 1, duration: 0.25, ease: "power2.out" });
-      if (!reduce) sweep.play();
-    };
-    const leave = () => {
-      gsap.to([glow, ring], {
-        autoAlpha: 0,
-        duration: 0.2,
-        ease: "power2.in",
-        // pause the sweep once faded out so no per-frame work continues
-        onComplete: () => sweep.pause(),
-      });
+    // Single guarded entry point for the on/off transition. The guard stops a
+    // rapid enter→leave→enter… burst from stacking tweens, and `overwrite: true`
+    // guarantees the newer tween KILLS the older one — so on a fast cross the
+    // leave always wins the race against a still-running enter (the root cause of
+    // the aura latching on).
+    let shown = false;
+    function show(next: boolean) {
+      if (next === shown) return;
+      shown = next;
+      if (next) {
+        gsap.to(glow, {
+          autoAlpha: GLOW_OPACITY,
+          duration: 0.25,
+          ease: "power2.out",
+          overwrite: true,
+        });
+        gsap.to(ring, {
+          autoAlpha: 1,
+          duration: 0.25,
+          ease: "power2.out",
+          overwrite: true,
+        });
+        if (!reduce) sweep.play();
+      } else {
+        gsap.to([glow, ring], {
+          autoAlpha: 0,
+          duration: 0.2,
+          ease: "power2.in",
+          overwrite: true,
+          // pause the sweep once faded out so no per-frame work continues
+          onComplete: () => sweep.pause(),
+        });
+      }
+    }
+
+    // pointerenter/leave are more reliable than mouse* under fast movement; focus
+    // only counts when it's keyboard focus (:focus-visible), so a mouse click
+    // doesn't leave the aura latched on once the pointer has moved away.
+    const enter = () => show(true);
+    const leave = () => show(false);
+    const onFocus = () => {
+      if (root.matches(":focus-visible")) show(true);
     };
 
-    // mouseenter/leave = hover intent (not touch taps); focus/blur mirrors it for
-    // keyboard users.
-    root.addEventListener("mouseenter", enter);
-    root.addEventListener("mouseleave", leave);
-    root.addEventListener("focus", enter);
+    root.addEventListener("pointerenter", enter);
+    root.addEventListener("pointerleave", leave);
+    root.addEventListener("focus", onFocus);
     root.addEventListener("blur", leave);
 
     return () => {
-      root.removeEventListener("mouseenter", enter);
-      root.removeEventListener("mouseleave", leave);
-      root.removeEventListener("focus", enter);
+      root.removeEventListener("pointerenter", enter);
+      root.removeEventListener("pointerleave", leave);
+      root.removeEventListener("focus", onFocus);
       root.removeEventListener("blur", leave);
       sweep.kill();
       gsap.killTweensOf([glow, ring]);
