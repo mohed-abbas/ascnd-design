@@ -120,6 +120,23 @@ export default function Pricing() {
           </span>
           <span className="font-instrument">fly.</span>
         </p>
+
+        {/* Custom-scope catch-all — for work that fits neither plan (node
+            546:655). 615px, centred; "book a call" is the underlined link,
+            pointing at the same #book target the navbar CTA uses. */}
+        <p
+          data-pricing-foot
+          className="w-[615px] max-w-full text-center text-[20px] font-light leading-[normal] text-white"
+        >
+          got something that doesn&apos;t fit either of these? tell us what
+          you&apos;re building and we&apos;ll scope it to you.{" "}
+          <a
+            href="#book"
+            className="font-medium underline decoration-solid [text-underline-position:from-font] transition-opacity hover:opacity-80"
+          >
+            book a call
+          </a>
+        </p>
       </div>
 
       <PricingReveal />

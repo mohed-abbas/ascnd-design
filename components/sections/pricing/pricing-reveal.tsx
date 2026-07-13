@@ -48,7 +48,7 @@ export default function PricingReveal() {
     const cards = gsap.utils.toArray<HTMLElement>("[data-pricing-card]", section);
     const badge = section.querySelector<HTMLElement>("[data-pricing-badge]");
     const arrow = section.querySelector<HTMLElement>("[data-pricing-arrow]");
-    const foot = section.querySelector<HTMLElement>("[data-pricing-foot]");
+    const foot = gsap.utils.toArray<HTMLElement>("[data-pricing-foot]", section);
     if (!head || cards.length === 0) return;
 
     let ctx: gsap.Context | undefined;
@@ -57,7 +57,7 @@ export default function PricingReveal() {
 
     // Hide the animated pieces synchronously (before fonts resolve) so no
     // finished-state flash shows if the page loads already scrolled here.
-    const hidden = [head, sub, ...cards, badge, arrow, foot].filter(
+    const hidden = [head, sub, ...cards, badge, arrow, ...foot].filter(
       (el): el is HTMLElement => el != null,
     );
     gsap.set(hidden, { autoAlpha: 0 });
