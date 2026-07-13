@@ -96,15 +96,21 @@ export default function PricingReveal() {
           );
         }
 
+        // The two plan cards blur-rise in, same as the cards-section glass
+        // shells: each parks below + fogged (foreground blur) and de-frosts to
+        // crisp, subscription first then the offset sprint. clearProps drops the
+        // entrance filter so only each card's own backdrop-blur remains at rest.
         tl.fromTo(
           cards,
-          { y: 48, autoAlpha: 0 },
+          { y: 36, autoAlpha: 0, filter: "blur(10px)" },
           {
             y: 0,
             autoAlpha: 1,
-            duration: 0.9,
+            filter: "blur(0px)",
+            duration: 0.8,
             ease: "power3.out",
             stagger: 0.14,
+            clearProps: "filter",
           },
           0.35,
         )
