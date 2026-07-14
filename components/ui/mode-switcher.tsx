@@ -17,6 +17,11 @@ import { MoonIcon, SunIcon, SunriseIcon, SunsetIcon } from "./icons";
  * it. It's a sibling of the fixed sky layers in layout.tsx (never an ancestor),
  * so it doesn't trip the no-filter-ancestor rule that governs those layers.
  *
+ * Below md the vertical side-rail would run straight down the hero headline (the
+ * mobile content fills the full width — no side gutter for a rail to live in), so
+ * it reflows to a HORIZONTAL capsule pinned bottom-centre, clear of the content
+ * column. Desktop keeps the left vertical rail byte-for-byte (max-md: only).
+ *
  * Ordered by time of day (sunrise → day → sunset → night). Icons are decorative;
  * each button carries an aria-label + aria-pressed for the active state.
  */
@@ -40,7 +45,7 @@ export default function ModeSwitcher() {
     <div
       role="group"
       aria-label="Sky mode"
-      className="pointer-events-auto fixed left-[24px] top-1/2 z-[900] flex -translate-y-1/2 flex-col items-center gap-[4px] rounded-full border border-white/30 bg-white/10 p-[6px] shadow-[inset_0_0_28.3px_0_rgba(255,255,255,0.25)] backdrop-blur-[10px]"
+      className="pointer-events-auto fixed left-[24px] top-1/2 z-[900] flex -translate-y-1/2 flex-col items-center gap-[4px] rounded-full border border-white/30 bg-white/10 p-[6px] shadow-[inset_0_0_28.3px_0_rgba(255,255,255,0.25)] backdrop-blur-[10px] max-md:left-1/2 max-md:top-auto max-md:bottom-[24px] max-md:-translate-x-1/2 max-md:translate-y-0 max-md:flex-row"
     >
       {MODES.map(({ mode, label, Icon }) => {
         const isActive = mode === active;

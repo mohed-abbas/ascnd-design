@@ -38,6 +38,34 @@ const OPEN = { top: 0, right: 0, bottom: 0, left: 0, borderRadius: 34 };
 const DURATION = 0.65;
 const EASE = "power2.inOut";
 const REDUCE_MOTION = "(prefers-reduced-motion: reduce)";
+const MOBILE_MQ = "(max-width: 767px)";
+
+/**
+ * The closed pill footprint (inset rect) inside the nav frame, chosen per
+ * breakpoint. Desktop: the Figma 52×149 pill centred on the frame's right edge.
+ *
+ * Below md the frame is TOP-anchored (see the <nav> classes) and its width is
+ * capped by max-w, so the pill pins to the frame's TOP-right instead:
+ *   • top:0 / bottom:216 → the pill sits at the frame top, height 365−216 = 149.
+ *   • left is derived from the MEASURED frame width (offsetWidth − 74 = a 52px
+ *     pill at right:22). A fixed 332 assumes the 406-wide desktop frame and
+ *     collapses to a <0-width (invisible) glass under the mobile width cap — the
+ *     pre-existing reason the mobile pill showed only bare icons with no capsule.
+ * OPEN is the full frame at both breakpoints, so it needs no variant; the glass
+ * grows from the top-right pill down-and-left into a dropdown.
+ */
+function closedState(nav: HTMLElement) {
+  if (window.matchMedia(MOBILE_MQ).matches) {
+    return {
+      top: 0,
+      right: 22,
+      bottom: 216,
+      left: Math.max(0, nav.offsetWidth - 74),
+      borderRadius: 61,
+    };
+  }
+  return CLOSED;
+}
 
 /**
  * Floating glass navbar from the Figma "Startup" design.
@@ -92,7 +120,7 @@ export default function Navbar() {
     // No entrance on first mount (or reduced motion): snap to current state.
     if (!mounted.current || reduce) {
       mounted.current = true;
-      gsap.set(surface, open ? OPEN : CLOSED);
+      gsap.set(surface, open ? OPEN : closedState(nav));
       gsap.set(items, { autoAlpha: open ? 1 : 0, y: 0 });
       return;
     }
@@ -116,7 +144,7 @@ export default function Navbar() {
         duration: 0.22,
         ease: "power2.in",
         stagger: 0.04,
-      }).to(surface, { ...CLOSED, duration: DURATION, ease: EASE }, 0.14);
+      }).to(surface, { ...closedState(nav), duration: DURATION, ease: EASE }, 0.14);
     }
 
     tlRef.current = tl;
@@ -131,7 +159,13 @@ export default function Navbar() {
       aria-label="Primary"
       data-reveal-soft
       data-reveal-order={2}
-      className="font-product pointer-events-none fixed right-[33px] top-[62.4%] z-[999] h-[365px] w-[406px] max-w-[calc(100vw-3rem)] -translate-y-1/2"
+      // Below md the frame re-anchors from centre-right (top-62.4%, -translate-y-1/2)
+      // to the TOP-right corner (top-16, right-16, no y-translate): the standard
+      // mobile hamburger spot, clear of the hero content. h-365 is kept so the open
+      // panel's px-mapped content (menu/links/socials) stays in place; the pill pins
+      // to the frame top and the glass grows DOWN into a dropdown (see closedState).
+      // Desktop unchanged — max-md: only.
+      className="font-product pointer-events-none fixed right-[33px] top-[62.4%] z-[999] h-[365px] w-[406px] max-w-[calc(100vw-3rem)] -translate-y-1/2 max-md:right-[16px] max-md:top-[16px] max-md:translate-y-0"
     >
       {/* The one morphing glass surface. Its closed pill footprint is pinned
           here as the default/no-JS state; GSAP overrides the geometry inline on
@@ -205,7 +239,10 @@ export default function Navbar() {
         aria-expanded={open}
         aria-controls={panelId}
         aria-label={open ? "Close menu" : "Open menu"}
-        className="pointer-events-auto absolute right-[22px] top-1/2 z-10 flex h-[149px] w-[52px] -translate-y-1/2 flex-col items-center justify-between pb-[22px] pt-[18px] text-white"
+        // Centred on the frame's right edge on desktop; below md it pins to the
+        // frame TOP (top-0) to sit in the top-right corner, matching the pill glass
+        // (closedState top:0). max-md: only → desktop unchanged.
+        className="pointer-events-auto absolute right-[22px] top-1/2 z-10 flex h-[149px] w-[52px] -translate-y-1/2 flex-col items-center justify-between pb-[22px] pt-[18px] text-white max-md:top-0 max-md:translate-y-0"
       >
         <Logo className="size-[30px]" />
         {open ? (
