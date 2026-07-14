@@ -36,12 +36,14 @@ export default function Footer() {
         data-footer-scene
         // The scene box is aspect-locked, so its height scales with viewport
         // WIDTH — on a 2K/ultrawide monitor the 1243-tall design proportion
-        // balloons (2105px at 2560w), and most of that extra is empty sky
-        // ABOVE the peaks that you scroll through to reach the mountains. On
-        // very wide screens use a shorter proportion (like the mobile crop) so
-        // the sky headroom is trimmed while the wordmark still clears the peaks
-        // (object-bottom keeps the mountains + wordmark, crops only top sky).
-        className="relative w-full aspect-[1512/1243] max-md:aspect-[1512/900] min-[1920px]:aspect-[1512/1040]"
+        // balloons (2105px at 2560w), and most of that extra is empty sky ABOVE
+        // the peaks that you scroll through to reach the mountains. Cap the box
+        // height on large screens so it's DECOUPLED from width: the WebGL scene
+        // sizes to the box and self-composes (mountains anchored to the bottom,
+        // wordmark at a fixed fraction of the box height — footer-glass-scene),
+        // so a shorter box just trims the top sky while the wordmark still
+        // clears the peaks.
+        className="relative w-full aspect-[1512/1243] max-md:aspect-[1512/900] min-[1920px]:max-h-[900px]"
       >
         <FooterScene />
       </div>
