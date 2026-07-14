@@ -46,9 +46,40 @@ html[data-mode="night"] {
   --grain-opacity: 0.05;
 }
 
+/* ─── Fluid type scale (mobile responsive system) ──────────────────────────
+   Source vars for the shared type tokens. The DESKTOP value is the exact design
+   pixel size, so ≥768px renders byte-for-byte unchanged; a single mobile media
+   query (matching Tailwind's `md` boundary, width < 768px) swaps in the fluid
+   clamp() values. Mapped into Tailwind text-* utilities in @theme inline below,
+   so `text-display` etc. emit `font-size: var(--fs-…)` and respond to this
+   override at runtime. Tracking is set in `em` at the call site (-0.03em headings
+   / 0.02em body) so it scales with the token — see docs/responsive-system.md §3. */
+:root {
+  --fs-display: 49px; /* section headings (9 sections share this) */
+  --fs-hero: 56px; /* hero H1 / pills lead */
+  --fs-body-lg: 20px; /* pricing / lead paragraphs */
+  --fs-body: 16px; /* body copy */
+}
+
+@media (width < 768px) {
+  :root {
+    --fs-display: clamp(28px, 7.5vw, 40px);
+    --fs-hero: clamp(32px, 9vw, 48px);
+    --fs-body-lg: clamp(16px, 4.4vw, 20px);
+    --fs-body: clamp(14px, 4vw, 16px);
+  }
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  /* Fluid type tokens → text-display / text-hero / text-body-lg / text-body.
+     Reference the --fs-* source vars above so the value tracks the mobile media
+     query (docs/responsive-system.md §3). */
+  --text-display: var(--fs-display);
+  --text-hero: var(--fs-hero);
+  --text-body-lg: var(--fs-body-lg);
+  --text-body: var(--fs-body);
   /* Product Sans (proprietary) is the primary typeface, self-hosted via
      next/font/local in layout.tsx (--font-product-sans). It's the default sans
      for the whole site, so font-sans and the base body font both resolve to it.

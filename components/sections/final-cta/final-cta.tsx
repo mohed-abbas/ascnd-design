@@ -38,28 +38,37 @@ export default function FinalCta() {
       className="relative flex min-h-dvh w-full items-center justify-center overflow-hidden py-[20dvh]"
     >
       {/* Content block, flow-centred so a viewport shorter than the block grows
-          the section (page scrolls) instead of clipping it. */}
-      <div className="flex flex-col items-center gap-[32px]">
+          the section (page scrolls) instead of clipping it. Below md it goes
+          full-width with a 24px gutter so the heading can wrap and the CTAs can
+          stack (docs/responsive-system.md §5, Archetype A). */}
+      <div className="flex flex-col items-center gap-[32px] max-md:w-full max-md:gap-[24px] max-md:px-6">
         {/* Word-by-word blur reveal on the heading (see final-cta-reveal.tsx). */}
         <FinalCtaReveal />
 
         {/* Heading (504:501) — Product Sans Light with an Instrument Serif
-            "ground". */}
+            "ground". Fluid `text-display` token + em tracking (−0.03em == the
+            design's −1.47px @ 49px, unchanged on desktop). Single-lined on
+            desktop; wraps within the gutter below md. */}
         <h2
           data-final-cta-head
-          className="whitespace-nowrap text-center text-[49px] leading-[1.1] tracking-[-1.47px] text-white"
+          className="whitespace-nowrap text-center text-display leading-[1.1] tracking-[-0.03em] text-white max-md:w-full max-md:whitespace-normal"
         >
           <span className="font-light">let&rsquo;s get you off the </span>
           <span className="font-instrument">ground</span>
         </h2>
 
-        {/* Button row (510:520) — the site's shared Button, two variants. */}
+        {/* Button row (510:520) — the site's shared Button, two variants. Stacks
+            full-width (capped) below md for thumb-friendly tap targets. */}
         <div
           data-final-cta-actions
-          className="flex items-center gap-[16px]"
+          className="flex items-center gap-[16px] max-md:w-full max-md:max-w-[360px] max-md:flex-col max-md:gap-[12px]"
         >
-          <Button variant="solid">choose a plan</Button>
-          <Button variant="clear">book a 15-min intro call</Button>
+          <Button variant="solid" className="max-md:w-full">
+            choose a plan
+          </Button>
+          <Button variant="clear" className="max-md:w-full">
+            book a 15-min intro call
+          </Button>
         </div>
       </div>
     </section>
