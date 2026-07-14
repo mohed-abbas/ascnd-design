@@ -108,7 +108,12 @@ export default function WhyStay() {
           unbent. */}
       <div
         data-whystay-stage
-        className="isolate absolute left-1/2 top-1/2 h-[434px] w-[876px] max-w-full -translate-x-1/2 -translate-y-1/2"
+        // Below md the whole 876×434 design block is scaled down as ONE unit
+        // (max-w-none keeps its design width; scale-[0.4] fits it to the phone),
+        // so the reel phrases, REEL_STEP, --reel-y translation, glass pill and
+        // heading all shrink together — the exact composition, just smaller, with
+        // no change to the (tightly coupled) reel geometry or the pin driver.
+        className="isolate absolute left-1/2 top-1/2 h-[434px] w-[876px] max-w-full -translate-x-1/2 -translate-y-1/2 max-md:max-w-none max-md:scale-[0.4]"
       >
         {/* Heading (Figma 302:1460) — top of the block, centred. */}
         <h2 className="absolute left-1/2 top-0 -translate-x-1/2 whitespace-nowrap text-center font-product text-[49px] font-light leading-[1.1] tracking-[-1.47px] text-white">
