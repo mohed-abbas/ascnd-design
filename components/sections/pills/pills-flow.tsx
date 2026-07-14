@@ -82,7 +82,9 @@ export default function PillsFlow() {
       const anims: (gsap.core.Tween | gsap.core.Timeline)[] = [];
 
       pills.forEach((el, i) => {
-        const top = parseFloat(el.style.top) || 0;
+        // Base top now comes from a CSS var (--dt/--mt, switched by media query
+        // in pills.tsx), not an inline style, so read the resolved value.
+        const top = parseFloat(getComputedStyle(el).top) || 0;
 
         // 1) Upward drift. The modifier wraps `y` so the pill's absolute position
         // (style `top` + y) cycles within [-CLEAR, BOX_H + CLEAR): rising past the
