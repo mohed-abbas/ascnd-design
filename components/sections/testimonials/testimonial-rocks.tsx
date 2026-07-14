@@ -211,10 +211,14 @@ export default function TestimonialRocks() {
         : UNITS.map((u, i) => (
             <div
               key={i}
-              // Same desktop-centre → mobile-corner switch as the ring in
-              // testimonials.tsx (shared --mx/--my/--ms), scaled about top-left =
-              // the rock's centre, so rock and ring stay concentric below md.
-              className="absolute left-[var(--x)] top-[var(--y)] max-md:left-[var(--mx)] max-md:top-[var(--my)] max-md:origin-top-left max-md:[transform:scale(var(--ms))]"
+              data-tm-fly
+              // Desktop centre (--x/--y) → mobile corner (--mx/--my). On mobile
+              // this OUTER level carries only the position + the reveal FLY-IN
+              // (GSAP x/y, testimonials-drift): keeping the fly on the unscaled
+              // wrapper lets its off-screen offset stay plain px. Scale lives on
+              // the middle level, spin on the inner — three independent transforms,
+              // none fighting.
+              className="absolute left-[var(--x)] top-[var(--y)] max-md:left-[var(--mx)] max-md:top-[var(--my)]"
               style={
                 {
                   "--x": `${u.cx}px`,
@@ -225,22 +229,26 @@ export default function TestimonialRocks() {
                 } as CSSProperties
               }
             >
-              <div
-                data-tm-rock
-                className="relative"
-                style={{
-                  width: u.rock.w * ROCK_SCALE,
-                  height: u.rock.h * ROCK_SCALE,
-                  transform: `translate(-50%, -50%) rotate(${u.rock.rotate}deg)`,
-                }}
-              >
-                <Image
-                  src="/rocks/testimonial-rock.png"
-                  alt=""
-                  fill
-                  sizes={`${Math.ceil(u.rock.w * ROCK_SCALE)}px`}
-                  className="select-none object-cover"
-                />
+              {/* Mobile scale, about the shared centre (origin-top-left = the
+                  anchor point), so rock + ring stay concentric below md. */}
+              <div className="max-md:origin-top-left max-md:[transform:scale(var(--ms))]">
+                <div
+                  data-tm-rock
+                  className="relative"
+                  style={{
+                    width: u.rock.w * ROCK_SCALE,
+                    height: u.rock.h * ROCK_SCALE,
+                    transform: `translate(-50%, -50%) rotate(${u.rock.rotate}deg)`,
+                  }}
+                >
+                  <Image
+                    src="/rocks/testimonial-rock.png"
+                    alt=""
+                    fill
+                    sizes={`${Math.ceil(u.rock.w * ROCK_SCALE)}px`}
+                    className="select-none object-cover"
+                  />
+                </div>
               </div>
             </div>
           ))}
