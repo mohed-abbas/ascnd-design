@@ -48,7 +48,7 @@ export default function Faq() {
     >
       {/* Content block (526:412), flow-centred so a viewport shorter than the
           stack grows the section (page scrolls) instead of clipping it. */}
-      <div className="flex w-[1128px] flex-col items-center gap-[52px]">
+      <div className="flex w-[1128px] flex-col items-center gap-[52px] max-md:w-full max-md:gap-[32px] max-md:px-6">
         {/* Word-by-word blur reveal on the heading (see faq-reveal.tsx). */}
         <FaqReveal />
 
@@ -56,7 +56,7 @@ export default function Faq() {
             "straight". */}
         <h2
           data-faq-head
-          className="w-full text-center text-[49px] leading-[1.1] tracking-[-1.47px] text-white"
+          className="w-full text-center text-display leading-[1.1] tracking-[-0.03em] text-white"
         >
           <span className="font-light">questions, answered </span>
           <span className="font-instrument">straight</span>
@@ -80,9 +80,9 @@ export default function Faq() {
                   aria-expanded={isOpen}
                   aria-controls={panelId}
                   onClick={() => setOpen(isOpen ? null : i)}
-                  className="flex h-[61px] w-full items-center justify-between gap-[16px] pl-[31.5px] pr-[20.5px] text-left"
+                  className="flex h-[61px] w-full items-center justify-between gap-[16px] pl-[31.5px] pr-[20.5px] text-left max-md:h-auto max-md:min-h-[56px] max-md:gap-[12px] max-md:py-[14px] max-md:pl-[20px] max-md:pr-[16px]"
                 >
-                  <span className="text-[20px] font-light leading-[1.1] tracking-[-0.6px] text-white">
+                  <span className="text-body-lg font-light leading-[1.1] tracking-[-0.03em] text-white">
                     {faq.question}
                   </span>
                   {/* Two-tone toggle (526:417): rotates 45° into an "×". */}
@@ -104,7 +104,7 @@ export default function Faq() {
                   style={{ gridTemplateRows: isOpen ? "1fr" : "0fr" }}
                 >
                   <div className="overflow-hidden">
-                    <p className="pb-[24px] pl-[31.5px] pr-[64px] text-[16px] leading-[1.55] tracking-[-0.2px] text-white/70">
+                    <p className="pb-[24px] pl-[31.5px] pr-[64px] text-body leading-[1.55] tracking-[-0.2px] text-white/70 max-md:pb-[20px] max-md:pl-[20px] max-md:pr-[20px]">
                       {faq.answer}
                     </p>
                   </div>
