@@ -90,8 +90,14 @@ export default function Hero() {
         <DesignShots />
       </div>
 
-      {/* Hero Text (node 103:22): centered, frame top y=515 of the 982-tall hero. */}
-      <div className="absolute left-1/2 top-[52.4%] w-[775px] max-w-[calc(100vw-3rem)] -translate-x-1/2">
+      {/* Hero Text (node 103:22): centered, frame top y=515 of the 982-tall hero.
+          Below md it re-anchors from the BOTTOM (top-auto + bottom-[180px]) instead
+          of hanging from 52.4%: the logos row is bottom-anchored too (bottom-[44px]),
+          so pinning the text block a fixed distance above the hero floor keeps a
+          constant CTA→"trusted by founders" gap on every phone height (the hero
+          floors at 850px), regardless of how many lines the headline wraps to.
+          Desktop keeps top-[52.4%] unchanged. */}
+      <div className="absolute left-1/2 top-[52.4%] w-[775px] max-w-[calc(100vw-3rem)] -translate-x-1/2 max-md:top-auto max-md:bottom-[180px]">
         <HeroText />
       </div>
     </section>

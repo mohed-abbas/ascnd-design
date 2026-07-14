@@ -12,7 +12,7 @@ export default function HeroText() {
       <h1
         data-reveal-split
         data-reveal-order={3}
-        className="w-[775px] max-w-full text-[56px] font-light leading-[1.1] tracking-[-1.68px]"
+        className="w-[775px] max-w-full text-hero font-light leading-[1.1] tracking-[-0.03em]"
       >
         your design and front-end team, without the{" "}
         <span className="font-instrument tracking-[-0.5px]">hiring</span>
@@ -22,7 +22,7 @@ export default function HeroText() {
       <p
         data-reveal-words
         data-reveal-order={4}
-        className="w-[567px] max-w-full text-[16px] leading-normal tracking-[0.32px]"
+        className="w-[567px] max-w-full text-body leading-normal tracking-[0.02em]"
       >
         subscribe and request unlimited brand, web, and product design.
         delivered in days, shipped as real code.
@@ -32,14 +32,22 @@ export default function HeroText() {
           armed only while hidden (see globals.css) and lifted the moment the
           roll-up finishes, so a permanent overflow never shaves the buttons'
           hover scale / focus ring. */}
-      <div className="flex items-center gap-[13px]">
-        <span data-reveal-cta data-reveal-order={5} className="inline-flex">
-          <Button variant="solid" href="#plans">
+      <div className="flex items-center gap-[13px] max-md:w-full max-md:flex-col max-md:gap-[12px]">
+        <span
+          data-reveal-cta
+          data-reveal-order={5}
+          className="inline-flex max-md:w-full"
+        >
+          <Button variant="solid" href="#plans" className="max-md:w-full">
             see plans
           </Button>
         </span>
-        <span data-reveal-cta data-reveal-order={5} className="inline-flex">
-          <Button variant="clear" href="#book">
+        <span
+          data-reveal-cta
+          data-reveal-order={5}
+          className="inline-flex max-md:w-full"
+        >
+          <Button variant="clear" href="#book" className="max-md:w-full">
             book a 15-min intro call
           </Button>
         </span>
