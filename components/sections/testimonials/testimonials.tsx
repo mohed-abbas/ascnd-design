@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import TestimonialRocks from "./testimonial-rocks";
 import TestimonialsDrift from "./testimonials-drift";
 import TestimonialsQuoteReveal from "./testimonials-quote-reveal";
@@ -34,8 +35,11 @@ export default function Testimonials() {
       data-testimonials
       className="relative flex min-h-dvh w-full items-center justify-center overflow-hidden"
     >
-      {/* Centre-anchored design block = the Figma TestimonialRocks group. */}
-      <div className="relative h-[595.775px] w-[1239.771px]">
+      {/* Centre-anchored design block = the Figma TestimonialRocks group. Below
+          md it fills the section (absolute inset-0) so the four rocks re-anchor
+          to the REAL viewport corners around the reflowed quote, instead of the
+          1239px group's off-screen corners. */}
+      <div className="relative h-[595.775px] w-[1239.771px] max-md:absolute max-md:inset-0 max-md:h-auto max-md:w-auto">
         {/* Rocks — 3D GLB canvas (capable devices) or flat PNG fallback.
             Rendered FIRST so the rings below paint on top of it. */}
         <TestimonialRocks />
@@ -48,8 +52,22 @@ export default function Testimonials() {
             key={i}
             data-tm-unit
             aria-hidden
-            className="pointer-events-none absolute"
-            style={{ left: u.cx, top: u.cy }}
+            // Desktop centre (--x/--y) → mobile corner (--mx/--my), switched by
+            // the max-md variants; the mobile scale rides this wrapper (about its
+            // top-left = the shared centre), so the ring's revolve/reveal scale on
+            // [data-tm-ring] inside stays free (same wrapper-vs-inner split cards
+            // uses). The rock in testimonial-rocks.tsx reads the same trio, so
+            // rock + ring stay concentric.
+            className="pointer-events-none absolute left-[var(--x)] top-[var(--y)] max-md:left-[var(--mx)] max-md:top-[var(--my)] max-md:origin-top-left max-md:[transform:scale(var(--ms))]"
+            style={
+              {
+                "--x": `${u.cx}px`,
+                "--y": `${u.cy}px`,
+                "--mx": u.mx,
+                "--my": u.my,
+                "--ms": u.ms,
+              } as CSSProperties
+            }
           >
             <div data-tm-ring className="absolute left-0 top-0 h-0 w-0">
               <span
@@ -76,11 +94,13 @@ export default function Testimonials() {
         ))}
 
         {/* The pull-quote — centred in the group (box left 120, w 1000). Same
-            49px mixed-font heading treatment as the sibling sections. */}
-        <div className="absolute left-[120px] top-[244px] w-[1000px] text-center">
+            49px mixed-font heading treatment as the sibling sections; below md it
+            decouples from the group and centres in the viewport at the fluid
+            token size (the group scale would shrink it to ~14px — unreadable). */}
+        <div className="absolute left-[120px] top-[244px] w-[1000px] text-center max-md:left-0 max-md:right-0 max-md:top-1/2 max-md:w-auto max-md:-translate-y-1/2 max-md:px-6">
           <p
             data-testimonials-quote
-            className="relative z-10 text-[49px] font-light leading-[1.1] tracking-[-1.47px] text-white [word-break:break-word]"
+            className="relative z-10 text-display font-light leading-[1.1] tracking-[-0.03em] text-white [word-break:break-word]"
           >
             {quote.map((seg, i) => (
               <span key={i} className={seg.serif ? "font-instrument" : undefined}>

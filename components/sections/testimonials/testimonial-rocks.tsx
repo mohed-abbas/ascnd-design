@@ -2,7 +2,13 @@
 
 import dynamic from "next/dynamic";
 import Image from "next/image";
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type CSSProperties,
+} from "react";
 import ReactDOM from "react-dom";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
@@ -205,8 +211,19 @@ export default function TestimonialRocks() {
         : UNITS.map((u, i) => (
             <div
               key={i}
-              className="absolute"
-              style={{ left: u.cx, top: u.cy }}
+              // Same desktop-centre → mobile-corner switch as the ring in
+              // testimonials.tsx (shared --mx/--my/--ms), scaled about top-left =
+              // the rock's centre, so rock and ring stay concentric below md.
+              className="absolute left-[var(--x)] top-[var(--y)] max-md:left-[var(--mx)] max-md:top-[var(--my)] max-md:origin-top-left max-md:[transform:scale(var(--ms))]"
+              style={
+                {
+                  "--x": `${u.cx}px`,
+                  "--y": `${u.cy}px`,
+                  "--mx": u.mx,
+                  "--my": u.my,
+                  "--ms": u.ms,
+                } as CSSProperties
+              }
             >
               <div
                 className="relative"

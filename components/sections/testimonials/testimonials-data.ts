@@ -57,6 +57,18 @@ export type Unit = {
   /** Shared centre of the rock + ring, in the group's px space. */
   cx: number;
   cy: number;
+  /**
+   * Below md the 1239px group is ~3× the phone width, so the four rocks are
+   * re-anchored to frame the (independently reflowed) portrait quote: `mx`/`my`
+   * are the unit's mobile centre as CSS lengths relative to the section-filling
+   * block (percent → robust across phone sizes), and `ms` scales the whole unit
+   * (rock + ring) down so it reads as a corner accent. Switched in under md via
+   * CSS vars (testimonials.tsx / testimonial-rocks.tsx), the pills-data pattern —
+   * both the rock and its ring read the same trio so they stay concentric.
+   */
+  mx: string;
+  my: string;
+  ms: number;
   /** Rock's on-screen footprint (px) — sized to overflow the ring. */
   size: number;
   rock: { w: number; h: number; rotate: number };
@@ -69,6 +81,9 @@ export const UNITS: Unit[] = [
   {
     cx: 152.999,
     cy: 101,
+    mx: "18%",
+    my: "18%",
+    ms: 0.5,
     size: 200,
     rock: { w: 136.844, h: 168.309, rotate: 60 },
     ring: { r: 73.5, stroke: 1 },
@@ -77,6 +92,9 @@ export const UNITS: Unit[] = [
   {
     cx: 1133.8,
     cy: 487.555,
+    mx: "82%",
+    my: "82%",
+    ms: 0.5,
     size: 200,
     rock: { w: 136.844, h: 168.309, rotate: 135 },
     ring: { r: 73.5, stroke: 1 },
@@ -85,6 +103,9 @@ export const UNITS: Unit[] = [
   {
     cx: 1179.72,
     cy: 54.7432,
+    mx: "84%",
+    my: "14%",
+    ms: 0.8,
     size: 90,
     rock: { w: 59.472, h: 73.147, rotate: 135 },
     ring: { r: 31.9429, stroke: 0.434597 },
@@ -93,6 +114,9 @@ export const UNITS: Unit[] = [
   {
     cx: 62.198,
     cy: 487.926,
+    mx: "16%",
+    my: "86%",
+    ms: 0.8,
     size: 116,
     rock: { w: 77.517, h: 95.341, rotate: 135 },
     ring: { r: 41.6349, stroke: 0.566462 },
