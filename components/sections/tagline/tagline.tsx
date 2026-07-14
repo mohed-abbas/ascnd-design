@@ -32,10 +32,10 @@ import TaglineReveal from "./tagline-reveal";
 // three — "look" / "like you" / "raised it." Same bold, left-aligned, vw-sized
 // look; the reveal still sees exactly two [data-trise] lines, so its per-line
 // blur cascade and per-character roll-up are unchanged on both viewports.
-const LINES = [
+const LINES: readonly { text: string; breakBefore?: number }[] = [
   { text: "look like you", breakBefore: 5 }, // break before the "l" of "like"
   { text: "raised it." },
-] as const;
+];
 
 export default function Tagline() {
   // A single sequence index across both lines so the per-character roll-up
