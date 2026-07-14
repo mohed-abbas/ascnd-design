@@ -182,24 +182,22 @@ html[data-mode="night"] {
    untouched. */
 @media (width < 520px) {
   [data-shots-wheel] {
-    -webkit-mask-image: linear-gradient(
-      to right,
-      transparent 0%,
-      transparent 14%,
-      #000 33%,
-      #000 67%,
-      transparent 86%,
-      transparent 100%
-    );
-    mask-image: linear-gradient(
-      to right,
-      transparent 0%,
-      transparent 14%,
-      #000 33%,
-      #000 67%,
-      transparent 86%,
-      transparent 100%
-    );
+    /* TWO dissolves, intersected (mask-composite) → a pixel shows only where BOTH
+       are opaque, i.e. the lower-centre. The fan rises toward the top: the SMALL
+       tiles enter at the top-left, exit top-right, and ride the hidden return leg
+       across the TOP — so a side-only fade left them ghosting in/out up there. The
+       second gradient (to bottom) fades that whole upper band, so the small tiles
+       are gone before they surface, while the big centre tile (low-centre) stays
+       crisp. Both are wheel-relative % (no vw — see the scale note); same intersect
+       trick as .pill-field-mask above. */
+    -webkit-mask-image:
+      linear-gradient(to right, transparent 0%, transparent 14%, #000 33%, #000 67%, transparent 86%, transparent 100%),
+      linear-gradient(to bottom, transparent 0%, transparent 10%, #000 34%, #000 100%); /* side ∩ top */
+    -webkit-mask-composite: source-in;
+    mask-image:
+      linear-gradient(to right, transparent 0%, transparent 14%, #000 33%, #000 67%, transparent 86%, transparent 100%),
+      linear-gradient(to bottom, transparent 0%, transparent 10%, #000 34%, #000 100%);
+    mask-composite: intersect;
   }
 }
 
