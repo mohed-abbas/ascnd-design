@@ -168,6 +168,46 @@ html[data-mode="night"] {
   }
 }
 
+/* Conveyor edge dissolve (clip regime only). Below ~521px the 0.5-scaled wheel is
+   wider than the screen, so its outer tiles fall off the edges. A phone can't show
+   the full 7-tile fan big AND keep every tile clear of the edges — clipping IS a
+   tile crossing the edge. So instead of a hard cut (or a thin soft fade, which
+   still leaves the edge tile translucent-but-visible) we dissolve a WIDE band at
+   each screen edge: the centre stays crisp while a tile entering/leaving fades all
+   the way to zero BEFORE it reaches the edge, so it's never seen clipped — it melts
+   "behind the scenes", restoring the conveyor's seamless illusion. Net effect on a
+   narrow phone: the big centre tile is in focus, the neighbours dissolve out toward
+   the sides. Wider phones (still < 521) keep more tiles crisp as the fan gets
+   relatively narrower.
+
+   The mask paints in the wheel's LOCAL 1029px box and is then scaled ×0.5 with the
+   element, so a local length L shows as 0.5·L on screen. A local point x maps to
+   screen_x = 100vw/2 + 0.5·(x − 514.5) (514.5 = half the 1029 box; centred).
+   Inverting that, the screen edges (0, 100vw) sit at local 514.5px∓100vw, and a
+   100px on-screen fade spans 200px local — hence the 100vw terms, which pin the
+   dissolve to the real screen edges at any width. Only active where the wheel
+   actually clips (width < 521px ≈ 1042·0.5); wider phones fit, so no fade. Desktop
+   untouched. */
+@media (width < 521px) {
+  [data-shots-wheel] {
+    /* wide dissolve → outer tiles fully gone before the screen edge */
+    -webkit-mask-image: linear-gradient(
+      to right,
+      transparent calc(514.5px - 100vw),
+      #000 calc(714.5px - 100vw),
+      #000 calc(100vw + 314.5px),
+      transparent calc(100vw + 514.5px)
+    );
+    mask-image: linear-gradient(
+      to right,
+      transparent calc(514.5px - 100vw),
+      #000 calc(714.5px - 100vw),
+      #000 calc(100vw + 314.5px),
+      transparent calc(100vw + 514.5px)
+    );
+  }
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
