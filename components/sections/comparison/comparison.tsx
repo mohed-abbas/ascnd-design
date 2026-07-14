@@ -81,7 +81,10 @@ export default function Comparison() {
             must bloom past the top/bottom edges (a clip would chop it into a
             broken loop). The grid fills the card edge-to-edge with no content in
             the rounded corners, so nothing else needs clipping. */}
-        <div className="absolute left-0 top-[211px] h-[601px] w-[1360px] rounded-[20px] border-[1.5px] border-solid border-white/30 bg-gradient-to-b from-black/10 to-black/5 backdrop-blur-[2px]">
+        <div
+          data-comparison-card
+          className="absolute left-0 top-[211px] h-[601px] w-[1360px] rounded-[20px] border-[1.5px] border-solid border-white/30 bg-gradient-to-b from-black/10 to-black/5 backdrop-blur-[2px]"
+        >
           {/* Featured-column highlight (469:554): a brighter panel behind the
               grid over the "ascnd" track, at full card height, wearing the
               siri-style rainbow aura (same effect as the CTA button's hover
