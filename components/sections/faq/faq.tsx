@@ -44,7 +44,12 @@ export default function Faq() {
   return (
     <section
       data-faq
-      className="relative flex min-h-dvh w-full items-center justify-center overflow-hidden py-[20dvh]"
+      // Desktop content-driven (no min-h-dvh) with 25dvh viewport-proportional
+      // padding — matches the full-screen tagline/cards breathing room, so the
+      // rhythm scales with the viewport but stays consistent across sections
+      // (see comparison.tsx for the rationale). Mobile keeps its full-height
+      // layout + 20dvh padding, untouched.
+      className="relative flex max-md:min-h-dvh w-full items-center justify-center overflow-hidden py-[25dvh] max-md:py-[20dvh]"
     >
       {/* Content block (526:412), flow-centred so a viewport shorter than the
           stack grows the section (page scrolls) instead of clipping it. */}

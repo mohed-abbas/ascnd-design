@@ -162,19 +162,21 @@ export const STATIC_CLOUDS: StaticCloudSpec[] = [
   { key: "pricing-tr", sprite: "puff-small.webp", layer: "sky", trigger: "[data-pricing]", x: 86, y: 30, width: 46, at: 0.35, travel: 130 },
   { key: "pricing-bl", sprite: "cards-bank.webp", layer: "sky", trigger: "[data-pricing]", x: 12, y: 66, width: 58, at: 0.7, travel: 130 },
 
-  // ——— Final CTA (diagonal corner frame, like desktop) ———
-  { key: "finalcta-tl", sprite: "hero-puff.webp", layer: "sky", trigger: "[data-final-cta]", x: 12, y: 16, width: 54 },
-  { key: "finalcta-br", sprite: "cta-bank.webp", layer: "sky", trigger: "[data-final-cta]", x: 88, y: 82, width: 60 },
+  // ——— Final CTA → footer transition ———
+  // Kept DELIBERATELY sparse: the CTA and footer are adjacent and the sky band
+  // between the buttons and the mountains is short, so extra clouds there read
+  // as clutter. One low CTA cloud hugging the fold into the footer, plus the
+  // footer's own two mountain clouds — nothing floating in the middle.
+  { key: "finalcta-br", sprite: "cta-bank.webp", layer: "sky", trigger: "[data-final-cta]", x: 85, y: 90, width: 56 },
 
   // ——— Footer (mountain range) ———
   // The footer is the LAST section and never scroll-centres — the page ends at
-  // ~0.2 crossing progress (d ≈ -0.57), so the cloud only ever climbs ~0.57 ×
-  // travel of its way back up to rest. Same fix as the desktop footer clouds:
-  // the `y` rest is set HIGH above the visible target to compensate, and
-  // travel stays big enough to satisfy the parking constraint. Visible spot at
-  // page end ≈ y + 0.57 × travel.
+  // ~0.2 crossing progress (d ≈ -0.6), so the cloud only ever climbs ~0.6 ×
+  // travel of its way back up to rest. Rest `y` is set so the page-end resting
+  // spot (≈ y + 0.6 × travel vh) sits low, near the ridgeline, rather than
+  // floating mid-gap; travel stays big enough to satisfy the parking constraint.
   // Bank BEHIND the peaks (sky layer) — only its top wisps crest the ridge.
-  { key: "footer-behind", sprite: "footer-bank.webp", layer: "sky", trigger: "[data-footer]", x: 25, y: 8, width: 82, travel: 105 },
+  { key: "footer-behind", sprite: "footer-bank.webp", layer: "sky", trigger: "[data-footer]", x: 22, y: 12, width: 82, travel: 125 },
   // Thin wisp IN FRONT of the peaks (front layer), low on the right.
-  { key: "footer-wisp", sprite: "footer-wisp.webp", layer: "front", trigger: "[data-footer]", x: 80, y: 57, width: 58, travel: 50 },
+  { key: "footer-wisp", sprite: "footer-wisp.webp", layer: "front", trigger: "[data-footer]", x: 82, y: 30, width: 54, travel: 95 },
 ];

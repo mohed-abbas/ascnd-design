@@ -35,7 +35,13 @@ export default function FinalCta() {
   return (
     <section
       data-final-cta
-      className="relative flex min-h-dvh w-full items-center justify-center overflow-hidden py-[20dvh]"
+      // No min-h-dvh. ASYMMETRIC padding: a spacious 25dvh TOP matches the
+      // viewport-scaling breathing room of the other sections (consistent
+      // rhythm coming out of the FAQ), while the BOTTOM stays tight (clamped
+      // ~128px) so the buttons sit close to the footer — the footer adds its own
+      // sky headroom, and a 25dvh bottom here would re-open the dead gap before
+      // it. Mobile keeps its own symmetric padding.
+      className="relative flex w-full items-center justify-center overflow-hidden pt-[25dvh] pb-[clamp(96px,13dvh,136px)] max-md:pt-[9dvh] max-md:pb-[9dvh]"
     >
       {/* Content block, flow-centred so a viewport shorter than the block grows
           the section (page scrolls) instead of clipping it. Below md it goes

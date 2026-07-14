@@ -31,14 +31,22 @@ export default function WorkingWith() {
   return (
     <section
       data-working-with
-      className="relative min-h-dvh w-full overflow-hidden"
+      // Content-driven (no min-h-dvh): this is the sparsest section (~213px of
+      // text). 25dvh viewport-proportional padding gives it the same breathing
+      // room as the full-screen tagline/cards sections, scaling with the
+      // viewport but staying CONSISTENT with the other sections instead of the
+      // near-double air a fixed full-viewport section gave this sparse content
+      // (see comparison.tsx). Mobile keeps its full-height layout.
+      className="relative flex max-md:min-h-dvh w-full items-center justify-center overflow-hidden py-[25dvh] max-md:py-[12dvh]"
     >
       {/* Word-by-word headline reveal + serif flourish + paragraph blur-in;
           renders nothing, drives the [data-ww-*] nodes below. */}
       <WorkingWithReveal />
 
-      {/* Centred statement block (design frame 423:464), viewport-centred. */}
-      <div className="absolute left-1/2 top-1/2 flex w-[726px] -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-[48px] text-center text-white max-md:w-full max-md:gap-[32px] max-md:px-6">
+      {/* Centred statement block (design frame 423:464), flow-centred by the
+          section's flex so its height drives the section (no absolute centring
+          in a forced-full-height parent). */}
+      <div className="flex w-[726px] flex-col items-center gap-[48px] text-center text-white max-md:w-full max-md:gap-[32px] max-md:px-6">
         {/* Headline — Product Sans Light with an Instrument Serif "working".
             Each word is an inline-block span so it can rise/blur independently;
             the serif word carries data-ww-serif for its distinct settle+glow. */}

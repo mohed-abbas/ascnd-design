@@ -55,7 +55,15 @@ export default function Comparison() {
   return (
     <section
       data-comparison
-      className="relative flex min-h-dvh w-full items-center justify-center overflow-hidden py-[20dvh] max-md:py-[12dvh]"
+      // Desktop is CONTENT-DRIVEN (no min-h-dvh) with viewport-proportional
+      // padding: 25dvh per side reproduces the breathing room of the
+      // full-screen tagline/cards sections (~25vh of air each side), so the
+      // rhythm SCALES with the viewport like they do — spacious on 2K, tighter
+      // on a laptop — while staying CONSISTENT across sections regardless of
+      // their content height (a fixed viewport section made sparse content float
+      // in far more air than dense content). Mobile keeps its full-height layout
+      // (max-md:min-h-dvh) + its own padding, untouched.
+      className="relative flex max-md:min-h-dvh w-full items-center justify-center overflow-hidden py-[25dvh] max-md:py-[12dvh]"
     >
       {/* Content block (Figma 469:646, 812×1360), flow-centred so a viewport
           shorter than the block grows the section (page scrolls) instead of
