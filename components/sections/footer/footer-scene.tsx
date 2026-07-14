@@ -83,7 +83,12 @@ function PosterStack({
             fill
             sizes="100vw"
             loading="lazy"
-            className="pointer-events-none select-none object-cover transition-opacity"
+            // object-bottom: below md the footer box is shortened (footer.tsx),
+            // so object-cover crops the overflow — anchoring to the bottom keeps
+            // the mountains + wordmark and trims only the excess top sky. On
+            // desktop the box aspect equals the image aspect (no crop), so this
+            // is a no-op there.
+            className="pointer-events-none select-none object-cover object-bottom transition-opacity"
             style={{
               opacity: active ? 1 : 0,
               // Poster→live swap keeps the quick fade; poster→poster theme

@@ -23,8 +23,19 @@ export default function Footer() {
       {/* Scene box — design proportion, so the wordmark clears the peaks. The
           in-scene glass reveal scrubs off THIS box's scroll-in (footer-glass-scene
           RevealRig → [data-footer-scene]): the wordmark slides up from behind the
-          ridgeline in step with the mountains riding into view. */}
-      <div data-footer-scene className="relative w-full aspect-[1512/1243]">
+          ridgeline in step with the mountains riding into view.
+
+          Below md the box shortens (1512/900) to trim the tall empty-sky headroom
+          the design reserves for clearing desktop-height peaks — on a phone the
+          scaled peaks are short, so that band reads as dead space. The composite
+          anchors to the bottom (object-bottom in footer-scene) so only excess top
+          sky is cropped; the full wordmark + mountains stay, with headroom to
+          spare. ≥md keeps the exact design proportion (box aspect = image aspect
+          → no crop), so desktop is unchanged. */}
+      <div
+        data-footer-scene
+        className="relative w-full aspect-[1512/1243] max-md:aspect-[1512/900]"
+      >
         <FooterScene />
       </div>
     </footer>
