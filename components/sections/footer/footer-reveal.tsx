@@ -61,7 +61,13 @@ export default function FooterReveal() {
           duration: 0.9,
           ease: "power3.out",
           clearProps: "filter",
-          scrollTrigger: { trigger: section, start: "top 70%", once: true },
+          // clamp(): on mobile the footer box is short (max-md aspect override,
+          // footer.tsx) and the page ends BEFORE its top can reach 70% of the
+          // viewport — unclamped, the trigger sits past max scroll, never fires,
+          // and the pre-hidden scene stays invisible. Clamping pulls the start
+          // back inside the scrollable range (fires at page end); desktop's
+          // natural 70% point is in range, so its timing is unchanged.
+          scrollTrigger: { trigger: section, start: "clamp(top 70%)", once: true },
         }
       );
     }, section);
