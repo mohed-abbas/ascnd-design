@@ -226,6 +226,7 @@ export default function TestimonialRocks() {
               }
             >
               <div
+                data-tm-rock
                 className="relative"
                 style={{
                   width: u.rock.w * ROCK_SCALE,

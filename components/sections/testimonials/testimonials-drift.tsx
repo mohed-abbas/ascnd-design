@@ -20,10 +20,13 @@ import {
  * Revolve — each ring outline is a circle (symmetric), so spinning it only
  * appears to move its dot — "the ring rotates" reads as the dot travelling
  * around the centre. Directions alternate and durations differ so no two units
- * sync. The rocks' own fly-in + orbit + 3D tumble live in the GLB canvas
- * (testimonial-rocks-canvas.tsx); this only drives the DOM rings.
+ * sync. On desktop the rocks' own fly-in + orbit + 3D tumble live in the GLB
+ * canvas (testimonial-rocks-canvas.tsx). On MOBILE (flat PNG rocks, no canvas)
+ * this driver also spins each rock in the OPPOSITE direction of its ring, so the
+ * two counter-rotate (see ROCK_DUR / the rockTweens below).
  *
- * Renders nothing — drives the [data-tm-ring] layers in testimonials.tsx.
+ * Renders nothing — drives the [data-tm-ring] layers in testimonials.tsx and,
+ * on mobile, the [data-tm-rock] layers in testimonial-rocks.tsx.
  *
  * ⚠️ Deliberately NOT gated on the quality tier (feature-first, CLAUDE.md) —
  * the tier can step down mid-session and must never change this section's
@@ -47,6 +50,13 @@ const RING = [
   { dur: 46, dir: -1 },
 ] as const;
 
+// Per-unit rock spin (index-aligned with UNITS/RING), seconds. MOBILE ONLY by
+// construction: the flat PNG rocks are the only [data-tm-rock] in the DOM — on
+// desktop the rocks tumble in the 3D canvas and this selector finds nothing. Each
+// rock spins in the OPPOSITE direction of its own ring (dir = −RING[i].dir), a
+// touch slower, so the rock and its orbit outline visibly counter-rotate.
+const ROCK_DUR = [58, 64, 50, 68] as const;
+
 export default function TestimonialsDrift() {
   useEffect(() => {
     if (window.matchMedia(REDUCE_MOTION).matches) return;
@@ -55,6 +65,8 @@ export default function TestimonialsDrift() {
     if (!section) return;
     const rings = gsap.utils.toArray<HTMLElement>("[data-tm-ring]", section);
     if (rings.length === 0) return;
+    // Empty on desktop (3D canvas rocks, no [data-tm-rock]); populated on mobile.
+    const rocks = gsap.utils.toArray<HTMLElement>("[data-tm-rock]", section);
 
     // Park the rings hidden up front (the section is off-screen on load, so no
     // flash); every PLAY draws them in, every RESET re-parks them. If the reveal
@@ -99,10 +111,26 @@ export default function TestimonialsDrift() {
       });
     });
 
+    // Rock counter-spin (mobile only — see ROCK_DUR). `+=` preserves each rock's
+    // resting orientation (its inline rotate()); the mobile scale rides the outer
+    // wrapper, so rotating this inner element composes cleanly. Same paused +
+    // IntersectionObserver idle-to-zero contract as the ring revolves.
+    const rockTweens = rocks.map((rock, i) => {
+      const dir = -RING[i % RING.length].dir; // opposite its own ring
+      return gsap.to(rock, {
+        rotation: `+=${360 * dir}`,
+        duration: ROCK_DUR[i % ROCK_DUR.length],
+        ease: "none",
+        repeat: -1,
+        paused: true,
+      });
+    });
+
+    const spinTweens = [...tweens, ...rockTweens];
     const io = new IntersectionObserver(
       ([entry]) => {
         const playing = entry.isIntersecting;
-        for (const t of tweens) {
+        for (const t of spinTweens) {
           if (playing) t.play();
           else t.pause();
         }
@@ -116,7 +144,7 @@ export default function TestimonialsDrift() {
       unReset();
       io.disconnect();
       killReveal();
-      for (const t of tweens) t.kill();
+      for (const t of spinTweens) t.kill();
       gsap.set(rings, { clearProps: "transform,opacity" });
     };
   }, []);
