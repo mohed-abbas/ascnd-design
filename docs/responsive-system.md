@@ -186,7 +186,7 @@ Recipe:
 | `faq`          | A | heading token; accordion pills already flow — width + gutter. |
 | `tagline`      | A | ✅ vw/em-sized. Per request: a mobile-only break makes it read 3 lines on mobile ("look" / "like you" / "raised it.") vs 2 on desktop, and the font steps up (15.27vw → 26vw below md) so the text fills the narrow screen. Same bold left-aligned look; reveal structure unchanged. |
 | `working-with` | A | drop `whitespace-nowrap`; token + gutter. |
-| `pricing`      | A (heading) / B (cards) | heading flows; the two glass cards + dashed connector stack (mini-plan). |
+| `pricing`      | A (heading) / B (cards) | ✅ Below md the absolute `h-[772.535px]` canvas becomes a flex column: cards stack full-width (subscription → sprint), badge reorders to `order-first` and straddles the subscription card's top edge via negative margin (Option A), connector arrow `max-md:hidden`. Inner fixed widths → `w-full`, features wrap, prices step 61→52px. Tokens applied throughout. |
 | `comparison`   | A (heading) / B (matrix) | grid `grid-cols-[302.5px…]` reflows to stacked rows / horizontal scroll (mini-plan). |
 | `pills`        | B | scatter field → stacked/simplified; decorative pills may be culled (mini-plan). |
 | `why-stay`     | B | pinned reel — pin math + `shrink-0` wrapper are load-bearing (mini-plan). |
