@@ -9,8 +9,8 @@
  *
  * Sizing is expressed as `vw` ratios off the 1512px design frame
  * (230.919/1512 ≈ 15.27vw, blur 6.544/1512 ≈ 0.43vw) so the headline stays
- * scale-invariant across viewports. Below md it steps up to 24vw so the three
- * mobile lines fill the narrow screen (the widest, "raised it.", spans ~90%).
+ * scale-invariant across viewports. Below md it steps up to 26vw so the three
+ * mobile lines fill the narrow screen (the widest, "raised it.", spans ~97%).
  * Tracking −6.9276px and leading 0.961 come straight from the node. Weight is
  * Bold (700) — the heaviest Product Sans the project self-hosts; the design's
  * "Black" weight isn't in app/fonts.
@@ -49,7 +49,7 @@ export default function Tagline() {
       <TaglineReveal />
       <p
         data-tagline-headline
-        className="absolute left-1/2 top-1/2 w-max -translate-x-1/2 -translate-y-1/2 text-left font-product text-[15.27vw] font-bold leading-[0.961] tracking-[-0.03em] max-md:text-[24vw]"
+        className="absolute left-1/2 top-1/2 w-max -translate-x-1/2 -translate-y-1/2 text-left font-product text-[15.27vw] font-bold leading-[0.961] tracking-[-0.03em] max-md:text-[26vw]"
       >
         {/* Three channels off one per-line --p (globals.css): [data-trise] on the
             line sharpens (blur-clear), and each character's [data-tfill] clone is

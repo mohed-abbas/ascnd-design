@@ -184,7 +184,7 @@ Recipe:
 |----------------|-----------|-------------|
 | `final-cta`    | A | heading token + wrap; stack the two CTAs full-width. **First section — births the tokens.** |
 | `faq`          | A | heading token; accordion pills already flow — width + gutter. |
-| `tagline`      | A | ✅ vw/em-sized. Per request: a mobile-only break makes it read 3 lines on mobile ("look" / "like you" / "raised it.") vs 2 on desktop, and the font steps up (15.27vw → 24vw below md) so the text fills the narrow screen. Same bold left-aligned look; reveal structure unchanged. |
+| `tagline`      | A | ✅ vw/em-sized. Per request: a mobile-only break makes it read 3 lines on mobile ("look" / "like you" / "raised it.") vs 2 on desktop, and the font steps up (15.27vw → 26vw below md) so the text fills the narrow screen. Same bold left-aligned look; reveal structure unchanged. |
 | `working-with` | A | drop `whitespace-nowrap`; token + gutter. |
 | `pricing`      | A (heading) / B (cards) | heading flows; the two glass cards + dashed connector stack (mini-plan). |
 | `comparison`   | A (heading) / B (matrix) | grid `grid-cols-[302.5px…]` reflows to stacked rows / horizontal scroll (mini-plan). |
