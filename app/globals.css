@@ -138,6 +138,36 @@ html[data-mode="night"] {
   }
 }
 
+/* Design-shots conveyor scale (components/sections/hero + design-shots) — below
+   md the turning tile wheel (arc span ≈ 1042px incl. the glass mat) is far wider
+   than a phone. Rather than shrink the WHOLE fan to fit (which drops the tiles to
+   ~24px on a narrow screen), we scale it LESS and let the outer tiles run off the
+   edges: the scale is FLOORED at 0.5 so the centre/inner tiles stay legible
+   (~130px centre), and the far-L/far-R (and part of the mid) tiles clip against
+   the hero's overflow-hidden. The wheel still turns — tiles rotate through the
+   clipped edge positions, appearing/disappearing as they pass.
+
+   --shots-s = max(0.5, fit): the fit ratio (viewport − 48px gutter over the 1042px
+   arc) is capped at 1 (never upscale) and floored at 0.5. On wider phones (~640px+)
+   the fit exceeds 0.5 so it scales to fit with NO clipping; the clip only kicks in
+   on the narrowest screens. Same tan(atan2(a,b)) ≡ a/b identity as the cards
+   (scale() needs a unitless number; calc can't divide a vw-length by a length);
+   the plain 0.5 line before it is the no-tan/atan2 fallback.
+
+   transform-origin is centre and the box is already centred (left-1/2), so the fan
+   overflows both screen edges EQUALLY — symmetric clip, no horizontal scroll. The
+   scale is a wrapper transform that composes with the per-rotor conveyor rotation
+   inside, leaving the shared 8-slot geometry (SHOT_ARC_SLOTS), the motion, and the
+   intro tile-handoff untouched. ≥768px this block is inert → desktop byte-identical. */
+@media (width < 768px) {
+  [data-shots-wheel] {
+    --shots-s: 0.5; /* fallback: engines without tan/atan2 */
+    --shots-s: max(0.5, min(1, tan(atan2(100vw - 48px, 1042px))));
+    transform: scale(var(--shots-s));
+    transform-origin: center;
+  }
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);

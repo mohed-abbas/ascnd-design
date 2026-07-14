@@ -87,7 +87,13 @@ export default function Hero() {
           drives the on-load bloom-from-center of the tiles; it renders nothing. */}
       <DesignShotsReveal />
       <div className="absolute left-1/2 top-[-44px] h-[491px] w-[1029px] -translate-x-1/2">
-        <DesignShots />
+        {/* Below md the whole wheel scales (floored at 0.5) so the centre/inner
+            tiles stay legible and the outer tiles clip against the hero's
+            overflow-hidden (globals.css [data-shots-wheel]). The conveyor motion +
+            intro handoff stay untouched inside. Inert ≥768px → desktop byte-identical. */}
+        <div data-shots-wheel className="size-full">
+          <DesignShots />
+        </div>
       </div>
 
       {/* Hero Text (node 103:22): centered, frame top y=515 of the 982-tall hero.
