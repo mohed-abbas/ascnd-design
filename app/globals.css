@@ -106,6 +106,38 @@ html[data-mode="night"] {
   }
 }
 
+/* Card stack scale (components/sections/cards) — below md the three 440×438
+   glass cards can't go fluid (their media guts are rigidly px-tuned with live
+   GSAP), so each card is scaled to fit the phone as ONE unit. The scale rides
+   the per-card wrapper ([data-card-scale]), NOT the article, so cards-reveal's
+   transform/blur on [data-card-shell] stays free.
+
+   --card-s fits the 440px card into the (viewport − 48px gutter) width, capped
+   at 1 so it never scales up past design. scale() needs a UNITLESS number, and
+   CSS calc can't divide a vw-length by a length to get one — so the ratio comes
+   from the tan(atan2(a,b)) ≡ a/b identity. The plain 0.72 line before it is the
+   fallback for engines without tan/atan2: an invalid later declaration is
+   dropped and the number is kept (progressive enhancement).
+
+   transform-origin is top-center so the visual card sits centred at the top of
+   its 440×438 layout box; the negative margin-bottom collapses the leftover
+   (unscaled) box height so the vertical stack packs tight. The 440-wide box
+   overflows a narrow viewport but is clipped by the section's overflow-hidden —
+   no horizontal scroll. ≥768px this whole block is inert, so desktop (the
+   wrappers are plain shrink-0 flex items) renders byte-for-byte unchanged. */
+@media (width < 768px) {
+  [data-cards-row] {
+    --card-s: 0.72;
+    --card-s: min(1, tan(atan2(100vw - 48px, 440px)));
+  }
+
+  [data-cards-row] > [data-card-scale] {
+    transform: scale(var(--card-s));
+    transform-origin: top center;
+    margin-bottom: calc(var(--card-s) * 438px - 438px);
+  }
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
