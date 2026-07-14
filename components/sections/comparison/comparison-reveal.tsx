@@ -39,7 +39,13 @@ export default function ComparisonReveal() {
 
     const head = section.querySelector<HTMLElement>("[data-comparison-head]");
     const sub = section.querySelector<HTMLElement>("[data-comparison-sub]");
-    const card = section.querySelector<HTMLElement>("[data-comparison-card]");
+    // Both the desktop grid and the mobile stack carry [data-comparison-card];
+    // only one is display-visible per viewport, so animating the array rises
+    // whichever is shown (the hidden one is a no-op).
+    const cards = gsap.utils.toArray<HTMLElement>(
+      "[data-comparison-card]",
+      section,
+    );
     if (!head) return;
 
     let ctx: gsap.Context | undefined;
@@ -48,7 +54,9 @@ export default function ComparisonReveal() {
 
     // Hide the heading (+ sub + table) synchronously, before fonts resolve, so no
     // finished-state flash shows if the page loads already scrolled here.
-    gsap.set([head, sub, card].filter(Boolean) as HTMLElement[], { autoAlpha: 0 });
+    gsap.set([head, sub, ...cards].filter(Boolean) as HTMLElement[], {
+      autoAlpha: 0,
+    });
 
     const build = () => {
       if (cancelled) return;
@@ -88,9 +96,9 @@ export default function ComparisonReveal() {
         // as the pricing / cards-section shells (parks below + fogged, de-frosts
         // to crisp). clearProps drops the entrance filter so only the card's own
         // backdrop-blur remains at rest.
-        if (card) {
+        if (cards.length) {
           tl.fromTo(
-            card,
+            cards,
             { y: 36, autoAlpha: 0, filter: "blur(10px)" },
             {
               y: 0,

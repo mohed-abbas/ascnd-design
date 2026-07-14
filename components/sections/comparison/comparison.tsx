@@ -43,33 +43,41 @@ function CellContent({ cell }: { cell: ComparisonCell }) {
   return <span className="text-[20px] leading-normal text-white/50">{cell}</span>;
 }
 
+/** The same cell, sized for the mobile stack's option rows (right-aligned). */
+function MobileCell({ cell }: { cell: ComparisonCell }) {
+  if (cell === "check")
+    return <CheckMark className="h-[22px] w-[22px] shrink-0" />;
+  if (cell === "dash") return <Dash className="h-[18px] w-[18px] shrink-0" />;
+  return <span className="text-right text-body text-white/50">{cell}</span>;
+}
+
 export default function Comparison() {
   return (
     <section
       data-comparison
-      className="relative flex min-h-dvh w-full items-center justify-center overflow-hidden py-[20dvh]"
+      className="relative flex min-h-dvh w-full items-center justify-center overflow-hidden py-[20dvh] max-md:py-[12dvh]"
     >
       {/* Content block (Figma 469:646, 812×1360), flow-centred so a viewport
           shorter than the block grows the section (page scrolls) instead of
           clipping it. Header and card are pinned inside (top:0 / top:211) rather
           than flow-spaced, matching the design's explicit positions. */}
-      <div className="relative h-[812px] w-[1360px]">
+      <div className="relative h-[812px] w-[1360px] max-md:h-auto max-md:w-full max-md:flex max-md:flex-col max-md:items-center max-md:gap-[32px] max-md:px-6">
         {/* Word-by-word blur reveal on the heading (see comparison-reveal.tsx). */}
         <ComparisonReveal />
         {/* Heading + supporting copy (469:550), pinned to the top and centred. */}
-        <div className="absolute left-1/2 top-0 flex w-[628px] -translate-x-1/2 flex-col items-center gap-[25px] text-center text-white">
+        <div className="absolute left-1/2 top-0 flex w-[628px] -translate-x-1/2 flex-col items-center gap-[25px] text-center text-white max-md:static max-md:w-full max-md:translate-x-0 max-md:gap-[18px]">
           <h2
             data-comparison-head
-            className="text-[49px] leading-[1.1] tracking-[-1.47px]"
+            className="text-display leading-[1.1] tracking-[-0.03em]"
           >
-            <span className="block whitespace-nowrap font-light">
+            <span className="block whitespace-nowrap font-light max-md:whitespace-normal">
               hiring, agencies, or freelancers?
             </span>
             <span className="block font-instrument">none of the above.</span>
           </h2>
           <p
             data-comparison-sub
-            className="w-[567px] text-[16px] leading-normal tracking-[0.32px]"
+            className="w-[567px] text-body leading-normal tracking-[0.02em] max-md:w-full"
           >
             freelancers go quiet a week before launch. agencies can&rsquo;t be
             paused. hiring takes months. there&rsquo;s a fourth option.
@@ -83,7 +91,7 @@ export default function Comparison() {
             the rounded corners, so nothing else needs clipping. */}
         <div
           data-comparison-card
-          className="absolute left-0 top-[211px] h-[601px] w-[1360px] rounded-[20px] border-[1.5px] border-solid border-white/30 bg-gradient-to-b from-black/10 to-black/5 backdrop-blur-[2px]"
+          className="absolute left-0 top-[211px] h-[601px] w-[1360px] rounded-[20px] border-[1.5px] border-solid border-white/30 bg-gradient-to-b from-black/10 to-black/5 backdrop-blur-[2px] max-md:hidden"
         >
           {/* Featured-column highlight (469:554): a brighter panel behind the
               grid over the "ascnd" track, at full card height, wearing the
@@ -124,6 +132,52 @@ export default function Comparison() {
               <Row key={row.label} label={row.label} cells={row.cells} />
             ))}
           </div>
+        </div>
+
+        {/* ── Mobile stack (below md) ─────────────────────────────────────
+            The wide grid can't shrink to a phone (long text cells across 6
+            tracks), so the matrix is rebuilt as one glass card per feature, each
+            listing all five options with ascnd featured on top. The desktop card
+            above is max-md:hidden; this is hidden max-md:flex. Carries
+            data-comparison-card so the reveal blur-rises it too. */}
+        <div
+          data-comparison-card
+          className="hidden w-full max-w-[520px] flex-col gap-[16px] max-md:flex"
+        >
+          {COMPARISON_ROWS.map((row) => (
+            <div
+              key={row.label}
+              className="rounded-[20px] border-[1.5px] border-solid border-white/30 bg-gradient-to-b from-black/10 to-black/5 p-[20px] backdrop-blur-[2px]"
+            >
+              <h3 className="mb-[14px] text-body-lg font-bold leading-normal text-white">
+                {row.label}
+              </h3>
+              <ul className="flex flex-col gap-[2px]">
+                {COMPARISON_COLUMNS.map((col, i) => {
+                  const featured = i === 0;
+                  return (
+                    <li
+                      key={col}
+                      className={`flex items-center justify-between gap-[16px] rounded-[10px] px-[12px] py-[9px] ${
+                        featured ? "bg-white/10" : ""
+                      }`}
+                    >
+                      <span
+                        className={`text-body ${
+                          featured
+                            ? "font-medium text-white"
+                            : "font-light text-white/60"
+                        }`}
+                      >
+                        {col}
+                      </span>
+                      <MobileCell cell={row.cells[i]} />
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          ))}
         </div>
       </div>
     </section>
