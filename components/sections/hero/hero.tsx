@@ -72,7 +72,10 @@ export default function Hero() {
           collage on plain sky. `data-wordmark-slot` is the intro's dock target. */}
       <div
         data-wordmark-slot
-        className="absolute left-1/2 top-[40px] z-10 -translate-x-1/2 text-[38px]"
+        // max-md: nudged up so the conveyor's centre tile (which must ride high —
+        // its far slots pin to the viewport top edge for the off-screen wrap, see
+        // [data-shots-wheel] in globals.css) keeps clear air below the wordmark.
+        className="absolute left-1/2 top-[40px] z-10 -translate-x-1/2 text-[38px] max-md:top-[24px]"
       >
         {/* Masked slide-up reveal (cascade #1). */}
         <span className="block overflow-hidden">

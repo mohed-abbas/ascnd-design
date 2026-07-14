@@ -151,53 +151,35 @@ html[data-mode="night"] {
    huge, overlapping the hero text (also mis-sized in desktop Firefox, which folds the
    scrollbar into 100vw). Lesson: media-query widths are reliable cross-browser;
    `100vw` in calc() is NOT when content overflows. So the size is a plain media query
-   + a constant — no vw, no trig. At 0.5 the wheel is 514.5px: it clips below ~515px
-   (dissolved by the mask below) and fits with gutters up to md. The scale composes
-   with the per-rotor conveyor rotation inside, leaving the shared 8-slot geometry, the
-   motion, and the intro handoff untouched. ≥768px inert → desktop byte-identical. */
+   + a constant — no vw, no trig. The outer tiles clip through the viewport edges (by
+   design). The scale composes with the per-rotor conveyor rotation inside, leaving the
+   shared 8-slot geometry, the motion, and the intro handoff untouched. ≥768px inert →
+   desktop byte-identical.
+
+   The translateY restores the DESKTOP wrap illusion: on desktop the far arc slots
+   straddle the viewport's top edge, so a tile leaving far-R exits THROUGH the top edge
+   and rides the whole hidden return leg (far-R → over the top → far-L) off-screen —
+   the viewport edge is the curtain. Scaling about the wheel centre pulls every slot
+   down/inward, parking the far slots INSIDE the viewport, so the return trip cut
+   visibly across the top of the screen (the "ghost tiles" materialising mid-air).
+   Lifting the scaled wheel puts the far slots back on the top edge: tiles slide up and
+   out of the viewport, wrap unseen, and descend back in on the other side. No
+   mask/fade needed — earlier gradient dissolves treated the symptom and still read as
+   translucent tiles drifting in the sky.
+
+   scale and translateY are COUPLED — solve both from the scale s:
+     translateY  = 207.5·s − 201.5   (pins the far slots' centres ~2px above the
+                                      viewport top, matching desktop's straddle)
+     centre-tile top ≈ 192·s         (how far the wheel hangs below the wordmark)
+   s=0.5 put the centre tile at y≈96 — touching the wordmark — so s=0.6 (bigger tiles,
+   centre-tile top ≈115px), formula lift −77px, hand-tuned +22px lower to −55 (design
+   call: the wheel sits lower; far tiles peek more and the wrap-fade still finishes
+   while the tile is exiting the edge). Tune size via s → recompute the lift (± a few
+   px of taste); big solo lift changes bring the wrap back on-screen. */
 @media (width < 768px) {
   [data-shots-wheel] {
-    transform: scale(0.5);
+    transform: translateY(-55px) scale(0.6);
     transform-origin: center;
-  }
-}
-
-/* Conveyor edge dissolve (clip regime). At the fixed 0.5 scale the 514.5px wheel is
-   wider than a narrow phone, so its outer tiles fall off the edges. A phone can't show
-   the full 7-tile fan big AND keep every tile clear of the edges — clipping IS a tile
-   crossing the edge. So we dissolve the wheel toward its sides: the centre stays crisp
-   while a tile entering/leaving fades to zero before the edge, so it's never seen
-   clipped — it melts "behind the scenes". Net effect: the big centre tile is in focus,
-   the neighbours dissolve out to the sides.
-
-   ⚠️ The stops are WHEEL-RELATIVE percentages (of the 1029px box), NOT viewport (100vw)
-   values — same reason as the scale above: iOS `100vw` in calc() is unreliable under
-   the box's overflow, which mis-placed the previous vw-anchored mask (the fade landed
-   off-screen, so tiles still hard-cut on device). Percentages are of the element, so
-   they're deterministic on every browser/device. The opaque band (33–67%) is centred
-   on the wheel centre = screen centre, ~175px wide after scaling, so the 130px centre
-   tile is always crisp; the fully-transparent zones (0–14%, 86–100%) sit at/past the
-   screen edges for any phone ≳360px, so entering tiles are gone before they clip. Only
-   active where the wheel clips (< 520px); wider screens fit, so no fade. Desktop
-   untouched. */
-@media (width < 520px) {
-  [data-shots-wheel] {
-    /* TWO dissolves, intersected (mask-composite) → a pixel shows only where BOTH
-       are opaque, i.e. the lower-centre. The fan rises toward the top: the SMALL
-       tiles enter at the top-left, exit top-right, and ride the hidden return leg
-       across the TOP — so a side-only fade left them ghosting in/out up there. The
-       second gradient (to bottom) fades that whole upper band, so the small tiles
-       are gone before they surface, while the big centre tile (low-centre) stays
-       crisp. Both are wheel-relative % (no vw — see the scale note); same intersect
-       trick as .pill-field-mask above. */
-    -webkit-mask-image:
-      linear-gradient(to right, transparent 0%, transparent 14%, #000 33%, #000 67%, transparent 86%, transparent 100%),
-      linear-gradient(to bottom, transparent 0%, transparent 10%, #000 34%, #000 100%); /* side ∩ top */
-    -webkit-mask-composite: source-in;
-    mask-image:
-      linear-gradient(to right, transparent 0%, transparent 14%, #000 33%, #000 67%, transparent 86%, transparent 100%),
-      linear-gradient(to bottom, transparent 0%, transparent 10%, #000 34%, #000 100%);
-    mask-composite: intersect;
   }
 }
 
