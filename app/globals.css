@@ -138,72 +138,67 @@ html[data-mode="night"] {
   }
 }
 
-/* Design-shots conveyor scale (components/sections/hero + design-shots) — below
-   md the turning tile wheel (arc span ≈ 1042px incl. the glass mat) is far wider
-   than a phone. Rather than shrink the WHOLE fan to fit (which drops the tiles to
-   ~24px on a narrow screen), we scale it LESS and let the outer tiles run off the
-   edges: the scale is FLOORED at 0.5 so the centre/inner tiles stay legible
-   (~130px centre), and the far-L/far-R (and part of the mid) tiles clip against
-   the hero's overflow-hidden. The wheel still turns — tiles rotate through the
-   clipped edge positions, appearing/disappearing as they pass.
+/* Design-shots conveyor scale (components/sections/hero + design-shots) — below md
+   the turning tile wheel (arc span ≈ 1042px incl. the glass mat) is far wider than a
+   phone, so it's scaled down as one unit. FIXED 0.5, deliberately NOT a fluid
+   vw-derived value.
 
-   --shots-s = max(0.5, fit): the fit ratio (viewport − 48px gutter over the 1042px
-   arc) is capped at 1 (never upscale) and floored at 0.5. On wider phones (~640px+)
-   the fit exceeds 0.5 so it scales to fit with NO clipping; the clip only kicks in
-   on the narrowest screens. Same tan(atan2(a,b)) ≡ a/b identity as the cards
-   (scale() needs a unitless number; calc can't divide a vw-length by a length);
-   the plain 0.5 line before it is the no-tan/atan2 fallback.
-
-   transform-origin is centre and the box is already centred (left-1/2), so the fan
-   overflows both screen edges EQUALLY — symmetric clip, no horizontal scroll. The
-   scale is a wrapper transform that composes with the per-rotor conveyor rotation
-   inside, leaving the shared 8-slot geometry (SHOT_ARC_SLOTS), the motion, and the
-   intro tile-handoff untouched. ≥768px this block is inert → desktop byte-identical. */
+   ⚠️ Why fixed, not fit-to-width: an earlier version used
+   max(0.5, min(1, tan(atan2(100vw - 48px, 1042px)))) to fit-then-floor. On iOS the
+   `100vw` inside calc() resolved to the OVERFLOW-expanded layout width (~950px — the
+   1029px box widens the layout box `vw` reads from), NOT the ~430px visual width the
+   media query correctly reports. So the scale computed ~0.87 and the wheel rendered
+   huge, overlapping the hero text (also mis-sized in desktop Firefox, which folds the
+   scrollbar into 100vw). Lesson: media-query widths are reliable cross-browser;
+   `100vw` in calc() is NOT when content overflows. So the size is a plain media query
+   + a constant — no vw, no trig. At 0.5 the wheel is 514.5px: it clips below ~515px
+   (dissolved by the mask below) and fits with gutters up to md. The scale composes
+   with the per-rotor conveyor rotation inside, leaving the shared 8-slot geometry, the
+   motion, and the intro handoff untouched. ≥768px inert → desktop byte-identical. */
 @media (width < 768px) {
   [data-shots-wheel] {
-    --shots-s: 0.5; /* fallback: engines without tan/atan2 */
-    --shots-s: max(0.5, min(1, tan(atan2(100vw - 48px, 1042px))));
-    transform: scale(var(--shots-s));
+    transform: scale(0.5);
     transform-origin: center;
   }
 }
 
-/* Conveyor edge dissolve (clip regime only). Below ~521px the 0.5-scaled wheel is
-   wider than the screen, so its outer tiles fall off the edges. A phone can't show
-   the full 7-tile fan big AND keep every tile clear of the edges — clipping IS a
-   tile crossing the edge. So instead of a hard cut (or a thin soft fade, which
-   still leaves the edge tile translucent-but-visible) we dissolve a WIDE band at
-   each screen edge: the centre stays crisp while a tile entering/leaving fades all
-   the way to zero BEFORE it reaches the edge, so it's never seen clipped — it melts
-   "behind the scenes", restoring the conveyor's seamless illusion. Net effect on a
-   narrow phone: the big centre tile is in focus, the neighbours dissolve out toward
-   the sides. Wider phones (still < 521) keep more tiles crisp as the fan gets
-   relatively narrower.
+/* Conveyor edge dissolve (clip regime). At the fixed 0.5 scale the 514.5px wheel is
+   wider than a narrow phone, so its outer tiles fall off the edges. A phone can't show
+   the full 7-tile fan big AND keep every tile clear of the edges — clipping IS a tile
+   crossing the edge. So we dissolve the wheel toward its sides: the centre stays crisp
+   while a tile entering/leaving fades to zero before the edge, so it's never seen
+   clipped — it melts "behind the scenes". Net effect: the big centre tile is in focus,
+   the neighbours dissolve out to the sides.
 
-   The mask paints in the wheel's LOCAL 1029px box and is then scaled ×0.5 with the
-   element, so a local length L shows as 0.5·L on screen. A local point x maps to
-   screen_x = 100vw/2 + 0.5·(x − 514.5) (514.5 = half the 1029 box; centred).
-   Inverting that, the screen edges (0, 100vw) sit at local 514.5px∓100vw, and a
-   100px on-screen fade spans 200px local — hence the 100vw terms, which pin the
-   dissolve to the real screen edges at any width. Only active where the wheel
-   actually clips (width < 521px ≈ 1042·0.5); wider phones fit, so no fade. Desktop
+   ⚠️ The stops are WHEEL-RELATIVE percentages (of the 1029px box), NOT viewport (100vw)
+   values — same reason as the scale above: iOS `100vw` in calc() is unreliable under
+   the box's overflow, which mis-placed the previous vw-anchored mask (the fade landed
+   off-screen, so tiles still hard-cut on device). Percentages are of the element, so
+   they're deterministic on every browser/device. The opaque band (33–67%) is centred
+   on the wheel centre = screen centre, ~175px wide after scaling, so the 130px centre
+   tile is always crisp; the fully-transparent zones (0–14%, 86–100%) sit at/past the
+   screen edges for any phone ≳360px, so entering tiles are gone before they clip. Only
+   active where the wheel clips (< 520px); wider screens fit, so no fade. Desktop
    untouched. */
-@media (width < 521px) {
+@media (width < 520px) {
   [data-shots-wheel] {
-    /* wide dissolve → outer tiles fully gone before the screen edge */
     -webkit-mask-image: linear-gradient(
       to right,
-      transparent calc(514.5px - 100vw),
-      #000 calc(714.5px - 100vw),
-      #000 calc(100vw + 314.5px),
-      transparent calc(100vw + 514.5px)
+      transparent 0%,
+      transparent 14%,
+      #000 33%,
+      #000 67%,
+      transparent 86%,
+      transparent 100%
     );
     mask-image: linear-gradient(
       to right,
-      transparent calc(514.5px - 100vw),
-      #000 calc(714.5px - 100vw),
-      #000 calc(100vw + 314.5px),
-      transparent calc(100vw + 514.5px)
+      transparent 0%,
+      transparent 14%,
+      #000 33%,
+      #000 67%,
+      transparent 86%,
+      transparent 100%
     );
   }
 }
