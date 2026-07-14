@@ -116,8 +116,9 @@ export default function StaticCloudLayer({
       }
 
       const apply = (self: ScrollTrigger) => {
-        // d in [-1, 1]: below rest → at rest (section centred) → above rest.
-        const d = -1 + 2 * self.progress;
+        // d: below rest → 0 at rest (crossing progress = `at`, default the
+        // section centre) → above rest. [-1, 1] for a centred cloud.
+        const d = 2 * (self.progress - (c.at ?? 0.5));
         gsap.set(el, {
           y: (-d * (c.travel ?? DEFAULT_TRAVEL) * window.innerHeight) / 100,
           scale: c.swell && c.swell !== 1 ? Math.pow(c.swell, d) : 1,

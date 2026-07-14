@@ -59,6 +59,17 @@ export type StaticCloudSpec = {
    */
   travel?: number;
   /**
+   * SECTION clouds: the crossing progress [0..1] at which the cloud rests at
+   * (x, y). Default 0.5 = section centred. Stagger values (e.g. 0.32 / 0.68)
+   * to space several clouds through a TALL section (comparison, pricing) so
+   * one is always around. ⚠️ Off-centre `at` shrinks the parking clearance on
+   * one side: parked below by 2·at·travel while the section is down-page, and
+   * above by 2·(1−at)·travel once passed — BOTH must push the cloud off-screen
+   * (see the `travel` constraint), so off-centre clouds usually want a larger
+   * travel.
+   */
+  at?: number;
+  /**
    * Perspective swell — the DOM stand-in for the WebGL `perspectiveScroll`
    * look. Scale multiplier reached at the END of a section cloud's drift
    * (entering it is correspondingly smaller): 1 = flat/constant size
@@ -133,11 +144,23 @@ export const STATIC_CLOUDS: StaticCloudSpec[] = [
   { key: "whystay-6", sprite: "whystay-wide.webp", layer: "sky", trigger: "[data-whystay]", pin: { extra: WHYSTAY_PIN_EXTRA, at: 5 / 5 }, x: 84, y: 62, width: 66 },
 
   // ——— Working-with ———
-  { key: "workingwith-l", sprite: "wide-bank.webp", layer: "sky", trigger: "[data-working-with]", x: 8, y: 86, width: 70 },
+  { key: "workingwith-l", sprite: "wide-bank.webp", layer: "sky", trigger: "[data-working-with]", x: 8, y: 86, width: 100 },
+  { key: "workingwith-r", sprite: "puff-soft.webp", layer: "sky", trigger: "[data-working-with]", x: 95, y: 25, width: 70 },
+
+  // ——— Comparison ("none of the above") ———
+  // ~2.7 viewports tall on mobile, so two staggered clouds (at 0.32 / 0.68)
+  // carry the sky through the long crossing.
+  { key: "comparison-tr", sprite: "puff-soft.webp", layer: "sky", trigger: "[data-comparison]", x: 88, y: 30, width: 50, at: 0.32, travel: 130 },
+  { key: "comparison-bl", sprite: "wide-bank.webp", layer: "sky", trigger: "[data-comparison]", x: 10, y: 58, width: 60, at: 0.68, travel: 130 },
 
   // ——— Testimonials ———
   { key: "testimonials-tr", sprite: "puff-soft.webp", layer: "sky", trigger: "[data-testimonials]", x: 88, y: 18, width: 52 },
   { key: "testimonials-bl", sprite: "wide-bank.webp", layer: "sky", trigger: "[data-testimonials]", x: 10, y: 76, width: 64, swell: 1.1 },
+
+  // ——— Pricing ———
+  // ~2.2 viewports tall — same staggered-pair treatment as comparison.
+  { key: "pricing-tr", sprite: "puff-small.webp", layer: "sky", trigger: "[data-pricing]", x: 86, y: 30, width: 46, at: 0.35, travel: 130 },
+  { key: "pricing-bl", sprite: "cards-bank.webp", layer: "sky", trigger: "[data-pricing]", x: 12, y: 66, width: 58, at: 0.7, travel: 130 },
 
   // ——— Final CTA (diagonal corner frame, like desktop) ———
   { key: "finalcta-tl", sprite: "hero-puff.webp", layer: "sky", trigger: "[data-final-cta]", x: 12, y: 16, width: 54 },
