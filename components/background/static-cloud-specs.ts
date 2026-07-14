@@ -1,3 +1,5 @@
+import { WHYSTAY_PIN_EXTRA } from "@/components/sections/why-stay/why-stay-data";
+
 // Static (sprite) cloud placement data — the mobile/no-WebGL counterpart of
 // cloud-specs.ts. Consumed by static-cloud-layer.tsx, which renders each entry
 // as a positioned <img> and drives its scroll drift with GSAP/ScrollTrigger.
@@ -10,7 +12,7 @@
 // spot on any phone. Values may run past 0/100 to bleed off-screen (the rock
 // skirts and footer banks do).
 //
-// Two anchoring modes, mirroring the WebGL layer:
+// Anchoring modes, mirroring the WebGL layer:
 //  - FIELD clouds (no `trigger`): rest at (x, y) when the page is at scroll 0
 //    (the hero) and travel UP with the page as you scroll — 1:1 at speed 1
 //    (welded to the hero rocks), slower below 1 (depth parallax, calmer).
@@ -19,6 +21,10 @@
 //    viewport crossing — `travel` below rest as the section enters, rest as it
 //    centres, `travel` above as it leaves (SectionRig "Option B" in DOM).
 //    Robust to section reflow/reordering; no viewport-height counting.
+//  - PIN clouds (`trigger` + `pin`): for PINNED sections (why-stay), whose
+//    element crossing is far shorter than their real scroll span. Driven
+//    across entrance + pin + exit; `pin.at` welds the cloud to a reel option
+//    and `flow` sets the conveyor speed/spacing. See the `pin` field docs.
 export type StaticCloudSpec = {
   key: string;
   /** Sprite filename under public/clouds/sprites/. */
@@ -62,11 +68,37 @@ export type StaticCloudSpec = {
   swell?: number;
   /** Extra opacity 0–1 for depth layering (sprites already carry alpha). */
   opacity?: number;
+  /**
+   * PINNED-section binding (the why-stay reel). Instead of the element's short
+   * viewport crossing, the cloud is driven across the section's FULL pinned
+   * journey — one viewport of entrance + `extra` px of pin + one viewport of
+   * exit. `at` is the pin progress [0..1] at which the cloud rests at (x, y):
+   * with N reel options, option i centres at i/(N-1), so `at: i/(N-1)` welds
+   * cloud i to option i. Overrides `travel`/`swell` (the drift is `flow`).
+   */
+  pin?: {
+    /** Extra scroll the section's pin adds, in px (import it from the
+     *  section's data module — e.g. WHYSTAY_PIN_EXTRA — never hardcode). */
+    extra: number;
+    /** Pin progress [0..1] where this cloud is at its (x, y) rest spot. */
+    at: number;
+  };
+  /**
+   * Pin clouds: vh the cloud travels across the WHOLE crossing (default 500).
+   * Spacing between consecutive clouds ≈ flow × (their `at` gap × pin share),
+   * so one value for all clouds in a section = an evenly-spaced conveyor.
+   * Bigger = faster streak, wider gaps.
+   */
+  flow?: number;
 };
 
 // Default drift sweep for section clouds (vh to each side of rest) — one
 // viewport per side, the desktop SectionRig default.
 export const DEFAULT_TRAVEL = 100;
+
+// Default full-crossing travel for PIN clouds (vh). ~500 ≈ page-scroll speed
+// through the why-stay pin, with ~55vh between consecutive clouds.
+export const DEFAULT_FLOW = 500;
 
 /**
  * The mobile cloud set — mirrors the desktop distribution (hero, cards,
@@ -78,16 +110,27 @@ export const STATIC_CLOUDS: StaticCloudSpec[] = [
   // ——— Hero (field: travel with the page) ———
   // Distant puff up in the top-right, slightly damped so it lags the page.
   { key: "hero-tr", sprite: "hero-puff.webp", layer: "sky", x: 86, y: 12, width: 58, speed: 0.85 },
+  { key: "hero-ml", sprite: "hero-puff.webp", layer: "sky", x: 0, y: 100, width: 90, speed: 0.95 },
   // Rock-skirt strips hugging the cliff feet — welded 1:1 to the page so they
   // never slide off the rocks (same mandate as ROCK_CLOUDS scrollFactor 1).
-  { key: "rock-skirt-l", sprite: "rock-skirt-left.webp", layer: "front", x: 22, y: 99, width: 110, speed: 1 },
-  { key: "rock-skirt-r", sprite: "rock-skirt-right.webp", layer: "front", x: 92, y: 101, width: 95, speed: 1 },
+  { key: "rock-skirt-l", sprite: "rock-skirt-left.webp", layer: "sky", trigger: "[data-tagline]", x: 100, y: 50, width: 110, speed: 0.85 },
+  // { key: "rock-skirt-r", sprite: "rock-skirt-right.webp", layer: "front", x: 92, y: 101, width: 95, speed: 1 },
 
   // ——— Cards ("ground to launch in days") ———
   { key: "cards-br", sprite: "cards-bank.webp", layer: "sky", trigger: "[data-cards]", x: 84, y: 80, width: 68 },
 
-  // ——— Why-stay (pinned reel) ———
-  { key: "whystay-bl", sprite: "whystay-left.webp", layer: "sky", trigger: "[data-whystay]", x: 12, y: 78, width: 62 },
+  // ——— Why-stay (pinned reel) — the cloud CONVEYOR ———
+  // One cloud per reel option, welded to it via `at: i/(N-1)`: cloud i sits at
+  // its (x, y) rest exactly when phrase i is centred in the glass pill, and the
+  // shared `flow` keeps them evenly spaced — a continuous streak, so the sky is
+  // never empty during the long pin. Sides alternate; y varies so the stream
+  // doesn't read as a rigid queue.
+  { key: "whystay-1", sprite: "whystay-left.webp", layer: "sky", trigger: "[data-whystay]", pin: { extra: WHYSTAY_PIN_EXTRA, at: 0 / 5 }, x: 14, y: 42, width: 56 },
+  { key: "whystay-2", sprite: "puff-soft.webp", layer: "sky", trigger: "[data-whystay]", pin: { extra: WHYSTAY_PIN_EXTRA, at: 1 / 5 }, x: 86, y: 55, width: 48 },
+  { key: "whystay-3", sprite: "wide-bank.webp", layer: "sky", trigger: "[data-whystay]", pin: { extra: WHYSTAY_PIN_EXTRA, at: 2 / 5 }, x: 12, y: 60, width: 60 },
+  { key: "whystay-4", sprite: "whystay-small.webp", layer: "sky", trigger: "[data-whystay]", pin: { extra: WHYSTAY_PIN_EXTRA, at: 3 / 5 }, x: 88, y: 38, width: 50 },
+  { key: "whystay-5", sprite: "puff-small.webp", layer: "sky", trigger: "[data-whystay]", pin: { extra: WHYSTAY_PIN_EXTRA, at: 4 / 5 }, x: 16, y: 52, width: 44 },
+  { key: "whystay-6", sprite: "whystay-wide.webp", layer: "sky", trigger: "[data-whystay]", pin: { extra: WHYSTAY_PIN_EXTRA, at: 5 / 5 }, x: 84, y: 62, width: 66 },
 
   // ——— Working-with ———
   { key: "workingwith-l", sprite: "wide-bank.webp", layer: "sky", trigger: "[data-working-with]", x: 8, y: 86, width: 70 },

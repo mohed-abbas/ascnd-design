@@ -6,6 +6,7 @@ import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { useMode } from "@/lib/theme/use-mode";
 import { CROSSFADE, PALETTES } from "@/lib/theme/palette";
 import {
+  DEFAULT_FLOW,
   DEFAULT_TRAVEL,
   STATIC_CLOUDS,
   type StaticCloudSpec,
@@ -75,11 +76,45 @@ export default function StaticCloudLayer({
     ScrollTrigger.addEventListener("refresh", onRefresh);
 
     // ——— SECTION clouds: linear drift across their section's crossing. ———
+    // ——— PIN clouds: conveyor across a pinned section's full scroll span. ———
     for (const c of STATIC_CLOUDS) {
       if (!c.trigger) continue;
       const section = document.querySelector<HTMLElement>(c.trigger);
       const el = imgRefs.current.get(c.key);
       if (!section || !el) continue;
+
+      if (c.pin) {
+        // The element's viewport crossing understates a pinned section's real
+        // scroll span, so drive across entrance + pin + exit explicitly:
+        // start at "top bottom", end a start-relative `+=` of one viewport
+        // (entrance) + the pin's extra scroll + the section height (exit) —
+        // immune to pin-spacer layout shifts. The cloud rests at (x, y) when
+        // overall progress hits its option's spot (pin.at remapped from pin
+        // progress to the full span) and otherwise drifts linearly, `flow` vh
+        // over the whole span — all clouds sharing a flow form an evenly
+        // spaced streak.
+        const { extra, at } = c.pin;
+        const flow = c.flow ?? DEFAULT_FLOW;
+        const apply = (self: ScrollTrigger) => {
+          const vh = window.innerHeight;
+          const total = vh + extra + section.offsetHeight;
+          const pAt = (vh + at * extra) / total;
+          gsap.set(el, { y: ((pAt - self.progress) * flow * vh) / 100 });
+        };
+        const st = ScrollTrigger.create({
+          trigger: section,
+          start: "top bottom",
+          end: () => `+=${window.innerHeight + extra + section.offsetHeight}`,
+          scrub: true,
+          invalidateOnRefresh: true,
+          onUpdate: apply,
+          onRefresh: apply,
+        });
+        triggers.push(st);
+        apply(st); // seed (parks pAt × flow vh below rest while down-page)
+        continue;
+      }
+
       const apply = (self: ScrollTrigger) => {
         // d in [-1, 1]: below rest → at rest (section centred) → above rest.
         const d = -1 + 2 * self.progress;
