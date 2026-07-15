@@ -9,25 +9,30 @@
  *   • "sweep" / "punch" / "coverflow" — V3: the depth idea with NO fade (crisp,
  *     depth-buffer occlusion); the active card scales up and leaves frame, in
  *     three arrangements (side-sweep · head-on punch-through · coverflow arc).
+ *   • "cloudCanvas" — V4: an image globe (2D canvas, Fibonacci sphere) of the
+ *     projects that auto-spins and drags to rotate. Unlike the others it doesn't
+ *     pin/scrub; it floats over the sky as an explorable object.
  *
- * All variants pin the same `[data-portfolio]` section, but only one is mounted at
- * a time, so their ScrollTriggers never collide — unmounting one kills its pin
- * before the other builds its own. The selector is a house-glass segmented
- * control (same recipe as the navbar / mode rail) and persists across the swap.
+ * The pinned variants share the same `[data-portfolio]` section, but only one is
+ * mounted at a time, so their ScrollTriggers never collide — unmounting one kills
+ * its pin before the other builds its own (cloudCanvas creates no pin). The
+ * selector is a house-glass segmented control (same recipe as the navbar / mode
+ * rail) and persists across the swap.
  *
- * Defaults to "sweep" (the primary V3) for review; flip to compare the rest.
+ * Defaults to "cloudCanvas" (V4) for review; flip to compare the rest.
  */
 import { useState } from "react";
 import PortfolioScene from "./portfolio-scene";
 import CloudlineScene from "./cloudline-scene";
 import CarouselScene from "./carousel-scene";
+import CloudCanvasScene from "./cloud-canvas-scene";
 
-type Variant = "depth" | "cloudline" | "sweep" | "punch" | "coverflow";
+type Variant = "depth" | "cloudline" | "sweep" | "punch" | "coverflow" | "cloudCanvas";
 
-const VARIANTS: Variant[] = ["depth", "cloudline", "sweep", "punch", "coverflow"];
+const VARIANTS: Variant[] = ["depth", "cloudline", "sweep", "punch", "coverflow", "cloudCanvas"];
 
 export default function PortfolioVariants() {
-  const [variant, setVariant] = useState<Variant>("sweep");
+  const [variant, setVariant] = useState<Variant>("cloudCanvas");
 
   const renderVariant = () => {
     switch (variant) {
@@ -35,6 +40,8 @@ export default function PortfolioVariants() {
         return <PortfolioScene />;
       case "cloudline":
         return <CloudlineScene />;
+      case "cloudCanvas":
+        return <CloudCanvasScene />;
       default:
         // sweep · punch · coverflow — keyed so a change remounts the engine.
         return <CarouselScene key={variant} mode={variant} />;
