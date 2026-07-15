@@ -22,6 +22,29 @@ const nextConfig: NextConfig = {
   images: {
     formats: ["image/avif", "image/webp"],
   },
+  // Next serves /public with `Cache-Control: public, max-age=0, must-revalidate`,
+  // which forces a 304 revalidation round-trip on EVERY use of a file — even a
+  // cached one. For the testimonials rock GLB that round-trip lands on the
+  // critical path when the canvas mounts at near-view (measured ~150ms just to
+  // revalidate 0 bytes), so the rocks stall behind a network hop the preload was
+  // meant to eliminate. Serve it `immutable` instead — like Next's own hashed
+  // _next/static assets — so the browser reuses the preloaded bytes with zero
+  // round-trip. Safe because the filename is version-suffixed (.vN.glb): bump
+  // the version on any model change (see testimonial-rocks-canvas.tsx header).
+  // Headers are matched before the /public filesystem (Next headers() docs).
+  async headers() {
+    return [
+      {
+        source: "/rocks/testimonial-rock.v1.glb",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "public, max-age=31536000, immutable",
+          },
+        ],
+      },
+    ];
+  },
 };
 
 export default nextConfig;

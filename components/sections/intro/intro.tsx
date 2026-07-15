@@ -93,6 +93,10 @@ type TilePose = { x: number; y: number; scale: number };
 type Plan = {
   rocks: RockLayout[];
   glassSize: number;
+  /** Proportional scale (≤1) for the glass's ABSOLUTE-world geometry (bevel,
+   *  thickness, attenuation, distortion) so small-viewport glyphs keep the same
+   *  bevel-to-stroke ratio as the big desktop glyph. 1 on desktop (unchanged). */
+  glassGeomScale: number;
   welcome: { x: number; y: number };
   navbar: { x: number; y: number; scale: number };
   /** Static tile config (image + rounding + slot), index-matched to scatter/necklace. */
@@ -217,9 +221,22 @@ export default function Intro() {
     const heroCx = h.left + h.width / 2;
     const heroMidY = h.top + h.height / 2;
 
-    const glassW = Math.min(1292, W - 32);
+    // Side margin around the wordmark. Phones (<768) get a wider margin so the
+    // word sits at ~desktop's 85%-of-width proportion instead of running nearly
+    // edge-to-edge (92%) — the estimate in WIDTH_PER_SIZE then never overruns the
+    // screen edges (the "a"/"d" clipping). Desktop keeps its 32px (unchanged).
+    const glassMargin = W < 768 ? 56 : 32;
+    const glassW = Math.min(1292, W - glassMargin);
     const glassEmPx = glassW / WIDTH_PER_SIZE; // em box in px
     const glassSize = glassEmPx * wpp; // Text3D size, world units
+
+    // The glass material's bevel/thickness/attenuation/distortion are ABSOLUTE
+    // world lengths tuned for the big desktop glyph (glassW == the 1292 cap). On a
+    // small glyph those same absolutes are a much larger fraction of the stroke,
+    // so the refractive bevel swells and the letters read bold + congested. Scale
+    // them by the width ratio so the bevel-to-stroke proportion matches desktop.
+    // Gated to phones (<768) so every desktop/tablet render stays byte-identical.
+    const glassGeomScale = W < 768 ? glassW / 1292 : 1;
 
     const welcome = toWorld(heroCx + WELCOME_NUDGE_X, heroMidY - WELCOME_LIFT);
 
@@ -346,6 +363,7 @@ export default function Intro() {
     setPlan({
       rocks,
       glassSize,
+      glassGeomScale,
       welcome,
       navbar,
       tiles,
@@ -624,6 +642,7 @@ export default function Intro() {
         introActive={introActive}
         conveyor={conveyor}
         glassSize={plan.glassSize}
+        glassGeomScale={plan.glassGeomScale}
         restY={plan.welcome.y}
         onReady={() => {
           setReady(true);

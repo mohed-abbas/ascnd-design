@@ -7,6 +7,7 @@ import type {
   ButtonHTMLAttributes,
   ReactNode,
 } from "react";
+import { AURA, GLOW_OPACITY, SWEEP_DURATION } from "./aura";
 
 /**
  * The site's CTA button — factored out of the two hero CTAs (hero-text.tsx,
@@ -41,19 +42,9 @@ import type {
  */
 export type ButtonVariant = "solid" | "clear";
 
-// The aura gradient — the siri-style rainbow from demo.html (the "creating your
-// board" ring). A CONIC gradient so the colour ORBITS the rim: the angle is
-// driven by --aura-angle (degrees, set per-frame by the rotation tween below),
-// and the endpoints match (#5ea8ff → #5ea8ff across 360°) so a full revolution
-// has no seam. Fallback 0 keeps the SSR/first paint valid before JS.
-const AURA =
-  "conic-gradient(from calc(var(--aura-angle, 0) * 1deg), #5ea8ff, #a06bff, #ff6ec7, #ff9d5c, #ffe36e, #5ef2c8, #5ea8ff)";
-
-// Seconds per full revolution of the aura around the rim (continuous). Matches
-// the demo's 2.6s auraSpin — slow enough to read as a smooth orbit.
-const SWEEP_DURATION = 2.6;
-// Glow strength on hover — matches the demo's .aura-glow (0.55).
-const GLOW_OPACITY = 0.55;
+// The rainbow aura (conic gradient orbiting the rim via --aura-angle), its sweep
+// duration and hover glow strength are shared with the comparison column's glow
+// — see components/ui/aura.ts.
 
 // Shared shape (root) — rounded corners, padding, size, centering. `group` so the
 // clear fill can react to hover in CSS; `isolate` so the aura layers stack cleanly
@@ -119,9 +110,18 @@ export default function Button({
 
     gsap.set([glow, ring], { autoAlpha: 0 });
 
+    // The source of truth for "should the aura be showing". `:hover` is
+    // authoritative — the browser keeps it correct even when a fast cross drops
+    // the pointerleave event — and `:focus-visible` covers keyboard focus without
+    // latching the aura on after a mouse *click* (which focuses but isn't
+    // focus-visible). The handlers below reconcile against this, never against a
+    // private boolean that a missed event could desync.
+    const isActive = () =>
+      root.matches(":hover") || root.matches(":focus-visible");
+
     // Continuous aura orbit — rotate the conic gradient's angle around the rim by
     // driving --aura-angle 0→360 (inherited by both glow + ring off the root), so
-    // the colour travels around the perimeter. Paused until hover, so nothing
+    // the colour travels around the perimeter. Paused until active, so nothing
     // animates at rest (idles to zero). Rides GSAP's shared ticker (LenisProvider),
     // no private rAF. A proxy object + onUpdate keeps GSAP off CSS-var unit
     // guessing — it just writes the plain number each frame.
@@ -132,35 +132,69 @@ export default function Button({
       ease: "none",
       repeat: -1,
       paused: true,
-      onUpdate: () => root.style.setProperty("--aura-angle", String(angle.v)),
+      onUpdate: () => {
+        root.style.setProperty("--aura-angle", String(angle.v));
+        // Self-heal: if we believe we're active but the pointer/focus has really
+        // gone (a fast cross that dropped the pointerleave — the stuck-aura bug),
+        // retract now. This only runs while the sweep plays, so it costs nothing
+        // at rest and the effect still idles to zero.
+        if (shown && !isActive()) show(false);
+      },
     });
 
-    const enter = () => {
-      gsap.to(glow, { autoAlpha: GLOW_OPACITY, duration: 0.25, ease: "power2.out" });
-      gsap.to(ring, { autoAlpha: 1, duration: 0.25, ease: "power2.out" });
-      if (!reduce) sweep.play();
-    };
-    const leave = () => {
-      gsap.to([glow, ring], {
-        autoAlpha: 0,
-        duration: 0.2,
-        ease: "power2.in",
-        // pause the sweep once faded out so no per-frame work continues
-        onComplete: () => sweep.pause(),
-      });
+    // Single guarded entry point for the on/off transition. The guard stops a
+    // rapid enter→leave→enter… burst from stacking tweens, and `overwrite: true`
+    // guarantees the newer tween KILLS the older one — so on a fast cross the
+    // leave always wins the race against a still-running enter (the root cause of
+    // the aura latching on).
+    let shown = false;
+    function show(next: boolean) {
+      if (next === shown) return;
+      shown = next;
+      if (next) {
+        gsap.to(glow, {
+          autoAlpha: GLOW_OPACITY,
+          duration: 0.25,
+          ease: "power2.out",
+          overwrite: true,
+        });
+        gsap.to(ring, {
+          autoAlpha: 1,
+          duration: 0.25,
+          ease: "power2.out",
+          overwrite: true,
+        });
+        if (!reduce) sweep.play();
+      } else {
+        gsap.to([glow, ring], {
+          autoAlpha: 0,
+          duration: 0.2,
+          ease: "power2.in",
+          overwrite: true,
+          // pause the sweep once faded out so no per-frame work continues
+          onComplete: () => sweep.pause(),
+        });
+      }
+    }
+
+    // pointerenter/leave are more reliable than mouse* under fast movement; focus
+    // only counts when it's keyboard focus (:focus-visible), so a mouse click
+    // doesn't leave the aura latched on once the pointer has moved away.
+    const enter = () => show(true);
+    const leave = () => show(false);
+    const onFocus = () => {
+      if (root.matches(":focus-visible")) show(true);
     };
 
-    // mouseenter/leave = hover intent (not touch taps); focus/blur mirrors it for
-    // keyboard users.
-    root.addEventListener("mouseenter", enter);
-    root.addEventListener("mouseleave", leave);
-    root.addEventListener("focus", enter);
+    root.addEventListener("pointerenter", enter);
+    root.addEventListener("pointerleave", leave);
+    root.addEventListener("focus", onFocus);
     root.addEventListener("blur", leave);
 
     return () => {
-      root.removeEventListener("mouseenter", enter);
-      root.removeEventListener("mouseleave", leave);
-      root.removeEventListener("focus", enter);
+      root.removeEventListener("pointerenter", enter);
+      root.removeEventListener("pointerleave", leave);
+      root.removeEventListener("focus", onFocus);
       root.removeEventListener("blur", leave);
       sweep.kill();
       gsap.killTweensOf([glow, ring]);
@@ -182,7 +216,12 @@ export default function Button({
           ref={glowRef}
           aria-hidden
           className="pointer-events-none absolute -inset-[3px] rounded-[35px]"
-          style={{ background: AURA, filter: "blur(9px)", opacity: 0 }}
+          // `saturate` is load-bearing: blurring a full-spectrum conic gradient
+          // averages its hues toward grey, so a plain blur read as a WHITE halo
+          // hugging the button (worst on low-dpr screens, where the soft edge has
+          // less AA to hide it). Re-saturating after the blur keeps the halo a
+          // colour glow instead of a white border.
+          style={{ background: AURA, filter: "blur(9px) saturate(2.2)", opacity: 0 }}
         />
       )}
       {/* the variant surface (fill) */}

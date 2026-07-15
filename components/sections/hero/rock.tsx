@@ -34,7 +34,10 @@ export default function Rock({ side }: { side: Side }) {
     <div
       data-rock
       data-rock-side={side}
-      className={`pointer-events-none absolute bottom-0 h-full select-none ${
+      // Hidden below md: the hero drops both cliffs on mobile (they'd overlap
+      // and swallow a phone screen), so the mobile hero has no rock framing.
+      // max-md:hidden keeps desktop byte-identical.
+      className={`pointer-events-none absolute bottom-0 h-full select-none max-md:hidden ${
         side === "left" ? "left-0 z-[99]" : "right-0 z-0"
       }`}
     >

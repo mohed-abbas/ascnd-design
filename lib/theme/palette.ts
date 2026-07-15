@@ -31,8 +31,15 @@ export type Light = { color: string; intensity: number };
 export type ModePalette = {
   /** Vertical sky gradient stops (top of viewport → horizon). */
   sky: { top: string; mid: string; bottom: string };
-  /** Cloud lighting for this mode (see cloud-canvas.tsx ThemeRig). */
-  cloud: { ambient: Light; key: Light };
+  /**
+   * Cloud lighting for this mode (see cloud-canvas.tsx ThemeRig). `cssFilter`
+   * is the STATIC-sprite equivalent: the baked mobile/no-WebGL cloud sprites
+   * (public/clouds/sprites/, day-lit white) are retinted per mode with a CSS
+   * filter on each <img> (static-cloud-layer.tsx) — approximating what the
+   * ambient/key light pair does to the live clouds. Keep the two in the same
+   * mood when tuning either.
+   */
+  cloud: { ambient: Light; key: Light; cssFilter: string };
   /**
    * Film-grain overlay opacity for this mode (0–1), applied to the noise tile in
    * background.tsx via --grain-opacity. Tunable per mode: darker/flatter skies
@@ -53,6 +60,7 @@ export const PALETTES: Record<ThemeMode, ModePalette> = {
     cloud: {
       ambient: { color: "#fff5ea", intensity: 1.6 },
       key: { color: "#ffeed6", intensity: 3.0 },
+      cssFilter: "brightness(1.03) sepia(0.12) saturate(1.05)",
     },
     grain: 0.06,
   },
@@ -62,6 +70,8 @@ export const PALETTES: Record<ThemeMode, ModePalette> = {
     cloud: {
       ambient: { color: "#ffffff", intensity: 1.5 },
       key: { color: "#ffffff", intensity: 2.6 },
+      // Sprites are baked day-lit — day needs no correction.
+      cssFilter: "none",
     },
     grain: 0.1,
   },
@@ -73,6 +83,7 @@ export const PALETTES: Record<ThemeMode, ModePalette> = {
     cloud: {
       ambient: { color: "#fff2ee", intensity: 1.6 },
       key: { color: "#ffe6dc", intensity: 3.0 },
+      cssFilter: "brightness(1.02) sepia(0.16) saturate(1.08) hue-rotate(-10deg)",
     },
     grain: 0.05,
   },
@@ -83,6 +94,8 @@ export const PALETTES: Record<ThemeMode, ModePalette> = {
     cloud: {
       ambient: { color: "#8fa8c8", intensity: 0.5 },
       key: { color: "#c4d4ec", intensity: 1.0 },
+      // Dim + pull toward the moonlit slate-blue of the live night lights.
+      cssFilter: "brightness(0.74) sepia(0.3) saturate(1.3) hue-rotate(180deg)",
     },
     grain: 0.05,
   },

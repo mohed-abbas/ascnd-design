@@ -252,3 +252,37 @@ Per-cloud flag `perspectiveScroll` (`cloud-specs.ts`) selects the travel axis:
 Implementation (`cloud-canvas.tsx`): field clouds are split into two wrapper groups (perspective / flat), each with its own `<ScrollAnchorRig>` + `<CloudPlacement>` parameterized by `perspective`. `anchorVh` is baked along the matching axis so a cloud still reaches its rest spot at the right scroll. The perspective path is byte-for-byte the prior code, so existing clouds are unchanged. Current assignment: hero `top-right` + `rock-left`/`rock-right` are `perspectiveScroll: true` (kept swelling); the section-anchored sky clouds (`cards-br`, `whystay-br`) are flat.
 
 **Scope:** both paths honour the flag. Field clouds (`ScrollAnchorRig`) and section-bound clouds (`SectionRig`, dormant until a `section` cloud is added) pick their slide/travel axis from `perspectiveScroll` the same way, so the two behave consistently whenever section clouds return.
+
+---
+
+## 11. Section-cloud motion — continuous drift vs. docking hold (2026-07-12)
+
+The two final-CTA corner clouds (`finalcta-tl`/`finalcta-br`) reopened how a **section-bound** cloud should move across its section's scroll crossing. `SectionRig` (`cloud-canvas.tsx`) originally used a **slide → HOLD → slide** curve; in use it felt wrong — the slide-in was compressed into a *fixed* 0.7vh (too fast), and the motionless middle (`d = 0`) read as the cloud being **pinned** to the section. The wanted feel: "nice and slow to reach position, then keep floating past."
+
+Three ways to change it were evaluated (none touch `anchorVh`, which is the *field*-cloud path and already drifts continuously):
+
+| | **A — Data-only (big `slide`)** | **B — Monotonic curve (chosen)** | **C — Opt-in `hold` flag (future)** |
+|---|---|---|---|
+| Change | Set `slide: 100` on the bind | ~5 lines in `SectionRig.apply()` | Add `hold?: boolean` to `SectionBind` + branch |
+| Code change | None | Small | Small + API surface |
+| Keeps section-anchoring | ✅ | ✅ | ✅ |
+| Removes the "pinned" hold | ✅ | ✅ | ✅ when `hold:false` |
+| Constant drift speed | ⚠️ settles at centre | ✅ | ✅ |
+| Can still dock/pin | ❌ | ❌ | ✅ (`hold:true`) |
+
+**Option A** exploits the existing `slide = Math.min(slidePx, total/2)` clamp: a large `slide` saturates to `total/2`, so slide-in fills the first half and slide-out the second — hold gone. But each half still uses `smoothstep`, which decelerates to ~0 velocity *at* rest, so a subtle settle/pause remains at centre. Zero-code, but not a true constant drift.
+
+**Option B — IMPLEMENTED (2026-07-12).** `SectionRig.apply()` now maps the crossing with a single linear function of scroll progress:
+
+```
+d = -1 + 2 * self.progress   // progress 0 → -1 (travel below rest)
+                             // progress 0.5 → 0 (rest, section centred)
+                             // progress 1 → +1 (travel above rest)
+off = d * travel
+```
+
+Constant velocity, no hold: the cloud drifts slowly up, passes through its `ndc` rest spot exactly when the section is centred, and keeps floating out — the `anchorVh` field-cloud feel, but triggered by the section element (no viewport-height counting, robust to reordering). The old `slide`/`smoothstep`/`clamp01`/`hold` code was removed; `SectionBind.slide` is now **reserved** (unused) for Option C. `travel` (default 1vh) still tunes how far the cloud sweeps to each side of rest — raise it for a longer, slower drift. `perspectiveScroll` still selects the drift axis (§10).
+
+**Option C — FUTURE (leaning toward it).** Reintroduce the docking hold as an **opt-in**, not the default: add `hold?: boolean` to `SectionBind` (default `false`). `false` → Option B's continuous curve; `true` → the original slide → HOLD → slide (fixed-`slide` ease-in, motionless middle spanning any pin, ease-out), which is the right choice for a cloud that should **pin beside a genuinely pinned section** (e.g. why-stay). This keeps continuous drift as the default feel while making `bind.slide` live again for the docking path. Cost: one flag + a restored branch + a doc line.
+
+**Independent knobs (stack on any option):** `travel` (sweep distance), `scrub: <number>` on the ScrollTrigger (currently `true` → 1:1; a number adds easing lag for a softer track), and — for B/C — a non-linear `d` ease (`power1`) if a gentle slow *near* centre is wanted without a full stop.

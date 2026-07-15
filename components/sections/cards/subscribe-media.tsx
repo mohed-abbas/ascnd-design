@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 import Image from "next/image";
 import gsap from "gsap";
 import { CheckMark } from "@/components/ui/icons";
+import { onMediaRelease } from "./media-gate";
 
 const REDUCE_MOTION = "(prefers-reduced-motion: reduce)";
 
@@ -227,24 +228,43 @@ export default function SubscribeMedia() {
         .set(cursor, { x: 0, y: 0, scale: 1, autoAlpha: 0 })
         .to(label0, { autoAlpha: 1, duration: 0.32, ease: "power2.out" });
 
-      // Only run while the card is on screen.
+      // Held until the card's entrance lands (Option D): CardsReveal releases
+      // this media as the panel finishes blur-rising, so it starts in step with
+      // the left→right cascade rather than on its own. After release the observer
+      // just pauses/resumes it as the card scrolls out of / back into view.
+      let released = false;
+      let onScreen = false;
+      const play = () => {
+        tl.play();
+        sweep.play();
+        spin.play();
+      };
+      const pause = () => {
+        tl.pause();
+        sweep.pause();
+        spin.pause();
+      };
+
       const io = new IntersectionObserver(
         ([entry]) => {
-          if (entry.isIntersecting) {
-            tl.play();
-            sweep.play();
-            spin.play();
-          } else {
-            tl.pause();
-            sweep.pause();
-            spin.pause();
-          }
+          onScreen = entry.isIntersecting;
+          if (!released) return; // hold until the card lands
+          if (onScreen) play();
+          else pause();
         },
         { threshold: 0.15 }
       );
       io.observe(root);
 
-      return () => io.disconnect();
+      const unrelease = onMediaRelease("subscribe", () => {
+        released = true;
+        if (onScreen) play();
+      });
+
+      return () => {
+        io.disconnect();
+        unrelease();
+      };
     }, root);
 
     return () => ctx.revert();

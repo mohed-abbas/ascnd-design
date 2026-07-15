@@ -18,3 +18,12 @@ export const PHRASES = [
 ] as const;
 
 export const REEL_STEP = 118; // px between phrase centres (91px line + 27px gap)
+
+// Scroll consumed per phrase while the section is PINNED (slower = softer
+// glide). Lives here (not in why-stay-reveal.tsx) because the pin's total
+// length is also consumed by the static cloud layer's why-stay conveyor
+// (static-cloud-specs.ts) — one source, so reel and clouds can't drift apart.
+export const PER_PHRASE = 420;
+
+// Total extra scroll the pin adds to the section's crossing.
+export const WHYSTAY_PIN_EXTRA = PER_PHRASE * (PHRASES.length - 1);

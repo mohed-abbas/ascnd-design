@@ -25,6 +25,19 @@
  * | components/sections/intro/intro-scene.tsx  | mtm*, text3d* (mount snapshot),          |
  * |                                            | heavyEffectFpsCap() (IntroFrameCap),     |
  * |                                            | makeCappedInvalidate (ScrollRig)         |
+ * | components/sections/footer/                | mtm* (own mtmResolutionFooter — smaller  |
+ * |   footer-glass-scene.tsx                   | FBO than the intro; the blur hides it),  |
+ * |                                            | text3d* (mount snapshot) — reuses the    |
+ * |                                            | intro's glass. heavyEffectFpsCap()       |
+ * |                                            | (RenderPump paint cap). Pre-warmed after |
+ * |                                            | the intro, mounted ~6vp early, poster-   |
+ * |                                            | covered until first real frames; paint   |
+ * |                                            | is request-driven (frameloop="never"),   |
+ * |                                            | so it idles to ZERO at rest, on-screen   |
+ * |                                            | or off; dpr≤1.5.                         |
+ * |                                            | No-WebGL/reduced-motion/mobile → per-    |
+ * |                                            | mode baked transparent stills (also the  |
+ * |                                            | eligible-device posters).                |
  * | components/ui/glass-surface.tsx            | NONE (2026-07-03, Decision 6): reads no   |
  * |                                            | tier knob. Its consumer (why-stay pill)   |
  * |                                            | now passes chromatic={false} on EVERY     |
@@ -39,6 +52,24 @@
  * | components/sections/showcase/              | showcaseDprMax (live), showcaseClothSeg- |
  * |   showcase-canvas.tsx                      | ments (mount snapshot), makeCappedInval- |
  * |                                            | idate (WheelScrollRig + ClothRig).       |
+ * | components/sections/comparison/            | comparisonAuraSweep — gates the featured |
+ * |   ascnd-aura.tsx                           | column's orbiting rainbow (per-frame     |
+ * |                                            | conic-gradient + blur repaint). false on |
+ * |                                            | low → static aura, no orbit. Also idles  |
+ * |                                            | to zero off-screen (IntersectionObserver)|
+ * |                                            | and rides the shared GSAP ticker.        |
+ * | components/sections/testimonials/          | testimonialsDrift — gates the ring dots' |
+ * |   testimonials-drift.tsx +                 | revolve (transform GSAP loop) AND the 3D |
+ * |   testimonial-rocks(-canvas).tsx           | GLB rock canvas (orbit+tumble). false on |
+ * |                                            | low → flat PNG rocks, no revolve. Canvas |
+ * |                                            | is frameloop=never, driven by the shared |
+ * |                                            | GSAP ticker + advance(), dpr≤1.5, and    |
+ * |                                            | idles to zero off-screen (IO). No-WebGL/ |
+ * |                                            | reduced-motion/mobile also → flat PNG.   |
+ * |                                            | When true, the wrapper idle-preloads the |
+ * |                                            | canvas chunk + GLB before near-view so   |
+ * |                                            | the mount is cache-hot, not a cold       |
+ * |                                            | chunk→GLB download waterfall.            |
  *
  * ★ RULE (audit 2026-07-02 F5.1): any NEW heavy effect — a WebGL canvas, a
  * free-running loop, a per-frame SVG/CSS filter — must be added to this table
@@ -82,6 +113,16 @@ export interface QualityConfig {
   readonly mtmSamples: number;
   /** MeshTransmissionMaterial FBO resolution (square). */
   readonly mtmResolution: number;
+  /**
+   * The FOOTER glass's FBO resolution — deliberately far below the intro's
+   * `mtmResolution`. With roughness 0.31 + anisotropicBlur 0.28 the refraction
+   * is heavily blurred anyway, so a small buffer reads the same while cutting
+   * the per-painted-frame FBO cost ~4× (S2 in
+   * docs/glass-loading-and-performance-2026-07-12.md). Safe to diverge from the
+   * intro: only `samples` is baked into the shader source (compile key), not
+   * resolution, so the browser program cache still sees identical GLSL.
+   */
+  readonly mtmResolutionFooter: number;
   /** Second (backside) scene render — the single costliest MTM lever. */
   readonly mtmBackside: boolean;
   /** Text3D curve tessellation (one-time CPU geometry build). */
@@ -105,6 +146,26 @@ export interface QualityConfig {
    * step-down applies on the next mount.
    */
   readonly showcaseClothSegments: number;
+
+  // ── Comparison featured-column aura (components/sections/comparison/ascnd-aura.tsx) ──
+  /**
+   * Whether the featured "ascnd" column's rainbow aura ORBITS. The orbit is a
+   * per-frame conic-gradient + blur repaint; on the weakest tier we hold it
+   * static (a fixed-angle rainbow, no repaint) to drop that cost. Higher tiers
+   * still idle to zero off-screen (the orbit only runs while the section is in
+   * view). Reduced-motion also forces it static regardless of tier.
+   */
+  readonly comparisonAuraSweep: boolean;
+
+  // ── Testimonials rock/ring drift (components/sections/testimonials/testimonials-drift.tsx) ──
+  /**
+   * Whether the testimonials rocks orbit + tumble and their ring dots revolve.
+   * All motion is transform-only GSAP loops on the shared ticker, gated to
+   * in-view (idle to zero off-screen). false on low → rocks/rings render at
+   * their resting Figma pose, no loops. Reduced-motion forces the same
+   * regardless of tier.
+   */
+  readonly testimonialsDrift: boolean;
 }
 
 export const TIERS: Record<TierName, QualityConfig> = {
@@ -124,12 +185,15 @@ export const TIERS: Record<TierName, QualityConfig> = {
     // `samples` stays 8 to preserve the refraction-blur sharpness.
     mtmSamples: 8,
     mtmResolution: 384,
+    mtmResolutionFooter: 192,
     mtmBackside: false,
     text3dCurveSegments: 32,
     text3dBevelSegments: 12,
     // Match the clouds: 1.5 on retina is imperceptible on soft card art.
     showcaseDprMax: 1.5,
     showcaseClothSegments: 24,
+    comparisonAuraSweep: true,
+    testimonialsDrift: true,
   },
   medium: {
     tier: "medium",
@@ -137,11 +201,14 @@ export const TIERS: Record<TierName, QualityConfig> = {
     cloudSegments: 14,
     mtmSamples: 6,
     mtmResolution: 320,
+    mtmResolutionFooter: 160,
     mtmBackside: false,
     text3dCurveSegments: 16,
     text3dBevelSegments: 8,
     showcaseDprMax: 1.5,
     showcaseClothSegments: 16,
+    comparisonAuraSweep: true,
+    testimonialsDrift: true,
   },
   low: {
     tier: "low",
@@ -149,10 +216,13 @@ export const TIERS: Record<TierName, QualityConfig> = {
     cloudSegments: 10,
     mtmSamples: 4,
     mtmResolution: 256,
+    mtmResolutionFooter: 128,
     mtmBackside: false,
     text3dCurveSegments: 16,
     text3dBevelSegments: 6,
     showcaseDprMax: 1.25,
     showcaseClothSegments: 10,
+    comparisonAuraSweep: false,
+    testimonialsDrift: false,
   },
 };

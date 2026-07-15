@@ -322,28 +322,31 @@ function ScrollAnchorRig({
 }
 
 /**
- * Section-anchored clouds. Unlike the field clouds (hero + rock bases) which
- * parallax continuously with the page, a section cloud is driven by ITS OWN
- * section's scroll crossing, so it: SLIDES into its `ndc` rest spot as the
- * section enters, HOLDS there motionless while the section is on screen — the
- * hold automatically spans any pin, since a pinned section's scroll crossing is
- * simply longer — then SLIDES up and out as the section leaves. These clouds sit
- * OUTSIDE the parallax field group, so only this rig moves them.
+ * Section-anchored clouds. Like the field clouds (hero + rock bases) they drift
+ * continuously with scroll, but a section cloud is driven by ITS OWN section's
+ * scroll crossing (a scrubbed ScrollTrigger on the section element) rather than
+ * by an absolute `anchorVh` — so it needs no viewport-height counting and is
+ * robust to sections being reordered above it. These clouds sit OUTSIDE the
+ * parallax field group, so only this rig moves them.
  *
- * Motion is a single scrubbed curve over the section's crossing (from section top
- * at viewport bottom, to section bottom at viewport top): the cloud eases from
- * `travel` below the rest spot up to it over a FIXED `slide` distance, HOLDS at
- * rest for the whole middle, then eases up to `travel` above over a final `slide`.
+ * Motion — Option B, continuous monotonic drift: a single LINEAR mapping over the
+ * whole crossing (section top at viewport bottom -> section bottom at viewport
+ * top). The cloud drifts at CONSTANT velocity from `travel` below its `ndc` rest
+ * spot, through rest exactly when the section is centred, up to `travel` above as
+ * it leaves — no hold. It rises slowly, passes through its corner and keeps
+ * floating out, matching the anchorVh clouds' feel.
  *
- * The slide distance is fixed in viewport-heights (not a fraction of the crossing)
- * so a PINNED section behaves identically to a plain one: the pin only lengthens
- * the crossing, which the hold simply absorbs — the cloud still slides in/out over
- * the same distance while the section enters/leaves, and stays put while it's
- * docked. Demand mode, so each update invalidate()s a repaint.
+ * This replaced an earlier slide -> HOLD -> slide curve (fixed 0.7vh slides + a
+ * motionless middle) that felt too fast on entry and read as "pinned" while
+ * docked. That docking behaviour — useful for a cloud that should pin beside a
+ * PINNED section — is preserved as a documented future opt-in (Option C: a
+ * `hold?` flag on SectionBind that restores the piecewise curve, using
+ * `bind.slide`). See docs/cloud-rendering-research.md § "Section-cloud motion".
+ * Demand mode, so each update invalidate()s a repaint.
  *
- * The slide axis honours each cloud's `perspectiveScroll` (cloud-specs.ts): flat
- * clouds (default) slide along the camera-up axis at constant size; perspective
- * clouds slide along world-Y and swell toward the lens — same toggle the field
+ * The drift axis honours each cloud's `perspectiveScroll` (cloud-specs.ts): flat
+ * clouds (default) drift along the camera-up axis at constant size; perspective
+ * clouds drift along world-Y and swell toward the lens — same toggle the field
  * rig uses, so section and field clouds behave consistently.
  */
 function SectionRig({
@@ -387,31 +390,27 @@ function SectionRig({
       const restY = rest.y;
       const restZ = rest.z;
 
-      // Flat clouds slide along the camera-up axis (calibrated by upSpan);
-      // perspective clouds slide along world-Y (vwh) and swell as they go.
+      // Flat clouds drift along the camera-up axis (calibrated by upSpan);
+      // perspective clouds drift along world-Y (vwh) and swell as they go.
       const persp = !!c.perspectiveScroll;
-      const travel = (bind.travel ?? 1) * (persp ? vwh : upSpan); // world units slid in/out
-      const slidePx = (bind.slide ?? 0.7) * window.innerHeight; // fixed slide distance
+      const travel = (bind.travel ?? 1) * (persp ? vwh : upSpan); // world units swept to each side of rest
 
-      // smoothstep for soft starts/stops at the hold boundaries.
-      const smooth = (t: number) => t * t * (3 - 2 * t);
-      const clamp01 = (t: number) => (t < 0 ? 0 : t > 1 ? 1 : t);
-
+      // Option B — continuous monotonic drift. A single LINEAR mapping over the
+      // whole crossing, no hold: progress 0 (section entering at viewport bottom)
+      // -> d = -1 (travel below rest); progress 0.5 (section centred) -> d = 0
+      // (rest at the cloud's ndc spot); progress 1 (section leaving at viewport
+      // top) -> d = +1 (travel above). Constant velocity, so the cloud drifts
+      // slowly up, passes through its corner rest spot and keeps floating out —
+      // the anchorVh field-cloud feel, but section-anchored (no viewport-height
+      // counting). This replaced an earlier slide -> HOLD -> slide curve whose
+      // fixed 0.7vh slides felt fast and whose motionless middle read as "pinned".
+      // (`bind.slide` is intentionally unused here; it returns only if the docking
+      // hold is reintroduced as an opt-in — Option C, see
+      // docs/cloud-rendering-research.md § "Section-cloud motion".)
       const apply = (self: ScrollTrigger) => {
         const g = cloudRefs.current[i];
         if (!g) return;
-        const total = self.end - self.start;
-        // Clamp the slide so two slides never overlap on a short crossing (hold ≥ 0).
-        const slide = Math.min(slidePx, total / 2);
-        const scroll = self.start + self.progress * total;
-        let d: number; // offset from rest, in [-1, 1] × travel
-        if (scroll <= self.start + slide) {
-          d = -1 + smooth(clamp01((scroll - self.start) / slide)); // slide in: below → rest
-        } else if (scroll >= self.end - slide) {
-          d = smooth(clamp01((scroll - (self.end - slide)) / slide)); // rest → above
-        } else {
-          d = 0; // hold at rest (spans the pin, if any)
-        }
+        const d = -1 + 2 * self.progress; // offset from rest, in [-1, 1] x travel
         const off = d * travel;
         if (persp) {
           g.position.set(restX, restY + off, restZ);

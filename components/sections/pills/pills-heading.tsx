@@ -89,15 +89,15 @@ export default function PillsHeading() {
   return (
     <div
       ref={ref}
-      className="relative h-[164px] w-full whitespace-nowrap text-center text-white"
+      className="relative h-[164px] w-full whitespace-nowrap text-center text-white max-md:flex max-md:h-auto max-md:flex-col max-md:items-center max-md:whitespace-normal"
     >
-      <p className="absolute left-[calc(50%-155.5px)] top-0 -translate-x-1/2 font-instrument text-[49px] leading-[1.1] tracking-[-1.47px]">
+      <p className="absolute left-[calc(50%-155.5px)] top-0 -translate-x-1/2 font-instrument text-display leading-[1.1] tracking-[-0.03em] max-md:static max-md:translate-x-0">
         everything
       </p>
-      <p className="absolute left-[calc(50%+36.5px)] top-[50px] -translate-x-1/2 text-[56px] font-bold leading-[1.1] tracking-[-1.68px]">
+      <p className="absolute left-[calc(50%+36.5px)] top-[50px] -translate-x-1/2 text-hero font-bold leading-[1.1] tracking-[-0.03em] max-md:static max-md:translate-x-0">
         that gets you up
       </p>
-      <p className="absolute left-[calc(50%+113.5px)] top-[110px] -translate-x-1/2 text-[49px] font-light leading-[1.1] tracking-[-1.47px]">
+      <p className="absolute left-[calc(50%+113.5px)] top-[110px] -translate-x-1/2 text-display font-light leading-[1.1] tracking-[-0.03em] max-md:static max-md:translate-x-0">
         there
       </p>
     </div>

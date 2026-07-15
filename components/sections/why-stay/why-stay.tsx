@@ -98,7 +98,7 @@ export default function WhyStay() {
           `isolate` is load-bearing (docs/why-stay-glass-optimization.md O2):
           per Filter Effects 2, `isolation: isolate` forms a BACKDROP ROOT, so
           the pill's backdrop-filter samples ONLY this stage subtree (the reel
-          text + heading) instead of the whole page behind it. Two wins:
+          text) instead of the whole page behind it. Two wins:
           - the fixed cloud canvas + sky/grain no longer invalidate the
             displacement chain (the clouds morph at 30fps behind this section —
             without the root, the pill re-filtered even while idle);
@@ -106,16 +106,29 @@ export default function WhyStay() {
           Look is preserved because bending the flat sky was invisible anyway —
           all visible refraction is the text, and the sky now shows through
           unbent. */}
+      {/* Heading (Figma 302:1460) — OUTSIDE the scaled stage, on the shared
+          text-display token, so it sizes like every other section heading
+          (inside, the stage's max-md:scale-[0.4] shrank it to ~20px vs the
+          ~29px fluid display size the rest of the page uses). Desktop is
+          unchanged: text-display = 49px and top 50% − 217px is exactly the old
+          stage-top line (stage centre − half its 434px height); the -1.47px
+          tracking is the same -0.03em, now in em so it scales with the token.
+          On mobile it rests 115px above centre, clear of the 0.4-scaled reel. */}
+      <h2 className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-[217px] max-md:-translate-y-[115px] whitespace-nowrap text-center font-product text-display font-light leading-[1.1] tracking-[-0.03em] text-white">
+        <span className="sr-only">why teams stay</span>
+        <HeadingWords />
+      </h2>
+
       <div
         data-whystay-stage
-        className="isolate absolute left-1/2 top-1/2 h-[434px] w-[876px] max-w-full -translate-x-1/2 -translate-y-1/2"
+        // Below md the whole 876×434 design block is scaled down as ONE unit
+        // (max-w-none keeps its design width; scale-[0.4] fits it to the phone),
+        // so the reel phrases, REEL_STEP, --reel-y translation and glass pill
+        // all shrink together — the exact composition, just smaller, with no
+        // change to the (tightly coupled) reel geometry or the pin driver. (The
+        // heading lives OUTSIDE, above, so it keeps the shared display size.)
+        className="isolate absolute left-1/2 top-1/2 h-[434px] w-[876px] max-w-full -translate-x-1/2 -translate-y-1/2 max-md:max-w-none max-md:scale-[0.4]"
       >
-        {/* Heading (Figma 302:1460) — top of the block, centred. */}
-        <h2 className="absolute left-1/2 top-0 -translate-x-1/2 whitespace-nowrap text-center font-product text-[49px] font-light leading-[1.1] tracking-[-1.47px] text-white">
-          <span className="sr-only">why teams stay</span>
-          <HeadingWords />
-        </h2>
-
         {/* The reel — bright phrases scrolling behind the glass. Masked to fade
             above/below the pill band (globals.css [data-whystay-window]) so only
             the framed phrase (and its neighbours as fog) shows. Sits BEHIND the
