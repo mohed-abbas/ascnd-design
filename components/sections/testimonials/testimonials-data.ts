@@ -136,7 +136,7 @@ export type Testimonial = {
 };
 
 /** Seconds each quote holds before cycling to the next (quote-reveal driver). */
-export const QUOTE_CYCLE_SECS = 2.5;
+export const QUOTE_CYCLE_SECS = 4;
 
 /**
  * The rotating pull-quotes. SSR renders [0]; the quote-reveal driver then
