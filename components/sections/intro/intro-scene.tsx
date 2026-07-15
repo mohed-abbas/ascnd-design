@@ -9,7 +9,14 @@ import {
   Text3D,
   useTexture,
 } from "@react-three/drei";
-import { Suspense, useEffect, useLayoutEffect, useMemo, useRef } from "react";
+import {
+  Suspense,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import * as THREE from "three";
 import type { Group, Mesh } from "three";
 import gsap from "gsap";
@@ -17,7 +24,8 @@ import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { getQualityConfig, heavyEffectFpsCap } from "@/lib/perf/quality-store";
 import { makeCappedInvalidate } from "@/lib/perf/capped-invalidate";
 import { useMode } from "@/lib/theme/use-mode";
-import { PALETTES } from "@/lib/theme/palette";
+import { CROSSFADE, PALETTES } from "@/lib/theme/palette";
+import { makeSkyBackdrop } from "@/lib/theme/sky-backdrop";
 import {
   SHOT_BASE,
   SHOT_FRAME_RADIUS,
@@ -43,8 +51,9 @@ for (const n of [2, 3, 4, 5, 6, 7, 8, 9]) useTexture.preload(`/shots/shot${n}.av
  * 8.284/innerHeight world units at z=0), so positions/sizes still line up with
  * the hero. The canvas is TRANSPARENT — the DOM sky + clouds show through; only
  * the two rock planes (refraction source under 'a'/'d', pixel-matched over the
- * DOM rocks) and the glass live in the scene. The material's `background` sky
- * colour fills the transmission where the scene is empty (open sky).
+ * DOM rocks) and the glass live in the scene. The material's `background` — a
+ * gradient texture of the real sky stops (lib/theme/sky-backdrop, shared with the
+ * footer glass) — fills the transmission where the scene is empty (open sky).
  *
  * Transforms are driven imperatively from <Intro>'s GSAP timeline via the shared
  * `anim` ref; frameloop is "always" for the brief intro.
@@ -128,6 +137,10 @@ export type IntroSceneProps = {
   conveyor: boolean;
   /** Text3D `size` in WORLD units (≈ 4–5, matching the lab). */
   glassSize: number;
+  /** Proportional scale (≤1) applied to the glass's absolute-world geometry
+   *  (bevel/thickness/attenuation/distortion) so a small-viewport glyph keeps the
+   *  same bevel-to-stroke ratio as the big desktop glyph. 1 on desktop. */
+  glassGeomScale: number;
   /** World y the glass rests at (the welcome spot) — anchors the reveal clip. */
   restY: number;
   font?: string;
@@ -815,26 +828,74 @@ function SceneReady({ onReady }: { onReady?: () => void }) {
 function Glass({
   anim,
   glassSize,
+  glassGeomScale,
   restY,
   font = FONT,
 }: {
   anim: React.RefObject<GlassAnim>;
   glassSize: number;
+  /** Proportional scale (≤1) for the absolute-world glass geometry (see props). */
+  glassGeomScale: number;
   /** World y the glass rests at after the reveal — the slide-up target. */
   restY: number;
   font?: string;
 }) {
+  // Scale every ABSOLUTE-world glass length by the geometry factor so a small
+  // glyph's bevel/thickness/attenuation stay in the same ratio to the stroke as
+  // on desktop (k=1 there → these are the exact tuned values). letterSpacing,
+  // roughness, ior, transmission, aberration etc. are unitless/em and DON'T scale.
+  const k = glassGeomScale;
   const ref = useRef<Group>(null);
   const textRef = useRef<Mesh>(null);
   // Refraction fill where the scene is empty (open sky) — without it the
   // transmission samples the transparent FBO (black) and the glass goes dark.
-  // Tied to the current sky MODE (its mid gradient stop, the dominant tone behind
-  // the glass) so the wordmark refracts a colour consistent with the live sky —
-  // otherwise it stays day-blue over a sunrise/sunset/night backdrop. The intro
-  // canvas repaints continuously while the welcome plays (IntroFrameCap), so a
-  // mode switch updates the glass in place. day.mid === the old #62abff.
+  // A GRADIENT texture of the current mode's real sky stops (lib/theme/
+  // sky-backdrop, shared with the footer glass) — a flat mid colour read wrong
+  // against the graded DOM sky, especially two-tone sunrise/sunset. On a mode
+  // switch the stops tween in lockstep with the site-wide sky CROSSFADE, each
+  // step redrawing the tiny gradient + invalidate()-ing the demand canvas (the
+  // welcome's own frames also pick it up while IntroFrameCap is running).
   const mode = useMode();
-  const sky = useMemo(() => new THREE.Color(PALETTES[mode].sky.mid), [mode]);
+  const invalidate = useThree((s) => s.invalidate);
+  const [sky] = useState(() => makeSkyBackdrop(mode));
+  useEffect(() => {
+    return () => sky.texture.dispose();
+  }, [sky]);
+
+  const firstMode = useRef(true);
+  useEffect(() => {
+    if (firstMode.current) {
+      firstMode.current = false;
+      return;
+    }
+    const target = PALETTES[mode];
+    const to = {
+      top: new THREE.Color(target.sky.top),
+      mid: new THREE.Color(target.sky.mid),
+      bottom: new THREE.Color(target.sky.bottom),
+    };
+    const from = {
+      top: sky.stops.top.clone(),
+      mid: sky.stops.mid.clone(),
+      bottom: sky.stops.bottom.clone(),
+    };
+    const proxy = { p: 0 };
+    const tween = gsap.to(proxy, {
+      p: 1,
+      duration: CROSSFADE.duration,
+      ease: CROSSFADE.ease,
+      onUpdate: () => {
+        sky.stops.top.copy(from.top).lerp(to.top, proxy.p);
+        sky.stops.mid.copy(from.mid).lerp(to.mid, proxy.p);
+        sky.stops.bottom.copy(from.bottom).lerp(to.bottom, proxy.p);
+        sky.redraw();
+        invalidate();
+      },
+    });
+    return () => {
+      tween.kill();
+    };
+  }, [mode, sky, invalidate]);
 
   // Adaptive glass quality (docs/performance-audit.md §6): the MTM is the intro's
   // heaviest frame cost (~3 scene renders/frame with backside on). Snapshot the
@@ -895,31 +956,31 @@ function Glass({
           height={0}
           curveSegments={q.text3dCurveSegments}
           bevelEnabled
-          bevelThickness={0.175}
-          bevelSize={0.095}
+          bevelThickness={0.175 * k}
+          bevelSize={0.095 * k}
           bevelOffset={0}
           bevelSegments={q.text3dBevelSegments}
           letterSpacing={0.02}
         >
           ascnd
           <MeshTransmissionMaterial
-            background={sky}
+            background={sky.texture}
             transmission={1}
-            thickness={0.3}
+            thickness={0.3 * k}
             roughness={0.31}
             ior={1.28}
             chromaticAberration={0.65}
             anisotropicBlur={0.28}
             distortion={0.2}
-            distortionScale={0.4}
+            distortionScale={0.4 * k}
             temporalDistortion={0.28}
             samples={q.mtmSamples}
             resolution={q.mtmResolution}
             backside={q.mtmBackside}
-            backsideThickness={0.4}
+            backsideThickness={0.4 * k}
             clearcoat={0}
             clearcoatRoughness={0}
-            attenuationDistance={4}
+            attenuationDistance={4 * k}
             attenuationColor="#eaf4ff"
             color="#ffffff"
           />
@@ -976,6 +1037,7 @@ export default function IntroScene({
   introActive,
   conveyor,
   glassSize,
+  glassGeomScale,
   restY,
   font = FONT,
   onReady,
@@ -1033,7 +1095,13 @@ export default function IntroScene({
         {introActive && (
           <>
             <Rocks rocks={rocks} rockEntry={rockEntry} />
-            <Glass anim={anim} glassSize={glassSize} restY={restY} font={font} />
+            <Glass
+              anim={anim}
+              glassSize={glassSize}
+              glassGeomScale={glassGeomScale}
+              restY={restY}
+              font={font}
+            />
             <directionalLight position={[3, 5, 6]} intensity={1.2} />
             <ambientLight intensity={0.4} />
             <IntroFrameCap />

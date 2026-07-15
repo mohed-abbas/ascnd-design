@@ -1,5 +1,8 @@
 import Cards from "@/components/sections/cards/cards";
 import Comparison from "@/components/sections/comparison/comparison";
+import Faq from "@/components/sections/faq/faq";
+import FinalCta from "@/components/sections/final-cta/final-cta";
+import Footer from "@/components/sections/footer/footer";
 import Hero from "@/components/sections/hero/hero";
 import IntroLoader from "@/components/sections/intro/intro-loader";
 import Pills from "@/components/sections/pills/pills";
@@ -56,8 +59,19 @@ export default function Home() {
       </div>
       {/* Two-tier pricing ("simple pricing, pause anytime"): subscription +
           fixed-sprint glass cards joined by a dashed connector, over the shared
-          sky. Last section for now. */}
+          sky. */}
       <Pricing />
+      {/* "questions, answered straight": six glass FAQ pills that expand on click
+          (single-open accordion), under a mixed-font heading, over the shared
+          sky. */}
+      <Faq />
+      {/* Closing call-to-action ("let's get you off the ground"): a mixed-font
+          heading over the two shared CTA buttons, over the shared sky. */}
+      <FinalCta />
+      {/* Footer brand payoff: a full-bleed mountain range with a giant glassy
+          "ascnd" wordmark laid across the peaks (one baked composite over the
+          shared sky). Last section — the mountains meet the bottom of the page. */}
+      <Footer />
     </>
   );
 }

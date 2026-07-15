@@ -35,10 +35,11 @@ export type CloudSpec = {
    */
   anchorVh?: number;
   /**
-   * SECTION clouds: bind the cloud to a section so it SLIDES into its `ndc` rest
-   * spot as the section enters, HOLDS there while the section is on screen (the
-   * hold spans any pin automatically), then SLIDES out as it leaves — instead of
-   * parallaxing continuously. Mutually exclusive with `anchorVh`. See <SectionRig>.
+   * SECTION clouds: bind the cloud to a section so it drifts continuously through
+   * its `ndc` rest spot over that section's scroll crossing — reaching rest as the
+   * section centres, then floating on out — WITHOUT counting viewport-heights (the
+   * `anchorVh` alternative). Mutually exclusive with `anchorVh`. Motion is Option
+   * B (constant-velocity drift, no hold); see <SectionRig>.
    */
   section?: SectionBind;
   /**
@@ -58,12 +59,17 @@ export type SectionBind = {
   /** CSS selector for the section element (e.g. "[data-cards]"). */
   trigger: string;
   /**
-   * Fixed distance (in viewport-heights) the cloud spends sliding IN and sliding
-   * OUT of its rest spot (default 0.7). Fixed — not a fraction of the crossing —
-   * so a pinned section (longer crossing) slides the same and just holds longer.
+   * RESERVED for the future docking mode (Option C): the fixed distance (in
+   * viewport-heights) a cloud would spend sliding in/out before HOLDING at rest.
+   * Unused by the current continuous-drift motion (Option B). See <SectionRig>
+   * and docs/cloud-rendering-research.md § "Section-cloud motion".
    */
   slide?: number;
-  /** How far (in viewport-heights) the cloud slides in/out of its rest spot (default 1). */
+  /**
+   * How far (in viewport-heights) the cloud sweeps to EACH side of its rest spot
+   * across the crossing (default 1): `travel` below rest at section-enter, rest at
+   * section-centre, `travel` above at section-exit. Bigger = a longer, slower drift.
+   */
   travel?: number;
 };
 
@@ -128,22 +134,22 @@ export const SKY_CLOUDS: CloudSpec[] = [
   },
   {
     key: "workingwith-right-bottom",
-    ndc: [0.90, -2.5],
+    ndc: [0.90, 0.5],
     dist: 24,
     seed: 11,
     bounds: [4, 1, 1],
     volume: 3,
-    anchorVh: 7,
+    section: { trigger: "[data-working-with]" },
     perspectiveScroll: false,
   },
   {
     key: "testimonials-right-top",
-    ndc: [0.90, -1.55],
+    ndc: [0.90, 0.55],
     dist: 24,
     seed: 11,
     bounds: [4, 1.4, 1],
     volume: 4,
-    anchorVh: 8.5,
+    section: { trigger: "[data-testimonials]" },
     perspectiveScroll: false,
   },
   {
@@ -153,11 +159,62 @@ export const SKY_CLOUDS: CloudSpec[] = [
     seed: 11,
     bounds: [7, 1.4, 1],
     volume: 4,
-    anchorVh: 10,
+    section: { trigger: "[data-testimonials]" },
     perspectiveScroll: false,
   },
   // data-working-with
 
+  // Final CTA ("let's get you off the ground") — two corner banks that frame the
+  // centred heading + buttons diagonally: one top-left, one bottom-right. Bound
+  // to the section (not anchorVh) so they drift continuously through their corner
+  // rest spots as the CTA crosses the viewport — reaching rest as it centres, then
+  // floating on out (SectionRig Option B, no hold). The bind needs no viewport-
+  // height counting, so it stays correct as sections are added/reordered above.
+  {
+    key: "finalcta-tl",
+    ndc: [-0.85, 0.78],
+    dist: 22,
+    seed: 4,
+    bounds: [4, 1.2, 1],
+    volume: 4,
+    section: { trigger: "[data-final-cta]" },
+    perspectiveScroll: false,
+  },
+  {
+    key: "finalcta-br",
+    ndc: [0.85, -0.8],
+    dist: 22,
+    seed: 11,
+    bounds: [5, 1.3, 1],
+    volume: 5,
+    section: { trigger: "[data-final-cta]" },
+    perspectiveScroll: false,
+  },
+  // Footer ("ascnd" mountain range) — a soft bank low on the LEFT that sits
+  // BEHIND the mountains (SKY layer, -z-10, behind page content), so only its top
+  // wisps crest the ridgeline / show through the gaps while its body stays hidden
+  // behind the opaque rock. The matching thin cloud IN FRONT of the peaks is
+  // footer-br-front in ROCK_CLOUDS.
+  //
+  // `travel` / `ndc` are coupled here. A section cloud parks `travel` BELOW its
+  // rest spot while its section is off-screen below; `travel` must be big enough
+  // that this parked point clears the screen bottom, or the cloud pokes up through
+  // the transparent sky at the foot of EVERY section (it's on the fixed layer).
+  // But the footer is the LAST section and never scroll-centres (SectionRig
+  // progress caps ~0.4 at page end), so the cloud only ever reaches ~0.3·travel
+  // below rest — the `ndc` rest is therefore set HIGH (above the visible target)
+  // to compensate, and the cloud settles into view at the page bottom without ever
+  // touching rest. Shrinking `travel` re-parks it on-screen — don't.
+  {
+    key: "footer-bl-behind",
+    ndc: [-0.7, -0.24],
+    dist: 24,
+    seed: 11,
+    bounds: [5, 1.6, 1],
+    volume: 6,
+    section: { trigger: "[data-footer]", travel: 0.7 },
+    perspectiveScroll: false,
+  },
 ];
 
 // Rock-base banks — a WIDE, SHALLOW strip that just skirts the foot of each
@@ -169,4 +226,19 @@ export const SKY_CLOUDS: CloudSpec[] = [
 export const ROCK_CLOUDS: CloudSpec[] = [
   { key: "rock-left", ndc: [-0.88, -1.02], dist: 22, seed: 7, bounds: [6.5, 0.45, 1], volume: 8, anchorVh: 0, perspectiveScroll: false },
   { key: "rock-right", ndc: [0.88, -1.02], dist: 22, seed: 3, bounds: [6.5, 0.45, 1], volume: 8, anchorVh: 0, perspectiveScroll: false },
+  // Footer ("ascnd" mountain range) — a THIN wisp low on the RIGHT that rides IN
+  // FRONT of the peaks (this ROCK layer renders at z-[61], above page content),
+  // the counterpart to footer-bl-behind. Wide + shallow bounds = a thin band, not
+  // a puff. Section-bound to the footer; small `travel` for the same page-end
+  // reason as its sibling (see footer-bl-behind in SKY_CLOUDS).
+  {
+    key: "footer-br-front",
+    ndc: [0.8, -0.8],
+    dist: 22,
+    seed: 7,
+    bounds: [3.5, 0.4, 1],
+    volume: 4,
+    section: { trigger: "[data-footer]", travel: 0.35 },
+    perspectiveScroll: false,
+  },
 ];

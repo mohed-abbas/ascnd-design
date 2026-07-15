@@ -22,8 +22,10 @@ export const AURA =
 // Seconds per full revolution of the aura around the rim (continuous orbit).
 export const SWEEP_DURATION = 2.6;
 
-// Hover glow strength for the button aura.
-export const GLOW_OPACITY = 0.55;
+// Hover glow strength for the button aura. Kept moderate so the soft glow reads
+// as a colour halo, not a bright wash around the rim (the glow is re-saturated
+// after its blur in button.tsx — see the note there).
+export const GLOW_OPACITY = 0.5;
 
 // Border-only mask — XOR of a content-box fill against a full fill leaves only
 // the `padding`-width edge, turning a filled gradient layer into a ring. Both

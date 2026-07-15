@@ -5,6 +5,7 @@ import Image from "next/image";
 import gsap from "gsap";
 import { CheckMark } from "@/components/ui/icons";
 import { SHOT_TILES } from "./cards-data";
+import { onMediaRelease } from "./media-gate";
 
 const REDUCE_MOTION = "(prefers-reduced-motion: reduce)";
 
@@ -130,21 +131,42 @@ export default function ReceiveMedia() {
           ">-0.05"
         );
 
+      // Held until the card's entrance lands (Option D): CardsReveal releases
+      // this media as the panel finishes blur-rising, so the collage's deliver
+      // loop starts in step with the left→right cascade rather than on its own.
+      // After release the observer just pauses/resumes it as the card scrolls
+      // out of / back into view.
+      let released = false;
+      let onScreen = false;
+      const play = () => {
+        tl.play();
+        sweep.play();
+      };
+      const pause = () => {
+        tl.pause();
+        sweep.pause();
+      };
+
       const io = new IntersectionObserver(
         ([entry]) => {
-          if (entry.isIntersecting) {
-            tl.play();
-            sweep.play();
-          } else {
-            tl.pause();
-            sweep.pause();
-          }
+          onScreen = entry.isIntersecting;
+          if (!released) return; // hold until the card lands
+          if (onScreen) play();
+          else pause();
         },
         { threshold: 0.15 }
       );
       io.observe(root);
 
-      return () => io.disconnect();
+      const unrelease = onMediaRelease("receive", () => {
+        released = true;
+        if (onScreen) play();
+      });
+
+      return () => {
+        io.disconnect();
+        unrelease();
+      };
     }, root);
 
     return () => ctx.revert();
@@ -159,15 +181,33 @@ export default function ReceiveMedia() {
       >
         <div ref={gridRef} className="absolute left-[-75px] top-[-88px] h-[510px] w-[594px]">
           {SHOT_TILES.map((t) => (
+            // Translucent-glass tile frame (Figma tile-frame nodes): a 0.5px
+            // white edge over an rgba-white mat with a soft backdrop blur. The
+            // shot is inset by `pad`, so the mat reads as a glass border. The
+            // rect (t.w × t.h) is the outer frame — footprint unchanged, so the
+            // collage layout and the disperse animation are untouched.
             <div
               key={t.src}
-              className="absolute overflow-hidden rounded-[12px]"
-              style={{ left: t.x, top: t.y, width: t.w, height: t.h }}
+              className="absolute"
+              style={{
+                left: t.x,
+                top: t.y,
+                width: t.w,
+                height: t.h,
+                padding: t.pad,
+                borderRadius: t.r,
+                border: "0.5px solid #ffffff",
+                background: "rgba(255,255,255,0.2)",
+                backdropFilter: `blur(${t.blur}px)`,
+                WebkitBackdropFilter: `blur(${t.blur}px)`,
+              }}
             >
-              {/* Served unoptimized: the tiles are 3× vector-mockup exports, so
-                  the raw PNG stays razor-sharp on retina — Next's AVIF/WebP
-                  re-encode was softening the fine dashboard text. */}
-              <Image src={t.src} alt={t.alt} fill sizes="300px" unoptimized className="object-cover" />
+              <div className="relative h-full w-full overflow-hidden" style={{ borderRadius: t.ri }}>
+                {/* Served unoptimized: the tiles are 3× vector-mockup exports, so
+                    the raw PNG stays razor-sharp on retina — Next's AVIF/WebP
+                    re-encode was softening the fine dashboard text. */}
+                <Image src={t.src} alt={t.alt} fill sizes="300px" unoptimized className="object-cover" />
+              </div>
             </div>
           ))}
         </div>

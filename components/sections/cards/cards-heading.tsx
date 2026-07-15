@@ -79,7 +79,7 @@ export default function CardsHeading() {
   return (
     <h2
       ref={ref}
-      className="absolute left-1/2 top-[calc(50%_-_303px)] w-max -translate-x-1/2 -translate-y-1/2 whitespace-nowrap text-center font-product text-[49px] font-light leading-[1.1] tracking-[-1.47px] text-white"
+      className="absolute left-1/2 top-[calc(50%_-_303px)] w-max -translate-x-1/2 -translate-y-1/2 whitespace-nowrap text-center font-product text-display font-light leading-[1.1] tracking-[-0.03em] text-white max-md:static max-md:left-auto max-md:top-auto max-md:w-full max-md:translate-x-0 max-md:translate-y-0 max-md:whitespace-normal max-md:px-6"
     >
       {"ground to "}
       <span className="font-instrument">launch</span>

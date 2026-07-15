@@ -1,7 +1,6 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import Image from "next/image";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import {
   INTRO_REVEAL_EVENT,
@@ -9,6 +8,7 @@ import {
   introWillPlay,
 } from "@/components/sections/intro/intro-state";
 import { SKY_CLOUDS, ROCK_CLOUDS } from "./cloud-specs";
+import StaticCloudLayer from "./static-cloud-layer";
 
 // The WebGL canvas is client-only; ssr:false must live in a Client Component
 // (Next disallows it in Server Components).
@@ -137,46 +137,14 @@ export default function CloudLayer() {
 
   if (!hydrated) return null;
 
-  // Baked static fallback for ineligible devices (mobile, reduced-motion,
-  // no-WebGL): full-frame captures of the live HERO cloud layers (3024×1964 —
-  // the 1512×982 reference frame at 2×; toDataURL readbacks of each canvas, so
-  // the alpha channel is real). Same stacking + reveal fade as the canvases.
-  // `object-position` anchors the crop on narrow screens: SKY keeps its
-  // top-right cloud, ROCK keeps the left cliff skirt. Section clouds are a
-  // desktop nicety — deliberately out of scope here.
+  // Static-sprite fallback for ineligible devices (mobile, reduced-motion,
+  // no-WebGL): individual baked cloud sprites distributed across every section
+  // and scroll-driven in DOM (GSAP transforms) — see static-cloud-layer.tsx
+  // and its static-cloud-specs.ts tuning surface. Replaces the earlier pair of
+  // frozen full-frame canvas captures, which pinned two desktop-cropped photos
+  // over the whole page.
   if (!eligible) {
-    return (
-      <>
-        <div
-          aria-hidden
-          style={reveal}
-          className="pointer-events-none fixed inset-0 -z-10"
-        >
-          <Image
-            src="/clouds/sky-clouds-static.webp"
-            alt=""
-            fill
-            sizes="100vw"
-            loading="lazy"
-            className="object-cover object-[100%_0%]"
-          />
-        </div>
-        <div
-          aria-hidden
-          style={reveal}
-          className="pointer-events-none fixed inset-0 z-[61]"
-        >
-          <Image
-            src="/clouds/rock-clouds-static.webp"
-            alt=""
-            fill
-            sizes="100vw"
-            loading="lazy"
-            className="object-cover object-[25%_100%]"
-          />
-        </div>
-      </>
-    );
+    return <StaticCloudLayer reveal={reveal} />;
   }
 
   return (

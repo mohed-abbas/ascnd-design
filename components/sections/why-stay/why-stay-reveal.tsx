@@ -4,7 +4,7 @@ import { useEffect, useLayoutEffect } from "react";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { makeCappedInvalidate } from "@/lib/perf/capped-invalidate";
-import { PHRASES, REEL_STEP } from "./why-stay-data";
+import { PER_PHRASE, PHRASES, REEL_STEP } from "./why-stay-data";
 
 gsap.registerPlugin(ScrollTrigger);
 
@@ -16,7 +16,8 @@ const useIsomorphicLayoutEffect =
 // ── Scroll ranges (tune live) ───────────────────────────────────────────────
 const ENTER_START = "top 85%"; // heading/pill begin revealing as the section rises
 const ENTER_END = "top top"; // fully formed exactly as the section locks to the top
-const PER_PHRASE = 420; // px of scroll consumed per phrase while pinned (slower = softer)
+// PER_PHRASE (px of scroll per phrase while pinned) lives in why-stay-data.ts —
+// shared with the static cloud layer's why-stay conveyor.
 const SCRUB = 0.8; // scroll-follow smoothing; higher = more glide/inertia
 const REEL_EASE = "sine.inOut"; // reel eases in/out so it's near-still at the pin edges
 

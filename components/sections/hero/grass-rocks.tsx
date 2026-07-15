@@ -71,7 +71,12 @@ export default function GrassRocks() {
     <div
       data-grass-overlay
       aria-hidden
-      className="pointer-events-none absolute inset-0 z-[100] select-none"
+      // Hidden below md alongside the bare cliffs — the mobile hero shows no
+      // rocks, so the grass hover overlay goes with them. (On touch phones the
+      // heavy images already never mount via useHoverEligible; this also covers
+      // a ≤768px viewport that happens to report a fine pointer.) Desktop
+      // unaffected — max-md:hidden only.
+      className="pointer-events-none absolute inset-0 z-[100] select-none max-md:hidden"
     >
       {eligible &&
         (["left", "right"] as const).map((side) => {

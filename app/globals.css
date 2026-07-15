@@ -46,9 +46,153 @@ html[data-mode="night"] {
   --grain-opacity: 0.05;
 }
 
+/* ─── Fluid type scale (mobile responsive system) ──────────────────────────
+   Source vars for the shared type tokens. The DESKTOP value is the exact design
+   pixel size, so ≥768px renders byte-for-byte unchanged; a single mobile media
+   query (matching Tailwind's `md` boundary, width < 768px) swaps in the fluid
+   clamp() values. Mapped into Tailwind text-* utilities in @theme inline below,
+   so `text-display` etc. emit `font-size: var(--fs-…)` and respond to this
+   override at runtime. Tracking is set in `em` at the call site (-0.03em headings
+   / 0.02em body) so it scales with the token — see docs/responsive-system.md §3. */
+:root {
+  --fs-display: 49px; /* section headings (9 sections share this) */
+  --fs-hero: 56px; /* hero H1 / pills lead */
+  --fs-body-lg: 20px; /* pricing / lead paragraphs */
+  --fs-body: 16px; /* body copy */
+}
+
+@media (width < 768px) {
+  :root {
+    --fs-display: clamp(28px, 7.5vw, 40px);
+    --fs-hero: clamp(32px, 9vw, 48px);
+    --fs-body-lg: clamp(16px, 4.4vw, 20px);
+    --fs-body: clamp(14px, 4vw, 16px);
+  }
+}
+
+/* Pill-field edge fade (components/sections/pills) — a vertical band so pills
+   dissolve at the top/bottom edges where the upward drift melts in/out. Below md
+   the compressed cloud (pills-data.ts) reaches the side edges too, so a left/right
+   fade is added (two mask layers intersected) — the cloud dissolves at all four
+   sides. Was an inline style; moved to a class so the mask isn't re-declared per
+   pill. */
+.pill-field-mask {
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, 0) 0%,
+    rgba(0, 0, 0, 1) 20%,
+    rgba(0, 0, 0, 1) 80%,
+    rgba(0, 0, 0, 0) 100%
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, 0) 0%,
+    rgba(0, 0, 0, 1) 20%,
+    rgba(0, 0, 0, 1) 80%,
+    rgba(0, 0, 0, 0) 100%
+  );
+}
+
+@media (width < 768px) {
+  .pill-field-mask {
+    -webkit-mask-image:
+      linear-gradient(to bottom, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 1) 16%, rgba(0, 0, 0, 1) 84%, rgba(0, 0, 0, 0) 100%),
+      linear-gradient(to right, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 1) 12%, rgba(0, 0, 0, 1) 88%, rgba(0, 0, 0, 0) 100%);
+    mask-image:
+      linear-gradient(to bottom, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 1) 16%, rgba(0, 0, 0, 1) 84%, rgba(0, 0, 0, 0) 100%),
+      linear-gradient(to right, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 1) 12%, rgba(0, 0, 0, 1) 88%, rgba(0, 0, 0, 0) 100%);
+    -webkit-mask-composite: source-in;
+    mask-composite: intersect;
+  }
+}
+
+/* Card stack scale (components/sections/cards) — below md the three 440×438
+   glass cards can't go fluid (their media guts are rigidly px-tuned with live
+   GSAP), so each card is scaled to fit the phone as ONE unit. The scale rides
+   the per-card wrapper ([data-card-scale]), NOT the article, so cards-reveal's
+   transform/blur on [data-card-shell] stays free.
+
+   --card-s fits the 440px card into the (viewport − 48px gutter) width, capped
+   at 1 so it never scales up past design. scale() needs a UNITLESS number, and
+   CSS calc can't divide a vw-length by a length to get one — so the ratio comes
+   from the tan(atan2(a,b)) ≡ a/b identity. The plain 0.72 line before it is the
+   fallback for engines without tan/atan2: an invalid later declaration is
+   dropped and the number is kept (progressive enhancement).
+
+   transform-origin is top-center so the visual card sits centred at the top of
+   its 440×438 layout box; the negative margin-bottom collapses the leftover
+   (unscaled) box height so the vertical stack packs tight. The 440-wide box
+   overflows a narrow viewport but is clipped by the section's overflow-hidden —
+   no horizontal scroll. ≥768px this whole block is inert, so desktop (the
+   wrappers are plain shrink-0 flex items) renders byte-for-byte unchanged. */
+@media (width < 768px) {
+  [data-cards-row] {
+    --card-s: 0.72;
+    --card-s: min(1, tan(atan2(100vw - 48px, 440px)));
+  }
+
+  [data-cards-row] > [data-card-scale] {
+    transform: scale(var(--card-s));
+    transform-origin: top center;
+    margin-bottom: calc(var(--card-s) * 438px - 438px);
+  }
+}
+
+/* Design-shots conveyor scale (components/sections/hero + design-shots) — below md
+   the turning tile wheel (arc span ≈ 1042px incl. the glass mat) is far wider than a
+   phone, so it's scaled down as one unit. FIXED 0.5, deliberately NOT a fluid
+   vw-derived value.
+
+   ⚠️ Why fixed, not fit-to-width: an earlier version used
+   max(0.5, min(1, tan(atan2(100vw - 48px, 1042px)))) to fit-then-floor. On iOS the
+   `100vw` inside calc() resolved to the OVERFLOW-expanded layout width (~950px — the
+   1029px box widens the layout box `vw` reads from), NOT the ~430px visual width the
+   media query correctly reports. So the scale computed ~0.87 and the wheel rendered
+   huge, overlapping the hero text (also mis-sized in desktop Firefox, which folds the
+   scrollbar into 100vw). Lesson: media-query widths are reliable cross-browser;
+   `100vw` in calc() is NOT when content overflows. So the size is a plain media query
+   + a constant — no vw, no trig. The outer tiles clip through the viewport edges (by
+   design). The scale composes with the per-rotor conveyor rotation inside, leaving the
+   shared 8-slot geometry, the motion, and the intro handoff untouched. ≥768px inert →
+   desktop byte-identical.
+
+   The translateY restores the DESKTOP wrap illusion: on desktop the far arc slots
+   straddle the viewport's top edge, so a tile leaving far-R exits THROUGH the top edge
+   and rides the whole hidden return leg (far-R → over the top → far-L) off-screen —
+   the viewport edge is the curtain. Scaling about the wheel centre pulls every slot
+   down/inward, parking the far slots INSIDE the viewport, so the return trip cut
+   visibly across the top of the screen (the "ghost tiles" materialising mid-air).
+   Lifting the scaled wheel puts the far slots back on the top edge: tiles slide up and
+   out of the viewport, wrap unseen, and descend back in on the other side. No
+   mask/fade needed — earlier gradient dissolves treated the symptom and still read as
+   translucent tiles drifting in the sky.
+
+   scale and translateY are COUPLED — solve both from the scale s:
+     translateY  = 207.5·s − 201.5   (pins the far slots' centres ~2px above the
+                                      viewport top, matching desktop's straddle)
+     centre-tile top ≈ 192·s         (how far the wheel hangs below the wordmark)
+   s=0.5 put the centre tile at y≈96 — touching the wordmark — so s=0.6 (bigger tiles,
+   centre-tile top ≈115px), formula lift −77px, hand-tuned +22px lower to −55 (design
+   call: the wheel sits lower; far tiles peek more and the wrap-fade still finishes
+   while the tile is exiting the edge). Tune size via s → recompute the lift (± a few
+   px of taste); big solo lift changes bring the wrap back on-screen. */
+@media (width < 768px) {
+  [data-shots-wheel] {
+    transform: translateY(-55px) scale(0.6);
+    transform-origin: center;
+  }
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  /* Fluid type tokens → text-display / text-hero / text-body-lg / text-body.
+     Reference the --fs-* source vars above so the value tracks the mobile media
+     query (docs/responsive-system.md §3). */
+  --text-display: var(--fs-display);
+  --text-hero: var(--fs-hero);
+  --text-body-lg: var(--fs-body-lg);
+  --text-body: var(--fs-body);
   /* Product Sans (proprietary) is the primary typeface, self-hosted via
      next/font/local in layout.tsx (--font-product-sans). It's the default sans
      for the whole site, so font-sans and the base body font both resolve to it.

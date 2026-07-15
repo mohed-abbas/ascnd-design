@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import Button from "@/components/ui/button";
 import PillsFlow from "./pills-flow";
 import PillsHeading from "./pills-heading";
@@ -36,13 +37,6 @@ import { PILLS } from "./pills-data";
  * pills-reveal.tsx driver, same split as the other sections.
  */
 
-// CSS alpha mask for the pill field — a VERTICAL fade only: pills dissolve at the
-// TOP and BOTTOM edges (where the rising flow melts in/out) while the left, right
-// and middle stay fully visible. No horizontal/radial falloff. Tune the middle
-// stop percentages to grow/shrink the top/bottom fade bands.
-const PILL_MASK =
-  "linear-gradient(to bottom, rgba(0,0,0,0) 0%, rgba(0,0,0,1) 20%, rgba(0,0,0,1) 80%, rgba(0,0,0,0) 100%)";
-
 export default function Pills() {
   return (
     <section
@@ -61,16 +55,26 @@ export default function Pills() {
             happens off-screen and reads as a seamless upward stream. */}
         <div
           aria-hidden
-          className="absolute left-[13px] top-[17px] h-[876px] w-[1258px] overflow-hidden"
-          style={{ maskImage: PILL_MASK, WebkitMaskImage: PILL_MASK }}
+          className="pill-field-mask absolute left-[13px] top-[17px] h-[876px] w-[1258px] overflow-hidden"
         >
           {PILLS.map((p) => (
             <div
               key={p.id}
               data-pill
               data-node-id={p.id}
-              className="absolute flex h-[42px] items-center rounded-[20px] border-[1.5px] border-solid border-white/30 bg-gradient-to-b from-black/10 to-black/5 px-[15px] backdrop-blur-[2px] will-change-transform"
-              style={{ left: p.left, top: p.top }}
+              className="absolute flex h-[42px] items-center rounded-[20px] border-[1.5px] border-solid border-white/30 bg-gradient-to-b from-black/10 to-black/5 px-[15px] backdrop-blur-[2px] will-change-transform left-[var(--dl)] top-[var(--dt)] max-md:left-[var(--ml)] max-md:top-[var(--mt)]"
+              // Desktop uses the design scatter (--dl/--dt); below md it switches
+              // to the compact, provably non-overlapping layout (--ml/--mt) — see
+              // pills-data.ts. Positions live in CSS vars so the switch is a pure
+              // media query (Tailwind max-md:) with no JS.
+              style={
+                {
+                  "--dl": `${p.left}px`,
+                  "--dt": `${p.top}px`,
+                  "--ml": `${p.mobileLeft}px`,
+                  "--mt": `${p.mobileTop}px`,
+                } as CSSProperties
+              }
             >
               <span
                 className={`whitespace-nowrap text-[20px] leading-[1.1] tracking-[-0.6px] text-white ${
