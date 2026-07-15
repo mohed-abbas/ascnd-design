@@ -2,8 +2,11 @@
 
 import { useEffect, useId, useRef, useState } from "react";
 import gsap from "gsap";
+import { setMode } from "@/lib/theme/mode-store";
+import { useMode } from "@/lib/theme/use-mode";
 import { CloseIcon, InstagramSocial, MenuLines, XSocial } from "./icons";
 import Logo from "./logo";
+import { MODE_ITEMS } from "./mode-switcher";
 
 type NavLink = { label: string; href: string };
 
@@ -40,28 +43,33 @@ const EASE = "power2.inOut";
 const REDUCE_MOTION = "(prefers-reduced-motion: reduce)";
 const MOBILE_MQ = "(max-width: 767px)";
 
+// The mobile pill is a HORIZONTAL capsule, not the desktop vertical one.
+const MOBILE_PILL_W = 140;
+const MOBILE_PILL_H = 52;
+
 /**
  * The closed pill footprint (inset rect) inside the nav frame, chosen per
  * breakpoint. Desktop: the Figma 52×149 pill centred on the frame's right edge.
  *
- * Below md the frame is TOP-anchored (see the <nav> classes) and its width is
- * capped by max-w, so the pill pins to the frame's TOP-right instead:
- *   • top:0 / bottom:216 → the pill sits at the frame top, height 365−216 = 149.
- *   • left is derived from the MEASURED frame width (offsetWidth − 74 = a 52px
- *     pill at right:22). A fixed 332 assumes the 406-wide desktop frame and
- *     collapses to a <0-width (invisible) glass under the mobile width cap — the
- *     pre-existing reason the mobile pill showed only bare icons with no capsule.
- * OPEN is the full frame at both breakpoints, so it needs no variant; the glass
- * grows from the top-right pill down-and-left into a dropdown.
+ * Below md the frame is BOTTOM-CENTRE anchored (see the <nav> classes) and the
+ * pill is a horizontal 140×52 capsule pinned to the frame's BOTTOM edge, centred
+ * horizontally. The glass grows UPWARD out of it into the panel (bottom edge
+ * fixed, top rises), the mirror of the desktop grow-down-and-left:
+ *   • bottom:0 → the pill sits flush with the frame bottom.
+ *   • top: frameHeight − 52 → the pill is 52 tall.
+ *   • left/right are derived from the MEASURED frame width so the 140px capsule
+ *     stays centred no matter how the width cap resolves on a given device.
+ * OPEN is the full frame at both breakpoints, so it needs no variant.
  */
 function closedState(nav: HTMLElement) {
   if (window.matchMedia(MOBILE_MQ).matches) {
+    const side = Math.max(0, (nav.offsetWidth - MOBILE_PILL_W) / 2);
     return {
-      top: 0,
-      right: 22,
-      bottom: 216,
-      left: Math.max(0, nav.offsetWidth - 74),
-      borderRadius: 61,
+      top: nav.offsetHeight - MOBILE_PILL_H,
+      right: side,
+      bottom: 0,
+      left: side,
+      borderRadius: MOBILE_PILL_H / 2,
     };
   }
   return CLOSED;
@@ -73,6 +81,7 @@ function closedState(nav: HTMLElement) {
  */
 export default function Navbar() {
   const [open, setOpen] = useState(false);
+  const activeMode = useMode();
   const navRef = useRef<HTMLElement>(null);
   const surfaceRef = useRef<HTMLDivElement>(null);
   const tlRef = useRef<gsap.core.Timeline | null>(null);
@@ -160,12 +169,12 @@ export default function Navbar() {
       data-reveal-soft
       data-reveal-order={2}
       // Below md the frame re-anchors from centre-right (top-62.4%, -translate-y-1/2)
-      // to the TOP-right corner (top-16, right-16, no y-translate): the standard
-      // mobile hamburger spot, clear of the hero content. h-365 is kept so the open
-      // panel's px-mapped content (menu/links/socials) stays in place; the pill pins
-      // to the frame top and the glass grows DOWN into a dropdown (see closedState).
-      // Desktop unchanged — max-md: only.
-      className="font-product pointer-events-none fixed right-[33px] top-[62.4%] z-[999] h-[365px] w-[406px] max-w-[calc(100vw-3rem)] -translate-y-1/2 max-md:right-[16px] max-md:top-[16px] max-md:translate-y-0"
+      // to the BOTTOM-CENTRE (left-1/2, bottom-5, -translate-x-1/2): the one mobile
+      // pill sits above the thumb, clear of the hero content, and the glass grows
+      // UPWARD out of it (see closedState). The mobile frame is taller (h-420) to
+      // hold the two-column open panel (nav links | theme column) over the bottom
+      // toggle bar. Desktop unchanged — max-md: only.
+      className="font-product pointer-events-none fixed right-[33px] top-[62.4%] z-[999] h-[365px] w-[406px] max-w-[calc(100vw-3rem)] -translate-y-1/2 max-md:left-1/2 max-md:right-auto max-md:top-auto max-md:bottom-[20px] max-md:h-[420px] max-md:-translate-x-1/2 max-md:translate-y-0"
     >
       {/* The one morphing glass surface. Its closed pill footprint is pinned
           here as the default/no-JS state; GSAP overrides the geometry inline on
@@ -174,7 +183,11 @@ export default function Navbar() {
       <div
         ref={surfaceRef}
         aria-hidden
-        className="pointer-events-none absolute bottom-[108px] left-[332px] right-[22px] top-[108px] rounded-[61px] border border-white/30 bg-white/10 shadow-[inset_0_0_28.3px_0_rgba(255,255,255,0.25)] backdrop-blur-[10px]"
+        // Pre-JS closed footprint. GSAP overrides top/right/bottom/left/radius
+        // inline on mount + toggle; the max-md values just approximate the
+        // bottom-centre pill (140-wide, flush to the frame bottom) so there's no
+        // wrong-shaped flash before the first gsap.set lands.
+        className="pointer-events-none absolute bottom-[108px] left-[332px] right-[22px] top-[108px] rounded-[61px] border border-white/30 bg-white/10 shadow-[inset_0_0_28.3px_0_rgba(255,255,255,0.25)] backdrop-blur-[10px] max-md:bottom-0 max-md:left-[101px] max-md:right-[101px] max-md:top-[368px] max-md:rounded-[26px]"
       />
 
       {/* Menu content — fixed in the nav frame (so it never slides as the box
@@ -189,12 +202,15 @@ export default function Navbar() {
       >
         <span
           data-menu-item
-          className="absolute left-[28px] top-[30px] text-[31px] font-medium leading-none tracking-[-0.03em] underline decoration-from-font underline-offset-[6px] opacity-0"
+          className="absolute left-[28px] top-[30px] text-[31px] font-medium leading-none tracking-[-0.03em] underline decoration-from-font underline-offset-[6px] opacity-0 max-md:top-[28px]"
         >
           menu
         </span>
 
-        <ul className="absolute left-[26px] top-1/2 flex -translate-y-1/2 flex-col gap-[10px] text-[25px] font-light leading-[1.1] tracking-[-0.03em]">
+        {/* Nav links — the left column. Desktop centres them in the frame; below
+            md they sit top-left, leaving room to the right for the theme column
+            and below for the bottom toggle bar. */}
+        <ul className="absolute left-[26px] top-1/2 flex -translate-y-1/2 flex-col gap-[10px] text-[25px] font-light leading-[1.1] tracking-[-0.03em] max-md:top-[84px] max-md:translate-y-0">
           {LINKS.map((link) => (
             <li key={link.label} data-menu-item className="opacity-0">
               <a
@@ -209,9 +225,52 @@ export default function Navbar() {
           ))}
         </ul>
 
+        {/* Theme column (MOBILE ONLY) — the sky-mode picker folded into the menu
+            as a centred column of the four modes, parallel to the nav links, so
+            the standalone rail (hidden below md) never adds a second pill. Same
+            store as ModeSwitcher; picking a mode does NOT close the menu, so you
+            can preview modes with the panel open. Hidden on desktop (`hidden`),
+            where the left rail owns this. */}
         <div
           data-menu-item
-          className="absolute left-[26px] top-[310px] flex items-center gap-[7px] opacity-0"
+          role="group"
+          aria-label="Sky mode"
+          className="absolute right-[28px] top-[80px] hidden flex-col items-center gap-[6px] opacity-0 max-md:flex"
+        >
+          {MODE_ITEMS.map(({ mode, label, Icon }) => {
+            const isActive = mode === activeMode;
+            return (
+              <button
+                key={mode}
+                type="button"
+                onClick={() => setMode(mode)}
+                aria-label={label}
+                aria-pressed={isActive}
+                title={label}
+                tabIndex={open ? 0 : -1}
+                className={`flex size-[36px] items-center justify-center rounded-full transition-colors duration-200 ${
+                  isActive
+                    ? "bg-white/20 text-white"
+                    : "text-white/50 hover:text-white/80"
+                }`}
+              >
+                <Icon className="size-[20px]" />
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Hairline above the bottom toggle bar (MOBILE ONLY) — separates the
+            panel content from the logo/close bar the glass grows out of. */}
+        <div
+          data-menu-item
+          aria-hidden
+          className="absolute left-[26px] right-[26px] bottom-[60px] hidden h-px bg-white/20 opacity-0 max-md:block"
+        />
+
+        <div
+          data-menu-item
+          className="absolute left-[26px] top-[310px] flex items-center gap-[7px] opacity-0 max-md:top-[288px]"
         >
           {SOCIALS.map(({ label, href, Icon }) => (
             <a
@@ -239,10 +298,13 @@ export default function Navbar() {
         aria-expanded={open}
         aria-controls={panelId}
         aria-label={open ? "Close menu" : "Open menu"}
-        // Centred on the frame's right edge on desktop; below md it pins to the
-        // frame TOP (top-0) to sit in the top-right corner, matching the pill glass
-        // (closedState top:0). max-md: only → desktop unchanged.
-        className="pointer-events-auto absolute right-[22px] top-1/2 z-10 flex h-[149px] w-[52px] -translate-y-1/2 flex-col items-center justify-between pb-[22px] pt-[18px] text-white max-md:top-0 max-md:translate-y-0"
+        // Centred on the frame's right edge on desktop (vertical: logo over the
+        // menu-lines). Below md it becomes the horizontal bottom bar the glass
+        // grows out of — pinned to the frame's bottom-centre, 140×52, logo LEFT +
+        // lines/close RIGHT — and STAYS there while the panel expands above it
+        // (matching closedState's bottom-centre pill). max-md: only → desktop
+        // unchanged.
+        className="pointer-events-auto absolute right-[22px] top-1/2 z-10 flex h-[149px] w-[52px] -translate-y-1/2 flex-col items-center justify-between pb-[22px] pt-[18px] text-white max-md:left-1/2 max-md:right-auto max-md:top-auto max-md:bottom-0 max-md:h-[52px] max-md:w-[140px] max-md:-translate-x-1/2 max-md:translate-y-0 max-md:flex-row max-md:justify-between max-md:gap-0 max-md:px-[26px] max-md:py-0"
       >
         <Logo className="size-[30px]" />
         {open ? (
