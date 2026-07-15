@@ -16,7 +16,18 @@ import FooterScene from "./footer-scene";
  */
 export default function Footer() {
   return (
-    <footer data-footer className="relative w-full overflow-hidden">
+    <footer
+      data-footer
+      // On large screens, CAP the footer's on-screen height and CLIP the scene
+      // to its bottom (overflow-hidden + the absolute, bottom-anchored scene box
+      // below). The scene keeps its DESIGN aspect so it composes correctly — the
+      // mountain plane is sized from the view WIDTH, so widening the box (a
+      // shorter aspect / letterbox) would blow the peaks up until they swallow
+      // the wordmark. Cropping instead trims only the top sky. The wordmark
+      // reveal still completes: its scrub ends at "bottom bottom", and the box
+      // bottom is still the page bottom.
+      className="relative w-full overflow-hidden min-[1920px]:h-[900px]"
+    >
       {/* Blur-rise on scroll-in (see footer-reveal.tsx). */}
       <FooterReveal />
 
@@ -34,16 +45,14 @@ export default function Footer() {
           → no crop), so desktop is unchanged. */}
       <div
         data-footer-scene
-        // The scene box is aspect-locked, so its height scales with viewport
-        // WIDTH — on a 2K/ultrawide monitor the 1243-tall design proportion
-        // balloons (2105px at 2560w), and most of that extra is empty sky ABOVE
-        // the peaks that you scroll through to reach the mountains. Cap the box
-        // height on large screens so it's DECOUPLED from width: the WebGL scene
-        // sizes to the box and self-composes (mountains anchored to the bottom,
-        // wordmark at a fixed fraction of the box height — footer-glass-scene),
-        // so a shorter box just trims the top sky while the wordmark still
-        // clears the peaks.
-        className="relative w-full aspect-[1512/1243] max-md:aspect-[1512/900] min-[1920px]:max-h-[900px]"
+        // Keeps the DESIGN aspect at every size (correct scene composition). On
+        // large screens it becomes absolute + bottom-anchored inside the capped,
+        // overflow-hidden <footer> above, so its full aspect-driven height
+        // (2105px at 2560w) hangs off the bottom and the excess TOP sky is
+        // clipped — an object-bottom crop, not a re-proportion. The mountains
+        // and wordmark (both at the scene's bottom) stay full-size and correct;
+        // only the empty upper sky is trimmed.
+        className="relative w-full aspect-[1512/1243] max-md:aspect-[1512/900] min-[1920px]:absolute min-[1920px]:inset-x-0 min-[1920px]:bottom-0"
       >
         <FooterScene />
       </div>
