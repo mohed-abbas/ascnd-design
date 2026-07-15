@@ -39,7 +39,7 @@ export default function HeroText() {
           className="inline-flex max-md:w-full"
         >
           <Button variant="solid" href="#plans" className="max-md:w-full">
-            see plans
+            explore more
           </Button>
         </span>
         <span
