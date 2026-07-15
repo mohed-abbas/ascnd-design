@@ -62,7 +62,12 @@ export default function Tagline() {
           <span key={li} data-tline className="block">
             <span data-trise className="relative block">
               {text.split("").map((ch, i) => {
-                const glyph = ch === " " ? " " : ch;
+                // A word-space must be a NON-BREAKING space: each char sits in its
+                // own `inline-block overflow-hidden` roll-up clip, and a lone ASCII
+                // space is leading+trailing whitespace inside that box, so it
+                // collapses to zero width and the words run together
+                // ("looklikeyou"). A non-breaking space keeps its intrinsic width.
+                const glyph = ch === " " ? " " : ch;
                 const idx = si++;
                 // Collapse the space directly before a mobile break so the
                 // wrapped row starts flush (no leading gap).
