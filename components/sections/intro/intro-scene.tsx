@@ -137,6 +137,10 @@ export type IntroSceneProps = {
   conveyor: boolean;
   /** Text3D `size` in WORLD units (≈ 4–5, matching the lab). */
   glassSize: number;
+  /** Proportional scale (≤1) applied to the glass's absolute-world geometry
+   *  (bevel/thickness/attenuation/distortion) so a small-viewport glyph keeps the
+   *  same bevel-to-stroke ratio as the big desktop glyph. 1 on desktop. */
+  glassGeomScale: number;
   /** World y the glass rests at (the welcome spot) — anchors the reveal clip. */
   restY: number;
   font?: string;
@@ -824,15 +828,23 @@ function SceneReady({ onReady }: { onReady?: () => void }) {
 function Glass({
   anim,
   glassSize,
+  glassGeomScale,
   restY,
   font = FONT,
 }: {
   anim: React.RefObject<GlassAnim>;
   glassSize: number;
+  /** Proportional scale (≤1) for the absolute-world glass geometry (see props). */
+  glassGeomScale: number;
   /** World y the glass rests at after the reveal — the slide-up target. */
   restY: number;
   font?: string;
 }) {
+  // Scale every ABSOLUTE-world glass length by the geometry factor so a small
+  // glyph's bevel/thickness/attenuation stay in the same ratio to the stroke as
+  // on desktop (k=1 there → these are the exact tuned values). letterSpacing,
+  // roughness, ior, transmission, aberration etc. are unitless/em and DON'T scale.
+  const k = glassGeomScale;
   const ref = useRef<Group>(null);
   const textRef = useRef<Mesh>(null);
   // Refraction fill where the scene is empty (open sky) — without it the
@@ -944,8 +956,8 @@ function Glass({
           height={0}
           curveSegments={q.text3dCurveSegments}
           bevelEnabled
-          bevelThickness={0.175}
-          bevelSize={0.095}
+          bevelThickness={0.175 * k}
+          bevelSize={0.095 * k}
           bevelOffset={0}
           bevelSegments={q.text3dBevelSegments}
           letterSpacing={0.02}
@@ -954,21 +966,21 @@ function Glass({
           <MeshTransmissionMaterial
             background={sky.texture}
             transmission={1}
-            thickness={0.3}
+            thickness={0.3 * k}
             roughness={0.31}
             ior={1.28}
             chromaticAberration={0.65}
             anisotropicBlur={0.28}
             distortion={0.2}
-            distortionScale={0.4}
+            distortionScale={0.4 * k}
             temporalDistortion={0.28}
             samples={q.mtmSamples}
             resolution={q.mtmResolution}
             backside={q.mtmBackside}
-            backsideThickness={0.4}
+            backsideThickness={0.4 * k}
             clearcoat={0}
             clearcoatRoughness={0}
-            attenuationDistance={4}
+            attenuationDistance={4 * k}
             attenuationColor="#eaf4ff"
             color="#ffffff"
           />
@@ -1025,6 +1037,7 @@ export default function IntroScene({
   introActive,
   conveyor,
   glassSize,
+  glassGeomScale,
   restY,
   font = FONT,
   onReady,
@@ -1082,7 +1095,13 @@ export default function IntroScene({
         {introActive && (
           <>
             <Rocks rocks={rocks} rockEntry={rockEntry} />
-            <Glass anim={anim} glassSize={glassSize} restY={restY} font={font} />
+            <Glass
+              anim={anim}
+              glassSize={glassSize}
+              glassGeomScale={glassGeomScale}
+              restY={restY}
+              font={font}
+            />
             <directionalLight position={[3, 5, 6]} intensity={1.2} />
             <ambientLight intensity={0.4} />
             <IntroFrameCap />
