@@ -360,33 +360,70 @@ export class CloudCanvasEngine {
     alpha = Math.min(1, alpha + p.card.hoverEase * 0.16);
     const dim = this.config.fadeBack ? Math.max(0, 0.26 - p.z * 0.18) : 0;
 
+    // Glass-matted frame — the exact design-shots / conveyor-arc recipe, as
+    // constant fractions of the tile edge (authored at SHOT_BASE = 261px): corner
+    // 14/261, mat ring 6.39/261, hairline border 1/261. The border therefore scales
+    // WITH the tile (hair-thin) instead of being a fat fixed outline. Frame and shot
+    // share ONE corner radius, and the frame sits BEHIND the shot — exactly like the
+    // DOM tile (a frame div under the shot), so only the mat ring shows the glass.
+    const base = Math.min(w, h);
+    const r = base * (14 / 261);
+    const mat = base * (6.39 / 261);
+    const edge = Math.max(0.5, base / 261); // ≈ the design's 1px border, scaled down
+    const fx = -w / 2 - mat;
+    const fy = -h / 2 - mat;
+    const fw = w + mat * 2;
+    const fh = h + mat * 2;
+
     ctx.save();
     ctx.translate(p.screenX, p.screenY);
     const tilt = this.config.tiltToCenter ? Math.atan2(p.x, 1.4 + p.z) * 0.18 : 0;
     ctx.rotate(tilt + p.card.jitter * 0.08);
     ctx.globalAlpha = alpha;
 
-    // Offset drop shadow (no blur — cheap depth read).
-    ctx.globalAlpha = Math.min(0.14, alpha * 0.12);
-    ctx.fillStyle = "#000";
-    ctx.fillRect(-w / 2 + 4 * scale, -h / 2 + 6 * scale, w, h);
+    // 1. Mat fill — translucent white ring (bg-white/10).
+    ctx.beginPath();
+    ctx.roundRect(fx, fy, fw, fh, r);
+    ctx.fillStyle = "rgba(255,255,255,0.1)";
+    ctx.fill();
 
-    // Image face (object-fit: cover).
+    // 2. Inset white sheen — soft inner glow, clipped to the frame (glows inward
+    // only) and BEHIND the shot, so only the mat ring lights up. Matches the
+    // design's `inset 0 0 6.39px rgba(255,255,255,0.28)`.
+    ctx.save();
+    ctx.beginPath();
+    ctx.roundRect(fx, fy, fw, fh, r);
+    ctx.clip();
+    ctx.beginPath();
+    ctx.roundRect(fx, fy, fw, fh, r);
+    ctx.strokeStyle = "rgba(255,255,255,0.28)";
+    ctx.lineWidth = mat * 2;
+    ctx.shadowColor = "rgba(255,255,255,0.28)";
+    ctx.shadowBlur = mat;
+    ctx.stroke();
+    ctx.restore();
+
+    // 3. Hairline edge — white/40, one design-pixel thick (scaled with the tile).
+    ctx.beginPath();
+    ctx.roundRect(fx, fy, fw, fh, r);
+    ctx.strokeStyle = "rgba(255,255,255,0.4)";
+    ctx.lineWidth = edge;
+    ctx.stroke();
+
+    // 4. The shot ON TOP — rounded (same radius), covering the frame centre so the
+    // mat ring is what remains as the glass border.
+    ctx.save();
+    ctx.beginPath();
+    ctx.roundRect(-w / 2, -h / 2, w, h, r);
+    ctx.clip();
     ctx.globalAlpha = alpha;
     drawImageCover(ctx, p.card.image, -w / 2, -h / 2, w, h);
-
-    // Far-tile darkening.
     if (dim > 0.01) {
       ctx.globalAlpha = Math.min(0.44, dim);
       ctx.fillStyle = "#000";
       ctx.fillRect(-w / 2, -h / 2, w, h);
     }
-
-    // Hairline border.
-    ctx.globalAlpha = Math.min(0.18, alpha * 0.2);
-    ctx.strokeStyle = "rgba(0,0,0,0.72)";
-    ctx.lineWidth = Math.max(0.5, 0.9 * scale);
-    ctx.strokeRect(-w / 2, -h / 2, w, h);
+    ctx.restore();
 
     ctx.restore();
   }
