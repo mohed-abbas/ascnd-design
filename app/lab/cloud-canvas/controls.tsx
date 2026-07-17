@@ -14,6 +14,7 @@ import {
   CONFIG_RANGES,
   CLOUD_PRESETS,
   type CloudCanvasConfig,
+  type CloudCanvasMode,
   type CloudLayoutMode,
 } from "@/components/sections/portfolio/cloud-canvas/cloud-canvas-config";
 
@@ -23,6 +24,7 @@ interface ControlsProps {
   imageCount: number;
 }
 
+const MODES: CloudCanvasMode[] = ["globe", "halo", "ascent", "cumulus"];
 const LAYOUTS: CloudLayoutMode[] = ["auto", "balanced", "custom"];
 const PRESET_NAMES = Object.keys(CLOUD_PRESETS);
 
@@ -56,6 +58,30 @@ export default function CloudCanvasControls({ config, onChange, imageCount }: Co
         <p className="mt-1 text-[11px] text-white/50">tune · copy · paste as a preset</p>
       </div>
 
+      {/* Formation — the same tiles in four arrangements (house segmented control). */}
+      <div
+        role="group"
+        aria-label="Formation"
+        className="flex items-center gap-[2px] rounded-full border border-white/20 bg-white/10 p-[3px]"
+      >
+        {MODES.map((m) => {
+          const isActive = m === config.mode;
+          return (
+            <button
+              key={m}
+              type="button"
+              onClick={() => set("mode", m)}
+              aria-pressed={isActive}
+              className={`flex-1 rounded-full px-2 py-[5px] font-mono text-[10px] lowercase tracking-[0.04em] transition-colors duration-200 ${
+                isActive ? "bg-white/20 text-white" : "text-white/50 hover:text-white/80"
+              }`}
+            >
+              {m}
+            </button>
+          );
+        })}
+      </div>
+
       {/* Presets */}
       <div className="flex flex-wrap gap-1.5">
         {PRESET_NAMES.map((name) => (
@@ -74,6 +100,7 @@ export default function CloudCanvasControls({ config, onChange, imageCount }: Co
       <Range label="spread" value={config.spread} range={CONFIG_RANGES.spread} onChange={(v) => set("spread", v)} />
       <Range label="size" value={config.size} range={CONFIG_RANGES.size} onChange={(v) => set("size", v)} />
       <Range label="depth" value={config.depth} range={CONFIG_RANGES.depth} onChange={(v) => set("depth", v)} />
+      <Range label="centre y" value={config.centerY} range={CONFIG_RANGES.centerY} onChange={(v) => set("centerY", v)} />
       <Range label="auto speed" value={config.autoSpeed} range={CONFIG_RANGES.autoSpeed} onChange={(v) => set("autoSpeed", v)} />
 
       {/* Visible count */}

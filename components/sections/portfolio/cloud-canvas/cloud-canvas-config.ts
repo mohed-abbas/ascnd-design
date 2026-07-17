@@ -16,13 +16,38 @@
 
 export type CloudLayoutMode = "auto" | "balanced" | "custom";
 
+/**
+ * Formation — how the tiles are arranged and how they move. One engine, one glass
+ * tile recipe, four arrangements of the same matter (the site's air/altitude
+ * vocabulary: a world, an orbit, a thermal, a cloud):
+ *
+ *   • "globe"   — Fibonacci sphere; slow spin (the shipped look).
+ *   • "halo"    — a braided two-radius orbital ring, echoing the testimonial
+ *                 rocks' orbit outlines; stable (no roll wobble).
+ *   • "ascent"  — a rising double-helix column; tiles climb and wrap, fading in
+ *                 at the base and out at the top (the brand name, literally).
+ *   • "cumulus" — a flattened cloud-bank scatter (volume, not shell) with slow
+ *                 collective drift + per-tile bob, matching the drei cloud layer's
+ *                 motion grammar.
+ */
+export type CloudCanvasMode = "globe" | "halo" | "ascent" | "cumulus";
+
 export interface CloudCanvasConfig {
+  /** Formation: how tiles are arranged + their characteristic motion. */
+  mode: CloudCanvasMode;
   /** Globe radius multiplier — how far apart the tiles sit on the sphere. */
   spread: number;
   /** Per-tile scale. */
   size: number;
   /** z-perspective strength (how much depth grows/shrinks near vs far tiles). */
   depth: number;
+  /**
+   * Vertical orbit centre as a fraction of the canvas height (0.47 = the
+   * reference's slightly-above-centre). The portfolio preset pushes it down to
+   * clear the section header while the canvas stays full-bleed (a smaller
+   * canvas would hard-clip tiles at its own edge).
+   */
+  centerY: number;
   /** Idle auto-rotation rate (0 = the globe rests unless dragged). */
   autoSpeed: number;
   /** How many images are laid onto the globe; "all" uses the full set. */
@@ -47,6 +72,7 @@ export const CONFIG_RANGES = {
   spread: { min: 0.55, max: 1.55, step: 0.01 },
   size: { min: 0.55, max: 1.45, step: 0.01 },
   depth: { min: 0.45, max: 1.65, step: 0.01 },
+  centerY: { min: 0.35, max: 0.7, step: 0.01 },
   autoSpeed: { min: 0, max: 1.2, step: 0.01 },
   zoom: { min: 0.55, max: 1.9, step: 0.01 },
   /** pitch is clamped every frame so the globe can't flip past its poles. */
@@ -56,9 +82,11 @@ export const CONFIG_RANGES = {
 
 /** The neutral starting point — matches the reference's raw control defaults. */
 export const DEFAULT_CLOUD_CANVAS_CONFIG: CloudCanvasConfig = {
+  mode: "globe",
   spread: 1,
   size: 1,
   depth: 1,
+  centerY: 0.47,
   autoSpeed: 0.35,
   visibleCount: "all",
   layout: "balanced",
@@ -74,22 +102,29 @@ export const DEFAULT_CLOUD_CANVAS_CONFIG: CloudCanvasConfig = {
  * object to change the production globe; the scene imports exactly this.
  */
 export const CLOUD_CANVAS_PORTFOLIO_CONFIG: CloudCanvasConfig = {
+  mode: "globe",
   spread: 1.2,
   size: 1.2,
   depth: 1.59,
+  // centerY 0.56 + zoom 0.9: the orbit sits below the section header ("stuff
+  // we've shipped", Figma 424:487) instead of colliding with it.
+  centerY: 0.56,
   autoSpeed: 0.2,
   visibleCount: "all",
   layout: "custom",
   balance: { portrait: 30, landscape: 60, square: 20 },
   tiltToCenter: true,
   fadeBack: true,
-  camera: { yaw: -0.35, pitch: 0.17, zoom: 1 },
+  camera: { yaw: -0.35, pitch: 0.17, zoom: 0.9 },
 };
 
 /**
- * Named looks (the reference's presets, merged onto the defaults). The lab starts
- * from one of these; a tuned favourite becomes the preset the portfolio variant
- * imports. Extend this map with your own once you've dialled a look in the lab.
+ * Named looks (globe looks from the reference + one tuned start per formation).
+ * The lab starts from one of these; a tuned favourite becomes the preset the
+ * portfolio variant imports. Extend this map once you've dialled a look in.
+ *
+ * (The reference's "orbit" globe-look was retired — that name now belongs to an
+ * actual orbit, the "halo" formation.)
  */
 export const CLOUD_PRESETS: Record<string, CloudCanvasConfig> = {
   editorial: {
@@ -108,14 +143,6 @@ export const CLOUD_PRESETS: Record<string, CloudCanvasConfig> = {
     depth: 0.82,
     layout: "auto",
   },
-  orbit: {
-    ...DEFAULT_CLOUD_CANVAS_CONFIG,
-    spread: 1.18,
-    autoSpeed: 0.48,
-    size: 0.92,
-    depth: 1.24,
-    layout: "balanced",
-  },
   dense: {
     ...DEFAULT_CLOUD_CANVAS_CONFIG,
     spread: 0.72,
@@ -123,5 +150,35 @@ export const CLOUD_PRESETS: Record<string, CloudCanvasConfig> = {
     size: 0.82,
     depth: 1.02,
     layout: "custom",
+  },
+  halo: {
+    ...DEFAULT_CLOUD_CANVAS_CONFIG,
+    mode: "halo",
+    spread: 1.18,
+    size: 1.05,
+    depth: 1.15,
+    autoSpeed: 0.3,
+    layout: "balanced",
+    camera: { yaw: -0.2, pitch: 0.42, zoom: 1.15 },
+  },
+  ascent: {
+    ...DEFAULT_CLOUD_CANVAS_CONFIG,
+    mode: "ascent",
+    spread: 0.95,
+    size: 1,
+    depth: 1.2,
+    autoSpeed: 0.4,
+    layout: "balanced",
+    camera: { yaw: -0.3, pitch: 0.1, zoom: 1.25 },
+  },
+  cumulus: {
+    ...DEFAULT_CLOUD_CANVAS_CONFIG,
+    mode: "cumulus",
+    spread: 1.3,
+    size: 1.12,
+    depth: 1,
+    autoSpeed: 0.25,
+    layout: "auto",
+    camera: { yaw: -0.15, pitch: 0.12, zoom: 1.4 },
   },
 };

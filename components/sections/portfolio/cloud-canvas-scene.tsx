@@ -26,11 +26,18 @@ const CloudCanvasView = dynamic(() => import("./cloud-canvas/cloud-canvas-view")
 
 export default function CloudCanvasScene() {
   return (
-    <div className="absolute inset-0 overflow-hidden">
+    // Full-bleed ON PURPOSE — the canvas is the drawing surface, so an inset
+    // region would hard-clip tiles at its own edge. Header clearance comes from
+    // the preset's centerY/zoom instead (cloud-canvas-config.ts): the orbit
+    // centre sits lower in the full-height canvas, and any far tile that still
+    // reaches up fades behind the z-10 header like the rest of the atmosphere.
+    <div className="absolute inset-0">
+      {/* cloud-globe-mask (globals.css): tiles dissolve into the sky as they
+          rise toward the header — the pills section's edge-mask device. */}
       <CloudCanvasView
         config={CLOUD_CANVAS_PORTFOLIO_CONFIG}
         wheelZoom={false}
-        className="block h-full w-full"
+        className="cloud-globe-mask block h-full w-full"
       />
     </div>
   );

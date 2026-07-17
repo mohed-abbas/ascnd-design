@@ -14,12 +14,32 @@
  * Slots between Testimonials and Pricing. Stays TRANSPARENT with z-index at
  * `auto` (below the site's front cloud layer) ON PURPOSE, so the sky/cloud
  * atmosphere reads through the globe.
+ *
+ * Header (Figma 424:487): the house 49px mixed-font display heading — "stuff
+ * we've " (Product Sans Light) + "shipped" (Instrument Serif) — over the shared
+ * solid <Button> ("see all work", the exact white-gradient pill from the Figma
+ * frame). The header wrapper is pointer-events-none so it never blocks the
+ * globe's drag; only the button re-enables hits. The globe region starts below
+ * the header (see cloud-canvas-scene.tsx) so tiles orbit under the heading, and
+ * any faded far tile that drifts up passes BEHIND it (header z-10) — the same
+ * "content floating among the atmosphere" move as the testimonials quote.
  */
+import Button from "@/components/ui/button";
 import CloudCanvasScene from "./cloud-canvas-scene";
 
 export default function Portfolio() {
   return (
     <section data-portfolio className="relative min-h-dvh w-full overflow-hidden">
+      {/* Section header — Figma 424:487 (heading + see-all-work, gap 25px). */}
+      <div className="pointer-events-none relative z-10 flex w-full flex-col items-center gap-[25px] pt-[10dvh] max-md:px-6">
+        <h2 className="text-center text-display font-light leading-[1.1] tracking-[-0.03em] text-white [word-break:break-word]">
+          stuff we&apos;ve <span className="font-instrument">shipped</span>
+        </h2>
+        <Button variant="solid" className="pointer-events-auto">
+          see all work
+        </Button>
+      </div>
+
       <CloudCanvasScene />
     </section>
   );

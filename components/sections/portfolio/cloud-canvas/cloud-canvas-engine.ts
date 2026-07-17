@@ -10,13 +10,27 @@
  *     (the reference filled the canvas opaque white; that is removed here).
  *   • DPR is capped (≤1.5 site mandate; 1.25 here to bound 2D fill-rate).
  *
- * Pipeline each frame: Fibonacci-sphere unit points → Euler rotate (yaw/pitch/roll)
- * → orthographic project (screen = centre + xy·radius) → painter's sort by rotated
- * z → draw each tile with depth-driven size + fade. Pointer drag rotates with a
- * fling/inertia model; wheel zooms; click focuses a tile (pulls it forward/centre).
+ * Pipeline each frame: formation unit points (see below) → Euler rotate (yaw/pitch/
+ * roll) → orthographic project (screen = centre + xy·radius) → painter's sort by
+ * rotated z → draw each tile with depth-driven size + fade. Pointer drag rotates
+ * with a fling/inertia model; wheel zooms; click focuses a tile (pulls it
+ * forward/centre).
  *
- * Pass 1 scope: globe view only, desktop. No flat board, no upload, no share-URL,
- * no quality-tier gating (feature-first, CLAUDE.md — degradation is a later pass).
+ * FORMATIONS (config.mode) — one engine, one glass tile recipe, four arrangements
+ * of the same matter (the site's air/altitude vocabulary):
+ *   • "globe"   — Fibonacci sphere, slow spin (the shipped look).
+ *   • "halo"    — braided two-radius orbital ring (the testimonial rocks' orbit
+ *                 outlines); roll wobble off so the orbit reads stable.
+ *   • "ascent"  — rising double-helix column; tiles climb and wrap, fading in at
+ *                 the base and out at the top (cloud lifecycle, not a pop).
+ *   • "cumulus" — flattened cloud-bank scatter (volume, not shell) with slow
+ *                 collective drift + per-tile bob at offset phases — the same
+ *                 motion grammar as the site's drei cloud layer.
+ * Only the point set and its characteristic motion differ per mode; drag/fling,
+ * hover, focus, zoom, and the glass-matted frame are identical across all four.
+ *
+ * Desktop scope. No flat board, no upload, no share-URL, no quality-tier gating
+ * (feature-first, CLAUDE.md — degradation is a later pass).
  */
 import type { CloudCanvasConfig } from "./cloud-canvas-config";
 import type { CloudImage } from "./cloud-canvas-data";
@@ -24,9 +38,20 @@ import type { CloudImage } from "./cloud-canvas-data";
 // ── Constants carried over from the reference ────────────────────────────────
 const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5)); // ≈ 2.399963 rad
 const Y_SQUASH = 0.86; // flatten the sphere vertically, as the reference does
-const DPR_CAP = 1.25; // ≤ 1.5 site mandate; 1.25 keeps 2D fill-rate in check
+const DPR_CAP = 1.5; // the site-wide cap — the design system values razor-sharp
+// shots (design-shots ships raw PNGs for the same reason), and ~28 rounded-rect
+// draws leave 2D fill-rate headroom to spend on crispness.
 const FAST_MAX_SIDE = 520; // downscale source images once for cheap per-frame draws
 const DT_MAX = 0.034; // clamp step (~29fps floor) so a stall can't fling the globe
+
+// ── Formation constants ──────────────────────────────────────────────────────
+const HALO_OUTER = 1; // braided ring — alternating tiles sit on two radii so the
+const HALO_INNER = 0.82; // orbit reads as a ring SYSTEM, not a queue
+const HELIX_RADIUS = 0.62; // ascent column radius
+const HELIX_TWIST = 3.0; // radians of twist per unit of height
+const HELIX_WRAP = 1.15; // |y| where a climbing tile wraps base ↔ top
+const HELIX_FADE_START = 0.88; // |y| where the pole fade begins (fade≈0 at wrap)
+const CUMULUS_SCALE = { x: 1.32, y: 0.42, z: 0.78 }; // cloud-bank ellipsoid axes
 
 type SlotType = "landscape" | "square" | "portrait";
 const SLOT_SIZE: Record<SlotType, { w: number; h: number }> = {
@@ -49,6 +74,8 @@ interface Card {
   baseY: number;
   baseZ: number;
   jitter: number;
+  /** Per-mode phase: helix strand offset (ascent) / bob phase (cumulus). */
+  phaseOffset: number;
   focusEase: number;
   hoverEase: number;
   dimEase: number;
@@ -60,6 +87,8 @@ interface Projected {
   screenY: number;
   x: number;
   z: number;
+  /** Formation alpha (ascent pole fade); 1 everywhere else. */
+  fade: number;
 }
 
 // ── Pure geometry ────────────────────────────────────────────────────────────
@@ -70,6 +99,64 @@ function fibonacciPoint(index: number, total: number) {
   const radius = Math.sqrt(Math.max(0, 1 - y * y));
   const theta = index * GOLDEN_ANGLE;
   return { x: Math.cos(theta) * radius, y, z: Math.sin(theta) * radius };
+}
+
+/** Deterministic per-index 0..1 hash — stable layout across mounts, no RNG. */
+function hash01(index: number): number {
+  const s = Math.sin(index * 127.1) * 43758.5453;
+  return s - Math.floor(s);
+}
+
+/** Wrap v into [-limit, limit] (ascent's climb — top wraps back to the base). */
+function wrapRange(v: number, limit: number): number {
+  const span = limit * 2;
+  return ((((v + limit) % span) + span) % span) - limit;
+}
+
+/**
+ * Static base point + phase for card i in the given formation. "ascent" stores
+ * only the climb coordinate (baseY) + strand phase — its x/z are a function of
+ * the per-frame effective height, computed in render().
+ */
+function formationPoint(
+  index: number,
+  total: number,
+  mode: CloudCanvasConfig["mode"],
+): { x: number; y: number; z: number; phase: number } {
+  if (mode === "halo") {
+    // Braided orbit: sequential angle, alternating inner/outer radius, a whisper
+    // of vertical jitter so the ring has body without losing its plane.
+    const angle = (index / Math.max(1, total)) * Math.PI * 2;
+    const radius = index % 2 === 0 ? HALO_OUTER : HALO_INNER;
+    return {
+      x: Math.cos(angle) * radius,
+      y: Math.sin(index * 13.7) * 0.055,
+      z: Math.sin(angle) * radius,
+      phase: 0,
+    };
+  }
+  if (mode === "ascent") {
+    // Even rungs up the column; two strands offset by π (a double helix), with a
+    // touch of per-card angular jitter so the strands don't read machine-perfect.
+    const y = total <= 1 ? 0 : (index / (total - 1)) * 2 - 1;
+    const strand = (index % 2) * Math.PI;
+    return { x: 0, y, z: 0, phase: strand + Math.sin(index * 7.3) * 0.18 };
+  }
+  if (mode === "cumulus") {
+    // Volume, not shell: a Fibonacci direction pushed inward by a cube-root hash
+    // radius (uniform in volume), then squashed to a cloud-bank ellipsoid.
+    const p = fibonacciPoint(index, total);
+    const r = Math.cbrt(0.16 + 0.84 * hash01(index)); // keep a hollow-free core
+    return {
+      x: p.x * r * CUMULUS_SCALE.x,
+      y: p.y * r * CUMULUS_SCALE.y,
+      z: p.z * r * CUMULUS_SCALE.z,
+      phase: index * GOLDEN_ANGLE, // bob phase — every tile off-beat
+    };
+  }
+  // "globe" — the original Fibonacci sphere.
+  const p = fibonacciPoint(index, total);
+  return { x: p.x, y: p.y * Y_SQUASH, z: p.z, phase: 0 };
 }
 
 /** Rotate a point by yaw (Y) → pitch (X) → roll (Z), in that order. */
@@ -187,6 +274,10 @@ export class CloudCanvasEngine {
   private releaseYaw = 0;
   private releasePitch = 0;
 
+  // Formation motion — ascent's climb phase, cumulus' bob clock.
+  private risePhase = 0;
+  private modeTime = 0;
+
   // Pointer
   private dragging = false;
   private lastX = 0;
@@ -220,14 +311,27 @@ export class CloudCanvasEngine {
   setConfig(config: CloudCanvasConfig): void {
     const prev = this.config;
     this.config = config;
-    // A count/layout/balance change alters the card set; the rest are read live.
+    // A mode/count/layout/balance change alters the card set; the rest are read live.
     const layoutChanged =
+      prev.mode !== config.mode ||
       prev.visibleCount !== config.visibleCount ||
       prev.layout !== config.layout ||
       prev.balance.portrait !== config.balance.portrait ||
       prev.balance.landscape !== config.balance.landscape ||
       prev.balance.square !== config.balance.square;
     if (layoutChanged) this.rebuildCards();
+    // A formation switch re-seats the camera on the new config's resting pose —
+    // the geometry teleports anyway, and each formation needs its own vantage
+    // (halo's high pitch, cumulus' wide zoom). Knob tweaks never touch the camera.
+    if (prev.mode !== config.mode) {
+      this.yaw = config.camera.yaw;
+      this.pitch = config.camera.pitch;
+      this.zoom = config.camera.zoom;
+      this.velYaw = 0.002;
+      this.velPitch = 0;
+      this.releaseYaw = 0;
+      this.releasePitch = 0;
+    }
   }
 
   private rebuildCards(): void {
@@ -237,7 +341,7 @@ export class CloudCanvasEngine {
         : Math.min(this.loaded.length, Math.max(0, this.config.visibleCount));
     const slots = buildSlotTypes(total, this.config, this.loaded);
     this.cards = Array.from({ length: total }, (_, i) => {
-      const p = fibonacciPoint(i, total);
+      const p = formationPoint(i, total, this.config.mode);
       const slot = SLOT_SIZE[slots[i]];
       return {
         index: i,
@@ -245,9 +349,10 @@ export class CloudCanvasEngine {
         w: slot.w,
         h: slot.h,
         baseX: p.x,
-        baseY: p.y * Y_SQUASH,
+        baseY: p.y,
         baseZ: p.z,
         jitter: Math.sin(i * 19.19) * 0.13,
+        phaseOffset: p.phase,
         focusEase: 0,
         hoverEase: 0,
         dimEase: 0,
@@ -275,9 +380,19 @@ export class CloudCanvasEngine {
   tick(dtSeconds: number): void {
     if (this.disposed) return;
     const dt = Math.min(DT_MAX, Math.max(0, dtSeconds));
+    const mode = this.config.mode;
+
+    // Formation clocks. Ascent's PRIMARY motion is the climb, so its yaw autospin
+    // is damped; cumulus drifts rather than spins. Clocks always advance (even
+    // mid-drag) — the cloud keeps breathing and the thermal keeps rising.
+    this.modeTime += dt;
+    if (mode === "ascent") {
+      this.risePhase += dt * (0.02 + this.config.autoSpeed * 0.14);
+    }
+    const autoFactor = mode === "ascent" ? 0.4 : mode === "cumulus" ? 0.55 : 1;
 
     if (!this.dragging) {
-      this.velYaw += this.config.autoSpeed * 0.00022;
+      this.velYaw += this.config.autoSpeed * 0.00022 * autoFactor;
       this.velYaw += this.releaseYaw;
       this.velPitch += this.releasePitch;
       this.releaseYaw *= 0.965;
@@ -287,8 +402,13 @@ export class CloudCanvasEngine {
       this.yaw += this.velYaw * dt * 60;
       this.pitch += this.velPitch * dt * 60;
     }
-    this.pitch = Math.max(-1.05, Math.min(1.05, this.pitch));
-    this.roll = Math.sin(this.yaw * 0.42) * 0.055;
+    // Per-mode pitch clamp: a ring shouldn't flip through its plane, a column
+    // shouldn't lie down, a cloud bank stays near the horizon.
+    const pitchLimit =
+      mode === "halo" ? 0.65 : mode === "ascent" ? 0.4 : mode === "cumulus" ? 0.6 : 1.05;
+    this.pitch = Math.max(-pitchLimit, Math.min(pitchLimit, this.pitch));
+    // Roll wobble is the globe's gesture only — orbits/columns/banks read stable.
+    this.roll = mode === "globe" ? Math.sin(this.yaw * 0.42) * 0.055 : 0;
 
     this.updateEasing(dt);
     this.render();
@@ -310,13 +430,36 @@ export class CloudCanvasEngine {
     ctx.clearRect(0, 0, this.cssW, this.cssH); // transparent over the sky
 
     const centerX = this.cssW * 0.5;
-    const centerY = this.cssH * 0.47;
+    const centerY = this.cssH * this.config.centerY;
     const density = densityFactors(this.cards.length);
     const radius =
       Math.min(this.cssW, this.cssH) * 0.45 * this.config.spread * density.spread * this.zoom;
 
+    const mode = this.config.mode;
     this.projected = this.cards.map((card) => {
-      const r = rotatePoint(card.baseX, card.baseY, card.baseZ, this.yaw, this.pitch, this.roll);
+      // Effective (pre-rotation) position: static for globe/halo; ascent climbs
+      // and wraps along its column; cumulus adds a per-tile bob.
+      let bx = card.baseX;
+      let by = card.baseY;
+      let bz = card.baseZ;
+      let fade = 1;
+      if (mode === "ascent") {
+        const effY = wrapRange(card.baseY + this.risePhase, HELIX_WRAP);
+        const theta = effY * HELIX_TWIST + card.phaseOffset;
+        bx = Math.cos(theta) * HELIX_RADIUS;
+        by = effY;
+        bz = Math.sin(theta) * HELIX_RADIUS;
+        // Cloud lifecycle at the poles: condense in at the base, evaporate at
+        // the top — never a pop at the wrap seam.
+        fade = Math.max(
+          0,
+          Math.min(1, (HELIX_WRAP - Math.abs(effY)) / (HELIX_WRAP - HELIX_FADE_START)),
+        );
+      } else if (mode === "cumulus") {
+        bx += Math.sin(this.modeTime * 0.42 + card.phaseOffset) * 0.028;
+        by += Math.sin(this.modeTime * 0.58 + card.phaseOffset * 1.7) * 0.05;
+      }
+      const r = rotatePoint(bx, by, bz, this.yaw, this.pitch, this.roll);
       let screenX = centerX + r.x * radius;
       let screenY = centerY + r.y * radius;
       let z = r.z;
@@ -326,11 +469,14 @@ export class CloudCanvasEngine {
       z += (1.16 - z) * 0.58 * card.focusEase;
       z -= 0.28 * card.dimEase;
       z += 0.16 * card.hoverEase;
-      return { card, screenX, screenY, x: r.x, z };
+      return { card, screenX, screenY, x: r.x, z, fade };
     });
     this.projected.sort((a, b) => a.z - b.z); // painter's: far → near
 
-    for (const p of this.projected) this.drawCard(p, density.size);
+    for (const p of this.projected) {
+      if (p.fade <= 0.01) continue; // fully evaporated at the wrap seam
+      this.drawCard(p, density.size);
+    }
   }
 
   private cardScale(p: Projected, densitySize: number): number {
@@ -356,9 +502,12 @@ export class CloudCanvasEngine {
     let alpha = this.config.fadeBack
       ? Math.min(1, Math.max(0.24, 0.48 + p.z * 0.44))
       : 1;
+    alpha *= p.fade; // formation fade (ascent's pole evaporation)
     alpha *= 1 - p.card.dimEase * 0.46;
     alpha = Math.min(1, alpha + p.card.hoverEase * 0.16);
-    const dim = this.config.fadeBack ? Math.max(0, 0.26 - p.z * 0.18) : 0;
+    // Haze curve kept gentle (max ~0.34 at the far pole) — stronger and far
+    // tiles read as blank white cards instead of photos in mist.
+    const dim = this.config.fadeBack ? Math.max(0, 0.2 - p.z * 0.14) : 0;
 
     // Glass-matted frame — the exact design-shots / conveyor-arc recipe, as
     // constant fractions of the tile edge (authored at SHOT_BASE = 261px): corner
@@ -419,8 +568,11 @@ export class CloudCanvasEngine {
     ctx.globalAlpha = alpha;
     drawImageCover(ctx, p.card.image, -w / 2, -h / 2, w, h);
     if (dim > 0.01) {
+      // Atmospheric haze, NOT black: this site's depth cue is receding INTO the
+      // sky (white/alpha — the clouds, the rocks), never toward black, which
+      // reads muddy over the bright atmosphere.
       ctx.globalAlpha = Math.min(0.44, dim);
-      ctx.fillStyle = "#000";
+      ctx.fillStyle = "#fff";
       ctx.fillRect(-w / 2, -h / 2, w, h);
     }
     ctx.restore();
@@ -494,6 +646,7 @@ export class CloudCanvasEngine {
     const density = densityFactors(this.cards.length);
     for (let i = this.projected.length - 1; i >= 0; i -= 1) {
       const p = this.projected[i];
+      if (p.fade <= 0.01) continue; // evaporated tiles aren't clickable
       const scale = this.cardScale(p, density.size);
       const halfW = (p.card.w * scale) / 2;
       const halfH = (p.card.h * scale) / 2;
