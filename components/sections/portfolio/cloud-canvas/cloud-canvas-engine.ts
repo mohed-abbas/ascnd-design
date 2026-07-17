@@ -8,7 +8,8 @@
  *   • It draws TRANSPARENT — clearRect only, never a background fill — so the globe
  *     floats over the site's global sky/cloud layers like every other section
  *     (the reference filled the canvas opaque white; that is removed here).
- *   • DPR is capped (≤1.5 site mandate; 1.25 here to bound 2D fill-rate).
+ *   • DPR is capped at 1.5 — the full site-wide cap, deliberately not lower
+ *     (see DPR_CAP below: the design system values razor-sharp shots).
  *
  * Pipeline each frame: formation unit points (see below) → Euler rotate (yaw/pitch/
  * roll) → orthographic project (screen = centre + xy·radius) → painter's sort by
@@ -37,6 +38,19 @@
  * invisible, so they never fly in from a stale position). One card exists per
  * project at all times; visibility is an eased per-card state, never a rebuild.
  *
+ * LITE MODE (isLite) — a self-measured slow-canvas fallback, decided ONCE at
+ * init (see benchmarkAtInit) and locked for the mount, never re-evaluated
+ * mid-view. On CPU-rasterized canvas2d (Firefox/Linux, or Chromium with a
+ * blocklisted GPU) the full recipe measured ~35ms/frame vs ~4.6ms accelerated —
+ * enough to stall the shared gsap ticker and Lenis page-wide. Lite swaps in:
+ *   • backing store at ratio 1.0 (CPU raster cost scales with pixels);
+ *   • ONE pre-composited whole-tile sprite per card (see buildTileSprites) in
+ *     place of drawCard's frame-blit + stroke + clip + cover-draw;
+ *   • an alpha pull-down in place of the white haze overlay;
+ *   • a per-tile edge-fade ramp (edgeFadeRamp) in place of the full-canvas
+ *     destination-in composite (~8ms/frame on CPU raster on its own).
+ * Full (non-lite) output is untouched — every lite branch is additive.
+ *
  * Desktop scope. No flat board, no upload, no share-URL, no quality-tier gating
  * (feature-first, CLAUDE.md — degradation is a later pass).
  */
@@ -50,6 +64,14 @@ const DPR_CAP = 1.5; // the site-wide cap — the design system values razor-sha
 // shots (design-shots ships raw PNGs for the same reason), and ~28 rounded-rect
 // draws leave 2D fill-rate headroom to spend on crispness.
 const FAST_MAX_SIDE = 520; // downscale source images once for cheap per-frame draws
+const FRAME_SPRITE_SCALE = 2.5; // frame sprites bake at 2.5× the authored slot px
+// size, so the blit stays crisp through depth/zoom/DPR upscaling of near tiles
+const TILE_SPRITE_SCALE = 1.5; // lite mode bakes each card's WHOLE visual at
+// 1.5× the authored slot px — enough headroom over lite's 1.0 backing-store
+// ratio that near tiles stay crisp, without paying 2.5× sprite memory per card
+const LITE_RENDER_BUDGET_MS = 8; // init benchmark: avg full-recipe frame above
+// this → CPU-rasterized canvas2d → lite mode (accelerated Chromium measures
+// ~4.6ms, Firefox/Linux software raster ~35ms — the gap is unambiguous)
 const DT_MAX = 0.034; // clamp step (~29fps floor) so a stall can't fling the globe
 
 // ── Formation constants ──────────────────────────────────────────────────────
@@ -76,6 +98,8 @@ interface LoadedImage {
 interface Card {
   index: number;
   image: CanvasImageSource;
+  /** Slot shape — keys the pre-rendered glass-frame sprite (see frameSprite). */
+  slot: SlotType;
   w: number;
   h: number;
   /** Current formation position — lerps toward target* (the re-form glide). */
@@ -96,6 +120,15 @@ interface Card {
   visTarget: number;
   /** Eased visibility — drives the evaporate/condense fade + shrink. */
   visEase: number;
+}
+
+/** Lite-mode pre-composited tile (frame + hairline + shot) — see buildTileSprites. */
+interface TileSprite {
+  canvas: HTMLCanvasElement;
+  /** Frame-box size in sprite px — the canvas adds `pad` of stroke bleed around it. */
+  fw: number;
+  fh: number;
+  pad: number;
 }
 
 interface Projected {
@@ -315,6 +348,23 @@ export class CloudCanvasEngine {
   private cssW = 1;
   private cssH = 1;
 
+  // Pre-rendered glass frames — drawCard steps 1–2 baked once per slot shape
+  // (see frameSprite). Lazy: built on each shape's first draw.
+  private frameSprites: Partial<Record<SlotType, HTMLCanvasElement>> = {};
+
+  // LITE MODE — flipped once by benchmarkAtInit when the canvas measures as
+  // CPU-rasterized, then locked for the mount (never re-evaluated mid-view).
+  private lite = false;
+  // Lite's per-card whole-tile sprites, indexed by card.index. Empty until the
+  // benchmark flips lite; re-baked by rebuildCards when the card set changes.
+  private tileSprites: (TileSprite | null)[] = [];
+
+  // Edge-fade gradient cache (config.edgeFade). A CanvasGradient is cheap to
+  // build, but there's no reason to rebuild one per frame — keyed on canvas
+  // height + the fade stops, so it refreshes on resize or a stop change only.
+  private fadeGradient: CanvasGradient | null = null;
+  private fadeGradientKey = "";
+
   // Orientation / camera
   private yaw: number;
   private pitch: number;
@@ -351,12 +401,47 @@ export class CloudCanvasEngine {
     this.zoom = config.camera.zoom;
   }
 
-  /** Load + downscale every image, then build the globe. */
+  /** True when the init benchmark locked this engine into lite mode. */
+  get isLite(): boolean {
+    return this.lite;
+  }
+
+  /** Load + downscale every image, build the globe, then self-benchmark. */
   async init(): Promise<void> {
     this.loaded = await Promise.all(this.images.map((img) => loadFastImage(img.src)));
     if (this.disposed) return;
     this.rebuildCards();
     this.resize();
+    this.benchmarkAtInit();
+  }
+
+  /**
+   * Self-measured canvas speed probe — THE lite-mode decision. Renders two
+   * representative full-recipe frames back-to-back through the real render()
+   * with performance.now() timing (init is fired by the view's near-view
+   * observer ~1000px before the section scrolls in, so nothing here is ever
+   * user-visible) and takes the average. Above LITE_RENDER_BUDGET_MS we're on
+   * a CPU-rasterized canvas2d — Firefox/Linux, or any Chromium whose GPU is
+   * blocklisted into software raster — where this exact recipe measured
+   * ~35ms/frame and stalled the shared gsap ticker (and Lenis) page-wide.
+   * The decision is LOCKED here at init and never re-evaluated mid-view
+   * (CLAUDE.md: tier decisions for mounted features are locked at mount — our
+   * decision point is init, which completes before the globe can be seen).
+   */
+  private benchmarkAtInit(): void {
+    const start = performance.now();
+    this.render();
+    this.render();
+    const avg = (performance.now() - start) / 2;
+    if (avg > LITE_RENDER_BUDGET_MS) {
+      this.lite = true;
+      this.buildTileSprites();
+      // The initial resize() ran pre-benchmark at the full DPR cap; re-run it
+      // now so the backing store shrinks to lite's 1.0 ratio (2.25× fewer
+      // pixels at DPR≥1.5) before the first visible frame.
+      this.resize();
+    }
+    this.ctx.clearRect(0, 0, this.cssW, this.cssH); // leave the canvas blank
   }
 
   setConfig(config: CloudCanvasConfig): void {
@@ -423,6 +508,7 @@ export class CloudCanvasEngine {
       return {
         index: i,
         image: this.loaded[i].source,
+        slot: slots[i],
         w: slot.w,
         h: slot.h,
         baseX: 0,
@@ -441,6 +527,9 @@ export class CloudCanvasEngine {
       };
     });
     this.assignFormation(true);
+    // LITE: the card set (count/slots/images) just changed, so the per-card
+    // sprites must follow. No-op pre-benchmark, while lite is still false.
+    if (this.lite) this.buildTileSprites();
     if (this.focusedIndex >= total) this.focusedIndex = -1;
     if (this.hoveredIndex >= total) this.hoveredIndex = -1;
   }
@@ -497,7 +586,10 @@ export class CloudCanvasEngine {
     const rect = this.canvas.getBoundingClientRect();
     this.cssW = Math.max(1, rect.width);
     this.cssH = Math.max(1, rect.height);
-    const ratio = Math.min(window.devicePixelRatio || 1, DPR_CAP);
+    // LITE: CPU raster cost scales directly with backing-store pixels, so a
+    // software canvas draws at 1.0 instead of the site-wide 1.5 cap — the soft
+    // atmospheric look hides the resolution drop, the frame-time doesn't.
+    const ratio = this.lite ? 1 : Math.min(window.devicePixelRatio || 1, DPR_CAP);
     this.canvas.width = Math.max(1, Math.floor(this.cssW * ratio));
     this.canvas.height = Math.max(1, Math.floor(this.cssH * ratio));
     this.ctx.setTransform(ratio, 0, 0, ratio, 0, 0); // draw in CSS px
@@ -613,6 +705,13 @@ export class CloudCanvasEngine {
       z += (1.16 - z) * 0.58 * card.focusEase;
       z -= 0.28 * card.dimEase;
       z += 0.16 * card.hoverEase;
+      // LITE edge fade: the full-canvas destination-in pass below costs ~8ms
+      // per frame on CPU raster on its own, so lite folds the same stops into
+      // a per-tile alpha ramp on the tile's screen centre instead — whole-tile
+      // fade rather than a pixel gradient, visually close at these tile sizes.
+      if (this.lite && this.config.edgeFade) {
+        fade *= this.edgeFadeRamp(screenY);
+      }
       return { card, screenX, screenY, x: r.x, z, fade };
     });
     this.projected.sort((a, b) => a.z - b.z); // painter's: far → near
@@ -621,6 +720,51 @@ export class CloudCanvasEngine {
       if (p.fade <= 0.01) continue; // fully evaporated at the wrap seam
       this.drawCard(p, this.denSize);
     }
+
+    // Edge fade (config.edgeFade) — the old .cloud-globe-mask CSS mask-image,
+    // moved in-canvas. A CSS mask on a composited layer whose contents change
+    // every frame forces an uncacheable full-screen render-surface + mask pass
+    // per frame in the GPU process; here it's one destination-in gradient fill
+    // over pixels we already own. Same stops, same dissolve. (Lite mode skips
+    // this composite entirely — the same stops were applied per tile during
+    // projection via edgeFadeRamp.)
+    const edgeFade = this.config.edgeFade;
+    if (edgeFade && !this.lite) {
+      const key = `${this.cssH}|${edgeFade.top[0]},${edgeFade.top[1]},${edgeFade.bottom[0]},${edgeFade.bottom[1]}`;
+      let grad = this.fadeGradient;
+      if (!grad || this.fadeGradientKey !== key) {
+        grad = ctx.createLinearGradient(0, 0, 0, this.cssH);
+        // Transparent above top[0], opaque top[1]→bottom[0], transparent below
+        // bottom[1] — destination-in keeps alpha only, the color is irrelevant.
+        grad.addColorStop(edgeFade.top[0], "rgba(0,0,0,0)");
+        grad.addColorStop(edgeFade.top[1], "rgba(0,0,0,1)");
+        grad.addColorStop(edgeFade.bottom[0], "rgba(0,0,0,1)");
+        grad.addColorStop(edgeFade.bottom[1], "rgba(0,0,0,0)");
+        this.fadeGradient = grad;
+        this.fadeGradientKey = key;
+      }
+      ctx.globalCompositeOperation = "destination-in";
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, this.cssW, this.cssH);
+      ctx.globalCompositeOperation = "source-over";
+    }
+  }
+
+  /**
+   * LITE stand-in for the destination-in edge fade: a clamped linear alpha
+   * ramp over the tile's screen-space centre against the SAME config.edgeFade
+   * stops — 0→1 across top[0]..top[1] of cssH, 1→0 across bottom[0]..bottom[1].
+   */
+  private edgeFadeRamp(screenY: number): number {
+    const edgeFade = this.config.edgeFade;
+    if (!edgeFade) return 1;
+    const y = screenY / this.cssH;
+    const [t0, t1] = edgeFade.top;
+    const [b0, b1] = edgeFade.bottom;
+    let ramp = 1;
+    if (t1 > t0) ramp = Math.min(ramp, Math.max(0, Math.min(1, (y - t0) / (t1 - t0))));
+    if (b1 > b0) ramp = Math.min(ramp, Math.max(0, Math.min(1, (b1 - y) / (b1 - b0))));
+    return ramp;
   }
 
   private cardScale(p: Projected, densitySize: number): number {
@@ -655,6 +799,12 @@ export class CloudCanvasEngine {
     // Haze curve kept gentle (max ~0.34 at the far pole) — stronger and far
     // tiles read as blank white cards instead of photos in mist.
     const dim = this.config.fadeBack ? Math.max(0, 0.2 - p.z * 0.14) : 0;
+    // LITE: the haze overlay would put a live fillRect-inside-a-clip back on
+    // top of the one-blit sprite path, so approximate it by pulling alpha down
+    // by the same amount instead. Visual tradeoff: far tiles fade slightly
+    // into the sky rather than hazing white — acceptable in lite; the depth
+    // cue (far = more atmospheric) survives.
+    if (this.lite && dim > 0.01) alpha *= 1 - Math.min(0.44, dim);
 
     // Glass-matted frame — the exact design-shots / conveyor-arc recipe, as
     // constant fractions of the tile edge (authored at SHOT_BASE = 261px): corner
@@ -677,27 +827,37 @@ export class CloudCanvasEngine {
     ctx.rotate(tilt + p.card.jitter * 0.08);
     ctx.globalAlpha = alpha;
 
-    // 1. Mat fill — translucent white ring (bg-white/10).
-    ctx.beginPath();
-    ctx.roundRect(fx, fy, fw, fh, r);
-    ctx.fillStyle = "rgba(255,255,255,0.1)";
-    ctx.fill();
+    // LITE: the whole tile — frame + hairline + cover-cropped shot — was baked
+    // once per card (buildTileSprites), so the per-frame cost collapses to a
+    // single drawImage. Geometry is preserved exactly: every frame metric is a
+    // fixed fraction of the tile edge, so the sprite's frame box downscales
+    // uniformly onto the live (fx, fy, fw, fh); `pad` is the stroke's bleed
+    // margin, scaled by the same factor. Hover/focus/dim still apply — they
+    // are transforms + alpha, never sprite content.
+    if (this.lite) {
+      const sprite = this.tileSprites[p.card.index];
+      if (sprite) {
+        const k = fw / sprite.fw; // uniform scale sprite px → live px
+        ctx.drawImage(
+          sprite.canvas,
+          fx - sprite.pad * k,
+          fy - sprite.pad * k,
+          fw + sprite.pad * 2 * k,
+          fh + sprite.pad * 2 * k,
+        );
+        ctx.restore();
+        return;
+      }
+    }
 
-    // 2. Inset white sheen — soft inner glow, clipped to the frame (glows inward
-    // only) and BEHIND the shot, so only the mat ring lights up. Matches the
-    // design's `inset 0 0 6.39px rgba(255,255,255,0.28)`.
-    ctx.save();
-    ctx.beginPath();
-    ctx.roundRect(fx, fy, fw, fh, r);
-    ctx.clip();
-    ctx.beginPath();
-    ctx.roundRect(fx, fy, fw, fh, r);
-    ctx.strokeStyle = "rgba(255,255,255,0.28)";
-    ctx.lineWidth = mat * 2;
-    ctx.shadowColor = "rgba(255,255,255,0.28)";
-    ctx.shadowBlur = mat;
-    ctx.stroke();
-    ctx.restore();
+    // 1+2. Mat fill + inset sheen — blitted from the per-slot sprite (see
+    // frameSprite below). Drawing the sheen live meant ctx.shadowBlur inside a
+    // clip: Skia rasterizes that into a temp surface, Gaussian-blurs it, and
+    // composites — per tile, per frame, and it was the dominant raster cost.
+    // The sprite pays the blur ONCE per slot shape; this is one drawImage,
+    // and because every frame metric (r, mat) is a fixed fraction of the tile
+    // edge, the uniform downscale to (fw, fh) is visually identical.
+    ctx.drawImage(this.frameSprite(p.card.slot), fx, fy, fw, fh);
 
     // 3. Hairline edge — white/40, one design-pixel thick (scaled with the tile).
     ctx.beginPath();
@@ -725,6 +885,108 @@ export class CloudCanvasEngine {
     ctx.restore();
 
     ctx.restore();
+  }
+
+  /**
+   * Build (lazily, on first draw) the cached glass-frame sprite for a slot
+   * shape: the mat fill + inset sheen at FRAME_SPRITE_SCALE× the slot's
+   * authored px size, using the exact drawCard recipe — corner r = base·14/261,
+   * mat = base·6.39/261, shadowBlur = mat, the same fill/stroke alphas. All of
+   * those are fractions of the tile edge, so the sprite scales uniformly to any
+   * live (fw, fh) without drifting from the hand-drawn look. Only the hairline
+   * edge (step 3) stays live — its Math.max(0.5, …) floor must apply at final
+   * scale, and a plain stroke is cheap.
+   */
+  private frameSprite(slot: SlotType): HTMLCanvasElement {
+    const cached = this.frameSprites[slot];
+    if (cached) return cached;
+    const size = SLOT_SIZE[slot];
+    const w = size.w * FRAME_SPRITE_SCALE;
+    const h = size.h * FRAME_SPRITE_SCALE;
+    const base = Math.min(w, h);
+    const r = base * (14 / 261);
+    const mat = base * (6.39 / 261);
+    const fw = w + mat * 2;
+    const fh = h + mat * 2;
+    const off = document.createElement("canvas");
+    off.width = Math.ceil(fw);
+    off.height = Math.ceil(fh);
+    const octx = off.getContext("2d");
+    if (octx) {
+      // 1. Mat fill — translucent white ring (bg-white/10).
+      octx.beginPath();
+      octx.roundRect(0, 0, fw, fh, r);
+      octx.fillStyle = "rgba(255,255,255,0.1)";
+      octx.fill();
+      // 2. Inset white sheen — soft inner glow, clipped to the frame (glows
+      // inward only) and BEHIND the shot, so only the mat ring lights up.
+      // Matches the design's `inset 0 0 6.39px rgba(255,255,255,0.28)`.
+      octx.save();
+      octx.beginPath();
+      octx.roundRect(0, 0, fw, fh, r);
+      octx.clip();
+      octx.beginPath();
+      octx.roundRect(0, 0, fw, fh, r);
+      octx.strokeStyle = "rgba(255,255,255,0.28)";
+      octx.lineWidth = mat * 2;
+      octx.shadowColor = "rgba(255,255,255,0.28)";
+      octx.shadowBlur = mat;
+      octx.stroke();
+      octx.restore();
+    }
+    this.frameSprites[slot] = off;
+    return off;
+  }
+
+  /**
+   * LITE: pre-composite each card's WHOLE visual — frame sprite + hairline
+   * edge + cover-cropped shot, i.e. drawCard steps 1–4 minus the per-frame
+   * haze overlay (approximated by alpha in lite, see drawCard) — into one
+   * offscreen canvas per card at TILE_SPRITE_SCALE× the authored slot px size.
+   * Every frame metric (r, mat, edge) is a fixed fraction of the tile edge, so
+   * the uniform downscale to the live frame box lands on the exact same
+   * geometry; the only drift is that the hairline's Math.max(0.5, …) floor now
+   * applies at bake scale rather than final scale (invisible at lite's 1.0
+   * backing-store ratio). Re-baked whenever rebuildCards changes the card set;
+   * cleared by dispose.
+   */
+  private buildTileSprites(): void {
+    this.tileSprites = this.cards.map((card) => {
+      const w = card.w * TILE_SPRITE_SCALE;
+      const h = card.h * TILE_SPRITE_SCALE;
+      const base = Math.min(w, h);
+      const r = base * (14 / 261);
+      const mat = base * (6.39 / 261);
+      const edge = Math.max(0.5, base / 261);
+      const fw = w + mat * 2;
+      const fh = h + mat * 2;
+      const pad = Math.ceil(edge); // bleed for the stroke's outer half
+      const off = document.createElement("canvas");
+      off.width = Math.ceil(fw + pad * 2);
+      off.height = Math.ceil(fh + pad * 2);
+      const octx = off.getContext("2d");
+      if (!octx) return null;
+      octx.imageSmoothingEnabled = true;
+      octx.imageSmoothingQuality = "medium";
+      octx.translate(pad, pad);
+      // 1+2. Mat fill + inset sheen — the shared per-slot glass-frame sprite.
+      octx.drawImage(this.frameSprite(card.slot), 0, 0, fw, fh);
+      // 3. Hairline edge — white/40, same recipe as drawCard's live stroke.
+      octx.beginPath();
+      octx.roundRect(0, 0, fw, fh, r);
+      octx.strokeStyle = "rgba(255,255,255,0.4)";
+      octx.lineWidth = edge;
+      octx.stroke();
+      // 4. The shot ON TOP — rounded (same radius), centred in the mat ring so
+      // only the ring shows the glass, exactly like the live path.
+      octx.save();
+      octx.beginPath();
+      octx.roundRect(mat, mat, w, h, r);
+      octx.clip();
+      drawImageCover(octx, card.image, mat, mat, w, h);
+      octx.restore();
+      return { canvas: off, fw, fh, pad };
+    });
   }
 
   // ── Pointer ──────────────────────────────────────────────────────────────────
@@ -809,6 +1071,9 @@ export class CloudCanvasEngine {
     this.cards = [];
     this.projected = [];
     this.loaded = [];
+    this.frameSprites = {};
+    this.tileSprites = [];
+    this.fadeGradient = null;
   }
 }
 

@@ -7,8 +7,26 @@
  *
  * House-rules compliance (heavy-effect contract, CLAUDE.md):
  *  - Rides the shared gsap.ticker (LenisProvider's "one loop") — no private rAF.
- *  - Pauses entirely when the canvas is off-screen (IntersectionObserver), so it
- *    idles to zero the moment the section leaves the viewport.
+ *  - Paint rate goes through heavyEffectFpsCap() (contract #3): the ticker
+ *    accumulates deltaTime and only ticks the engine once the cap's frame budget
+ *    has elapsed (cap 0 = uncapped on a 60 Hz high-tier panel → every frame).
+ *    Re-read each frame so a mid-session tier step-down applies live.
+ *  - Idles to zero off-screen: an IntersectionObserver with a 0px rootMargin
+ *    gates the tick, and `inView` starts FALSE — nothing repaints until the
+ *    canvas actually intersects the viewport (a 200px margin used to wake the
+ *    loop through the entire preceding testimonials scroll).
+ *  - Lazy init: the 28-image fetch + main-thread decode + downscale does NOT run
+ *    at mount (it used to land during the intro/hero moment). A one-shot
+ *    near-view observer (~1000px ahead — the portfolio section sits ~8000px+
+ *    down the page, so it never fires at the top) kicks off engine.init() early
+ *    enough that the images are ready before the section scrolls in.
+ *  - Lite mode: engine.init() ends with a self-benchmark of two real frames;
+ *    a slow (CPU-rasterized) canvas2d — Firefox/Linux, blocklisted GPUs —
+ *    locks the engine into a cheaper recipe (engine.isLite; see the engine
+ *    header) and this view caps its tick at 30fps instead of the tier cap.
+ *    Decided at init, which the near-view observer fires ~1000px before the
+ *    canvas is visible, and never re-evaluated mid-view — the mounted-feature
+ *    tier lock (CLAUDE.md), applied at our actual decision point.
  *  - Client-only + SSR-safe: nothing here runs on the server (the lab page loads it
  *    via next/dynamic ssr:false); first paint is an empty transparent canvas.
  *
@@ -16,6 +34,7 @@
  */
 import { useEffect, useRef } from "react";
 import gsap from "gsap";
+import { heavyEffectFpsCap } from "@/lib/perf/quality-store";
 import { CloudCanvasEngine } from "./cloud-canvas-engine";
 import {
   cloudProjects,
@@ -60,14 +79,19 @@ export default function CloudCanvasView({
     engineRef.current = engine;
 
     let disposed = false;
-    let inView = true;
+    // Starts FALSE — the loop stays cold until the first IO callback confirms
+    // the canvas is actually on-screen (not merely mounted).
+    let inView = false;
     let tickerFn: ((time: number, deltaTime: number) => void) | null = null;
 
+    // 0px margin: wake the repaint loop only when the canvas itself intersects.
+    // (A 200px margin on this full-bleed min-h-dvh canvas kept the loop hot
+    // through the whole testimonials scroll above it.)
     const io = new IntersectionObserver(
       (entries) => {
         inView = entries[0]?.isIntersecting ?? false;
       },
-      { rootMargin: "200px" },
+      { rootMargin: "0px" },
     );
     io.observe(canvas);
 
@@ -118,27 +142,66 @@ export default function CloudCanvasView({
       canvas.addEventListener("wheel", onWheel, { passive: false });
     }
 
-    engine
-      .init()
-      .then(() => {
-        if (disposed) {
-          engine.dispose();
-          return;
-        }
-        engine.resize();
-        // gsap.ticker: deltaTime is milliseconds since the last tick.
-        tickerFn = (_time, deltaTime) => {
-          if (!inView) return;
-          engine.tick(deltaTime / 1000);
-        };
-        gsap.ticker.add(tickerFn);
-      })
-      .catch((err) => console.error("CloudCanvasEngine init failed", err));
+    // Deferred init flow — identical to what used to run at mount, just held
+    // until the near-view observer below fires. The `disposed` race handling is
+    // preserved: unmount-before-resolve is caught inside .then (dispose again),
+    // unmount-after-resolve by the cleanup below.
+    const startInit = () => {
+      engine
+        .init()
+        .then(() => {
+          if (disposed) {
+            engine.dispose();
+            return;
+          }
+          engine.resize();
+          // gsap.ticker: deltaTime is milliseconds since the last tick. Paints
+          // are capped via heavyEffectFpsCap() (contract #3): accumulate the
+          // delta and skip frames until the cap's budget (1000/cap ms) has
+          // elapsed, then tick with the accumulated step. Cap 0 = uncapped →
+          // this degenerates to ticking every frame with the raw delta. The
+          // engine clamps dt at 0.034s, so a capped 16.7ms step is well within
+          // range. Read every frame so a mid-session step-down applies live.
+          // LITE: a lite engine (CPU-rasterized canvas2d, locked at init) caps
+          // at 30fps regardless of tier — even the lite recipe pays software
+          // raster per pixel, and 30fps halves whatever that still costs while
+          // the slow auto-spin reads perfectly fine at 30. isLite is settled
+          // before this ticker ever runs (the benchmark is part of init).
+          let accMs = 0;
+          tickerFn = (_time, deltaTime) => {
+            if (!inView) return;
+            accMs += deltaTime;
+            const cap = engine.isLite ? 30 : heavyEffectFpsCap();
+            if (cap > 0 && accMs < 1000 / cap) return;
+            engine.tick(accMs / 1000);
+            accMs = 0;
+          };
+          gsap.ticker.add(tickerFn);
+        })
+        .catch((err) => console.error("CloudCanvasEngine init failed", err));
+    };
+
+    // Lazy init: the 28-image fetch + decode + downscale is deliberately NOT
+    // kicked off at mount — at page load that work landed in the middle of the
+    // intro/hero moment. This one-shot observer starts it ~1000px before the
+    // section scrolls into view: far enough that a normal scroll finishes the
+    // load before the canvas is visible, close enough that it never fires while
+    // the user is at the top of the page (portfolio sits ~8000px+ down).
+    const initIo = new IntersectionObserver(
+      (entries) => {
+        if (!entries.some((e) => e.isIntersecting)) return;
+        initIo.disconnect();
+        startInit();
+      },
+      { rootMargin: "1000px" },
+    );
+    initIo.observe(canvas);
 
     return () => {
       disposed = true;
       if (tickerFn) gsap.ticker.remove(tickerFn);
       io.disconnect();
+      initIo.disconnect();
       ro.disconnect();
       if (interactive) {
         canvas.removeEventListener("pointerdown", onDown);

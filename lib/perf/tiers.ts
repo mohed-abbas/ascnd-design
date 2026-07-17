@@ -67,6 +67,12 @@
  * |                                            | canvas chunk + GLB before near-view so   |
  * |                                            | the mount is cache-hot, not a cold       |
  * |                                            | chunk→GLB download waterfall.            |
+ * | components/sections/portfolio/             | heavyEffectFpsCap() (ticker paint cap).  |
+ * |   cloud-canvas/                            | 2D-canvas image globe. Idles to zero     |
+ * |                                            | off-screen via IO (0px margin), defers   |
+ * |                                            | its 28-image fetch+decode init until     |
+ * |                                            | ~1000px near-view, and self-caps its     |
+ * |                                            | backing store at dpr≤1.5.                |
  *
  * ★ RULE (audit 2026-07-02 F5.1): any NEW heavy effect — a WebGL canvas, a
  * free-running loop, a per-frame SVG/CSS filter — must be added to this table

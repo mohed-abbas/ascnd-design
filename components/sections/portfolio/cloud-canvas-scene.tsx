@@ -38,13 +38,16 @@ export default function CloudCanvasScene({
     // centre sits lower in the full-height canvas, and any far tile that still
     // reaches up fades behind the z-10 header like the rest of the atmosphere.
     <div className="absolute inset-0">
-      {/* cloud-globe-mask (globals.css): tiles dissolve into the sky as they
-          rise toward the header — the pills section's edge-mask device. */}
+      {/* The edge fade lives IN the engine (config.edgeFade): tiles dissolve
+          into the sky as they rise toward the header — the pills section's
+          edge-mask device, but composited in-canvas. The old CSS mask-image on
+          this canvas forced a per-frame full-screen mask pass (the layer's
+          contents change every frame, so nothing was cacheable). */}
       <CloudCanvasView
         config={CLOUD_CANVAS_PORTFOLIO_CONFIG}
         filter={filter}
         wheelZoom={false}
-        className="cloud-globe-mask block h-full w-full"
+        className="block h-full w-full"
       />
     </div>
   );

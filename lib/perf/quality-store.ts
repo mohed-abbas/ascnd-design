@@ -84,8 +84,9 @@ export function getRefreshHz(): number {
 
 /**
  * The fps cap for the *heavy, look-invariant* effects — the intro liquid glass,
- * the tile conveyor, and (via makeCappedInvalidate) the scroll-driven canvas
- * repaints in the cloud/intro rigs. All are visually identical above 60 fps but
+ * the tile conveyor, the portfolio cloud-canvas globe's ticker, and (via
+ * makeCappedInvalidate) the scroll-driven canvas repaints in the cloud/intro
+ * rigs. All are visually identical above 60 fps but
  * cost ~2× on a 120 Hz panel, so cap them to 60 on any fast panel OR any
  * stepped-down tier (audit item 9). Returns 0 = uncapped (ride the display) on
  * a 60 Hz high tier. The clouds' living morph is already 30 fps-throttled.

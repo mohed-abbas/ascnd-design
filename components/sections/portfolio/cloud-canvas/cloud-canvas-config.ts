@@ -71,6 +71,18 @@ export interface CloudCanvasConfig {
   layout: CloudLayoutMode;
   /** Only used when `layout === "custom"` — relative weights, normalised at use. */
   balance: { portrait: number; landscape: number; square: number };
+  /**
+   * Optional in-canvas edge fade — each pair is [start, end] as fractions of
+   * the canvas height: tile alpha ramps 0→1 across `top` and 1→0 across
+   * `bottom` (a destination-in gradient fill after all tiles are drawn, read
+   * live in render — never part of a layout rebuild). This replaces the old
+   * .cloud-globe-mask CSS mask-image: a CSS mask on a canvas that repaints
+   * every frame forced a full-screen render-surface + mask pass per frame in
+   * the compositor. Omit for no fade (the lab / default presets). In the
+   * engine's lite mode (CPU-rasterized canvas2d, locked at init) the SAME
+   * stops drive a per-tile alpha ramp instead of the gradient composite.
+   */
+  edgeFade?: { top: [number, number]; bottom: [number, number] };
   /** Tiles rotate slightly to face the globe centre. */
   tiltToCenter: boolean;
   /** Far tiles fade + darken (depth cue). */
@@ -134,6 +146,10 @@ export const CLOUD_CANVAS_PORTFOLIO_CONFIG: CloudCanvasConfig = {
   // (the old "custom" 30/60/20 spread assigned shapes by position, not project).
   layout: "manual",
   balance: { portrait: 30, landscape: 60, square: 20 },
+  // The old .cloud-globe-mask stops, verbatim: tiles dissolve into the sky
+  // under the "stuff we've shipped" header (opaque by ~34% ≈ just below the
+  // header block) and again toward the section's bottom edge.
+  edgeFade: { top: [0.16, 0.34], bottom: [0.86, 0.98] },
   tiltToCenter: true,
   fadeBack: true,
   camera: { yaw: -0.35, pitch: 0.17, zoom: 0.9 },
