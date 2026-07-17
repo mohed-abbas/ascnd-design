@@ -14,7 +14,15 @@
  * lab sliders and any validation read one table.
  */
 
-export type CloudLayoutMode = "auto" | "balanced" | "custom";
+/**
+ * How tile slot shapes are chosen:
+ *   • "manual"   — each project's authored `form` (cloud-canvas-data.ts) wins.
+ *                  The shipped portfolio mode: the registry is the control panel.
+ *   • "auto"     — classified from each image's natural aspect ratio.
+ *   • "balanced" — a fixed repeating cycle, independent of content.
+ *   • "custom"   — distributed to match the `balance` ratios.
+ */
+export type CloudLayoutMode = "manual" | "auto" | "balanced" | "custom";
 
 /**
  * Formation — how the tiles are arranged and how they move. One engine, one glass
@@ -52,6 +60,13 @@ export interface CloudCanvasConfig {
   autoSpeed: number;
   /** How many images are laid onto the globe; "all" uses the full set. */
   visibleCount: number | "all";
+  /**
+   * Cap for the "all" FILTER TAB only: the first N registry entries are laid
+   * out, the rest stay evaporated. Type tabs are never capped — every project
+   * of that type shows. "none" disables the cap. (Distinct from visibleCount,
+   * which trims the card set itself and applies to every tab.)
+   */
+  allMax: number | "none";
   /** How tile slot shapes (portrait/landscape/square) are chosen. */
   layout: CloudLayoutMode;
   /** Only used when `layout === "custom"` — relative weights, normalised at use. */
@@ -89,6 +104,7 @@ export const DEFAULT_CLOUD_CANVAS_CONFIG: CloudCanvasConfig = {
   centerY: 0.47,
   autoSpeed: 0.35,
   visibleCount: "all",
+  allMax: 30,
   layout: "balanced",
   balance: { portrait: 45, landscape: 35, square: 20 },
   tiltToCenter: true,
@@ -111,7 +127,12 @@ export const CLOUD_CANVAS_PORTFOLIO_CONFIG: CloudCanvasConfig = {
   centerY: 0.56,
   autoSpeed: 0.2,
   visibleCount: "all",
-  layout: "custom",
+  // The "all" tab shows at most 30 projects (registry order — put the ones
+  // that must always be visible first). Type tabs still show every match.
+  allMax: 30,
+  // "manual": every tile's shape is authored per project in cloud-canvas-data.ts
+  // (the old "custom" 30/60/20 spread assigned shapes by position, not project).
+  layout: "manual",
   balance: { portrait: 30, landscape: 60, square: 20 },
   tiltToCenter: true,
   fadeBack: true,

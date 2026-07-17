@@ -17,7 +17,10 @@ import {
   DEFAULT_CLOUD_CANVAS_CONFIG,
   type CloudCanvasConfig,
 } from "@/components/sections/portfolio/cloud-canvas/cloud-canvas-config";
-import { cloudImages } from "@/components/sections/portfolio/cloud-canvas/cloud-canvas-data";
+import {
+  cloudProjects,
+  type CloudFilter,
+} from "@/components/sections/portfolio/cloud-canvas/cloud-canvas-data";
 
 const CloudCanvasView = dynamic(
   () => import("@/components/sections/portfolio/cloud-canvas/cloud-canvas-view"),
@@ -26,6 +29,7 @@ const CloudCanvasView = dynamic(
 
 export default function CloudCanvasLabPage() {
   const [config, setConfig] = useState<CloudCanvasConfig>(DEFAULT_CLOUD_CANVAS_CONFIG);
+  const [filter, setFilter] = useState<CloudFilter>("all");
 
   return (
     <main className="fixed inset-0 h-dvh w-dvw overflow-hidden">
@@ -33,8 +37,18 @@ export default function CloudCanvasLabPage() {
           the globe reads clearly while tuning. The real portfolio variant stays
           transparent over the actual sky + clouds; this fill is lab-only. */}
       <div className="absolute inset-0 z-0 bg-[#62abff]" />
-      <CloudCanvasView config={config} className="absolute inset-0 z-[1] h-full w-full" />
-      <CloudCanvasControls config={config} onChange={setConfig} imageCount={cloudImages.length} />
+      <CloudCanvasView
+        config={config}
+        filter={filter}
+        className="absolute inset-0 z-[1] h-full w-full"
+      />
+      <CloudCanvasControls
+        config={config}
+        onChange={setConfig}
+        imageCount={cloudProjects.length}
+        filter={filter}
+        onFilterChange={setFilter}
+      />
     </main>
   );
 }

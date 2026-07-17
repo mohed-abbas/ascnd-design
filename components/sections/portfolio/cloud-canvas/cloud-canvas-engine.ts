@@ -29,11 +29,19 @@
  * Only the point set and its characteristic motion differ per mode; drag/fling,
  * hover, focus, zoom, and the glass-matted frame are identical across all four.
  *
+ * FILTERING (setFilter) — the section's type tabs. The formation RE-FORMS rather
+ * than leaving holes: the matching subset gets a fresh formation sized to its
+ * count, surviving tiles glide from old to new positions (base → target lerp in
+ * updateEasing), filtered-out tiles evaporate in place (visEase → 0: fade +
+ * shrink), and returning tiles condense in AT their new spot (snapped while
+ * invisible, so they never fly in from a stale position). One card exists per
+ * project at all times; visibility is an eased per-card state, never a rebuild.
+ *
  * Desktop scope. No flat board, no upload, no share-URL, no quality-tier gating
  * (feature-first, CLAUDE.md — degradation is a later pass).
  */
 import type { CloudCanvasConfig } from "./cloud-canvas-config";
-import type { CloudImage } from "./cloud-canvas-data";
+import type { CloudFilter, CloudProject } from "./cloud-canvas-data";
 
 // ── Constants carried over from the reference ────────────────────────────────
 const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5)); // ≈ 2.399963 rad
@@ -70,15 +78,24 @@ interface Card {
   image: CanvasImageSource;
   w: number;
   h: number;
+  /** Current formation position — lerps toward target* (the re-form glide). */
   baseX: number;
   baseY: number;
   baseZ: number;
+  /** Assigned formation position under the active filter. */
+  targetX: number;
+  targetY: number;
+  targetZ: number;
   jitter: number;
   /** Per-mode phase: helix strand offset (ascent) / bob phase (cumulus). */
   phaseOffset: number;
   focusEase: number;
   hoverEase: number;
   dimEase: number;
+  /** Filter visibility: 1 = in the active filter, 0 = filtered out. */
+  visTarget: number;
+  /** Eased visibility — drives the evaporate/condense fade + shrink. */
+  visEase: number;
 }
 
 interface Projected {
@@ -87,7 +104,7 @@ interface Projected {
   screenY: number;
   x: number;
   z: number;
-  /** Formation alpha (ascent pole fade); 1 everywhere else. */
+  /** Combined alpha: formation fade (ascent poles) × filter visEase. */
   fade: number;
 }
 
@@ -209,7 +226,16 @@ function buildSlotTypes(
   total: number,
   config: CloudCanvasConfig,
   loaded: LoadedImage[],
+  images: CloudProject[],
 ): SlotType[] {
+  if (config.layout === "manual") {
+    // The registry's authored form wins; natural aspect only backfills an
+    // entry that somehow lacks one (type-safe callers never hit that).
+    return Array.from(
+      { length: total },
+      (_, i) => images[i]?.form ?? classifyAspect(loaded[i]?.aspect ?? 1),
+    );
+  }
   if (config.layout === "auto") {
     return Array.from({ length: total }, (_, i) =>
       classifyAspect(loaded[i]?.aspect ?? 1),
@@ -255,11 +281,16 @@ export class CloudCanvasEngine {
   private canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
   private config: CloudCanvasConfig;
-  private images: CloudImage[];
+  private images: CloudProject[];
 
   private loaded: LoadedImage[] = [];
   private cards: Card[] = [];
   private projected: Projected[] = [];
+
+  /** Active type filter (the section tabs). "all" shows every project. */
+  private filter: CloudFilter = "all";
+  /** How many cards the active filter keeps — sizes the formation + density. */
+  private visibleTotal = 0;
 
   private cssW = 1;
   private cssH = 1;
@@ -288,7 +319,7 @@ export class CloudCanvasEngine {
 
   private disposed = false;
 
-  constructor(canvas: HTMLCanvasElement, config: CloudCanvasConfig, images: CloudImage[]) {
+  constructor(canvas: HTMLCanvasElement, config: CloudCanvasConfig, images: CloudProject[]) {
     this.canvas = canvas;
     const ctx = canvas.getContext("2d", { alpha: true });
     if (!ctx) throw new Error("CloudCanvasEngine: 2D context unavailable");
@@ -320,6 +351,10 @@ export class CloudCanvasEngine {
       prev.balance.landscape !== config.balance.landscape ||
       prev.balance.square !== config.balance.square;
     if (layoutChanged) this.rebuildCards();
+    // An allMax change only re-shapes the current formation (glide, not rebuild).
+    else if (prev.allMax !== config.allMax && this.cards.length) {
+      this.assignFormation(false);
+    }
     // A formation switch re-seats the camera on the new config's resting pose —
     // the geometry teleports anyway, and each formation needs its own vantage
     // (halo's high pitch, cumulus' wide zoom). Knob tweaks never touch the camera.
@@ -334,32 +369,100 @@ export class CloudCanvasEngine {
     }
   }
 
+  /**
+   * Switch the active type filter. The matching subset gets a fresh formation
+   * sized to its count (surviving tiles glide there); the rest evaporate.
+   */
+  setFilter(filter: CloudFilter): void {
+    if (filter === this.filter) return;
+    this.filter = filter;
+    if (!this.cards.length) return; // pre-init: rebuildCards applies it later
+    this.assignFormation(false);
+    // A focused/hovered tile that just got filtered out releases its state —
+    // otherwise the whole globe would stay dimmed around an invisible tile.
+    if (this.focusedIndex >= 0 && !this.matchesFilter(this.focusedIndex)) {
+      this.focusedIndex = -1;
+    }
+    if (this.hoveredIndex >= 0 && !this.matchesFilter(this.hoveredIndex)) {
+      this.hoveredIndex = -1;
+    }
+  }
+
+  private matchesFilter(index: number): boolean {
+    return this.filter === "all" || this.images[index]?.type === this.filter;
+  }
+
   private rebuildCards(): void {
     const total =
       this.config.visibleCount === "all"
         ? this.loaded.length
         : Math.min(this.loaded.length, Math.max(0, this.config.visibleCount));
-    const slots = buildSlotTypes(total, this.config, this.loaded);
+    const slots = buildSlotTypes(total, this.config, this.loaded, this.images);
     this.cards = Array.from({ length: total }, (_, i) => {
-      const p = formationPoint(i, total, this.config.mode);
       const slot = SLOT_SIZE[slots[i]];
       return {
         index: i,
         image: this.loaded[i].source,
         w: slot.w,
         h: slot.h,
-        baseX: p.x,
-        baseY: p.y,
-        baseZ: p.z,
+        baseX: 0,
+        baseY: 0,
+        baseZ: 0,
+        targetX: 0,
+        targetY: 0,
+        targetZ: 0,
         jitter: Math.sin(i * 19.19) * 0.13,
-        phaseOffset: p.phase,
+        phaseOffset: 0,
         focusEase: 0,
         hoverEase: 0,
         dimEase: 0,
+        visTarget: 1,
+        visEase: 1,
       };
     });
+    this.assignFormation(true);
     if (this.focusedIndex >= total) this.focusedIndex = -1;
     if (this.hoveredIndex >= total) this.hoveredIndex = -1;
+  }
+
+  /**
+   * Lay the filter's matching cards onto a formation sized to their count and
+   * mark the rest for evaporation. `snap` (rebuild/mode switch — the geometry
+   * teleports anyway) seats positions AND visibility instantly; a live filter
+   * change instead leaves current state in place for updateEasing to glide.
+   * Cards re-entering while invisible are snapped to their new spot in both
+   * paths, so a returning tile condenses in place rather than flying across.
+   */
+  private assignFormation(snap: boolean): void {
+    let visible = this.cards.filter((card) => this.matchesFilter(card.index));
+    // The "all" tab is capped (config.allMax) so a growing registry can't
+    // overcrowd the resting formation — first N in registry order win. Type
+    // tabs always show every match.
+    if (this.filter === "all" && this.config.allMax !== "none") {
+      visible = visible.slice(0, Math.max(0, this.config.allMax));
+    }
+    this.visibleTotal = visible.length;
+    const chosen = new Set(visible.map((card) => card.index));
+    visible.forEach((card, j) => {
+      const p = formationPoint(j, visible.length, this.config.mode);
+      card.targetX = p.x;
+      card.targetY = p.y;
+      card.targetZ = p.z;
+      card.phaseOffset = p.phase;
+      card.visTarget = 1;
+      if (snap || card.visEase <= 0.02) {
+        card.baseX = p.x;
+        card.baseY = p.y;
+        card.baseZ = p.z;
+      }
+      if (snap) card.visEase = 1;
+    });
+    for (const card of this.cards) {
+      if (!chosen.has(card.index)) {
+        card.visTarget = 0;
+        if (snap) card.visEase = 0;
+      }
+    }
   }
 
   /** Fit the backing store to the canvas's client box at capped DPR. */
@@ -415,6 +518,11 @@ export class CloudCanvasEngine {
   }
 
   private updateEasing(dt: number): void {
+    // Re-form glide (filter change): ~90% of the way in 0.5s, settled by ~1s.
+    // Visibility fades a touch slower so departing tiles are still evaporating
+    // while the survivors are already sliding into the tighter formation.
+    const reform = 1 - Math.pow(0.01, dt);
+    const vis = 1 - Math.pow(0.02, dt);
     for (const card of this.cards) {
       const focusTarget = card.index === this.focusedIndex ? 1 : 0;
       const hoverTarget = card.index === this.hoveredIndex ? 1 : 0;
@@ -422,6 +530,10 @@ export class CloudCanvasEngine {
       card.focusEase += (focusTarget - card.focusEase) * (1 - Math.pow(0.0024, dt));
       card.hoverEase += (hoverTarget - card.hoverEase) * (1 - Math.pow(0.0012, dt));
       card.dimEase += (dimTarget - card.dimEase) * (1 - Math.pow(0.0032, dt));
+      card.baseX += (card.targetX - card.baseX) * reform;
+      card.baseY += (card.targetY - card.baseY) * reform;
+      card.baseZ += (card.targetZ - card.baseZ) * reform;
+      card.visEase += (card.visTarget - card.visEase) * vis;
     }
   }
 
@@ -431,7 +543,9 @@ export class CloudCanvasEngine {
 
     const centerX = this.cssW * 0.5;
     const centerY = this.cssH * this.config.centerY;
-    const density = densityFactors(this.cards.length);
+    // Density follows the FILTERED count: a 6-project filter yields a small,
+    // dense formation with full-size tiles, not a 28-slot layout with holes.
+    const density = densityFactors(this.visibleTotal || this.cards.length);
     const radius =
       Math.min(this.cssW, this.cssH) * 0.45 * this.config.spread * density.spread * this.zoom;
 
@@ -459,6 +573,7 @@ export class CloudCanvasEngine {
         bx += Math.sin(this.modeTime * 0.42 + card.phaseOffset) * 0.028;
         by += Math.sin(this.modeTime * 0.58 + card.phaseOffset * 1.7) * 0.05;
       }
+      fade *= card.visEase; // filter evaporation/condensation
       const r = rotatePoint(bx, by, bz, this.yaw, this.pitch, this.roll);
       let screenX = centerX + r.x * radius;
       let screenY = centerY + r.y * radius;
@@ -483,13 +598,16 @@ export class CloudCanvasEngine {
     const depth = 2.05 - p.z * 0.78 * this.config.depth;
     const interaction =
       1 + p.card.focusEase * 0.28 + p.card.hoverEase * 0.08 - p.card.dimEase * 0.14;
+    // Filtered-out tiles shrink as they fade — evaporation, not a dissolve.
+    const vis = 0.6 + 0.4 * p.card.visEase;
     return (
       Math.max(0.2, 1 / Math.max(0.72, depth)) *
       1.42 *
       this.config.size *
       this.zoom *
       densitySize *
-      interaction
+      interaction *
+      vis
     );
   }
 
@@ -643,10 +761,11 @@ export class CloudCanvasEngine {
 
   /** Front-most tile whose (unrotated) screen box contains (x,y); -1 if none. */
   private hitTest(x: number, y: number): number {
-    const density = densityFactors(this.cards.length);
+    const density = densityFactors(this.visibleTotal || this.cards.length);
     for (let i = this.projected.length - 1; i >= 0; i -= 1) {
       const p = this.projected[i];
       if (p.fade <= 0.01) continue; // evaporated tiles aren't clickable
+      if (p.card.visTarget === 0) continue; // mid-evaporation: already leaving
       const scale = this.cardScale(p, density.size);
       const halfW = (p.card.w * scale) / 2;
       const halfH = (p.card.h * scale) / 2;

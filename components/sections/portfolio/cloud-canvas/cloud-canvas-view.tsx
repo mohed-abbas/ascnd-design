@@ -17,12 +17,18 @@
 import { useEffect, useRef } from "react";
 import gsap from "gsap";
 import { CloudCanvasEngine } from "./cloud-canvas-engine";
-import { cloudImages, type CloudImage } from "./cloud-canvas-data";
+import {
+  cloudProjects,
+  type CloudFilter,
+  type CloudProject,
+} from "./cloud-canvas-data";
 import type { CloudCanvasConfig } from "./cloud-canvas-config";
 
 interface CloudCanvasViewProps {
   config: CloudCanvasConfig;
-  images?: CloudImage[];
+  images?: CloudProject[];
+  /** Type filter (the section tabs) — the formation re-forms on change. */
+  filter?: CloudFilter;
   /** Enable pointer drag + click focus. */
   interactive?: boolean;
   /**
@@ -35,7 +41,8 @@ interface CloudCanvasViewProps {
 
 export default function CloudCanvasView({
   config,
-  images = cloudImages,
+  images = cloudProjects,
+  filter = "all",
   interactive = true,
   wheelZoom = true,
   className,
@@ -152,6 +159,12 @@ export default function CloudCanvasView({
   useEffect(() => {
     engineRef.current?.setConfig(config);
   }, [config]);
+
+  // Live filter updates — the engine re-forms; safe pre-init (it stores the
+  // filter and the first card build applies it).
+  useEffect(() => {
+    engineRef.current?.setFilter(filter);
+  }, [filter]);
 
   return <canvas ref={canvasRef} className={className} />;
 }

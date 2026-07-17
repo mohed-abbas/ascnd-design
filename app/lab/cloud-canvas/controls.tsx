@@ -17,18 +17,31 @@ import {
   type CloudCanvasMode,
   type CloudLayoutMode,
 } from "@/components/sections/portfolio/cloud-canvas/cloud-canvas-config";
+import {
+  PROJECT_FILTERS,
+  type CloudFilter,
+} from "@/components/sections/portfolio/cloud-canvas/cloud-canvas-data";
 
 interface ControlsProps {
   config: CloudCanvasConfig;
   onChange: (next: CloudCanvasConfig) => void;
   imageCount: number;
+  /** Mirrors the portfolio section's type tabs — exercises the re-form here. */
+  filter: CloudFilter;
+  onFilterChange: (next: CloudFilter) => void;
 }
 
 const MODES: CloudCanvasMode[] = ["globe", "halo", "ascent", "cumulus"];
-const LAYOUTS: CloudLayoutMode[] = ["auto", "balanced", "custom"];
+const LAYOUTS: CloudLayoutMode[] = ["manual", "auto", "balanced", "custom"];
 const PRESET_NAMES = Object.keys(CLOUD_PRESETS);
 
-export default function CloudCanvasControls({ config, onChange, imageCount }: ControlsProps) {
+export default function CloudCanvasControls({
+  config,
+  onChange,
+  imageCount,
+  filter,
+  onFilterChange,
+}: ControlsProps) {
   const [copied, setCopied] = useState(false);
 
   const set = <K extends keyof CloudCanvasConfig>(key: K, value: CloudCanvasConfig[K]) =>
@@ -77,6 +90,30 @@ export default function CloudCanvasControls({ config, onChange, imageCount }: Co
               }`}
             >
               {m}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Type filter — the section tabs' behavior, for tuning the re-form. */}
+      <div
+        role="group"
+        aria-label="Project type filter"
+        className="flex items-center gap-[2px] rounded-full border border-white/20 bg-white/10 p-[3px]"
+      >
+        {PROJECT_FILTERS.map(({ value, label }) => {
+          const isActive = value === filter;
+          return (
+            <button
+              key={value}
+              type="button"
+              onClick={() => onFilterChange(value)}
+              aria-pressed={isActive}
+              className={`flex-1 rounded-full px-1 py-[5px] font-mono text-[10px] lowercase tracking-[0.02em] transition-colors duration-200 ${
+                isActive ? "bg-white/20 text-white" : "text-white/50 hover:text-white/80"
+              }`}
+            >
+              {value === "all" ? label : value}
             </button>
           );
         })}

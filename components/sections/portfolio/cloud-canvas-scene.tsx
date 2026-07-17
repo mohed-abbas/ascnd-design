@@ -19,12 +19,18 @@
  */
 import dynamic from "next/dynamic";
 import { CLOUD_CANVAS_PORTFOLIO_CONFIG } from "./cloud-canvas/cloud-canvas-config";
+import type { CloudFilter } from "./cloud-canvas/cloud-canvas-data";
 
 const CloudCanvasView = dynamic(() => import("./cloud-canvas/cloud-canvas-view"), {
   ssr: false,
 });
 
-export default function CloudCanvasScene() {
+export default function CloudCanvasScene({
+  filter = "all",
+}: {
+  /** Type filter owned by the section's tabs (portfolio.tsx). */
+  filter?: CloudFilter;
+}) {
   return (
     // Full-bleed ON PURPOSE — the canvas is the drawing surface, so an inset
     // region would hard-clip tiles at its own edge. Header clearance comes from
@@ -36,6 +42,7 @@ export default function CloudCanvasScene() {
           rise toward the header — the pills section's edge-mask device. */}
       <CloudCanvasView
         config={CLOUD_CANVAS_PORTFOLIO_CONFIG}
+        filter={filter}
         wheelZoom={false}
         className="cloud-globe-mask block h-full w-full"
       />
