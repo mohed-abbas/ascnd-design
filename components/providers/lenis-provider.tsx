@@ -53,6 +53,12 @@ export default function LenisProvider({
 
   useEffect(() => {
     gsap.registerPlugin(ScrollTrigger);
+    // On phones the URL bar collapsing/expanding during a fling fires a
+    // viewport resize, and ScrollTrigger's default response is a full
+    // refresh(): every trigger re-measures mid-scroll (a main-thread stall)
+    // and scrubbed elements visibly snap as they re-seed. Ignore those
+    // touch-device height-only resizes; real rotations/resizes still refresh.
+    ScrollTrigger.config({ ignoreMobileResize: true });
 
     // Drive Lenis from GSAP's ticker (one loop, no competing schedulers). Read
     // the instance LAZILY every frame instead of capturing it once: the ref may
