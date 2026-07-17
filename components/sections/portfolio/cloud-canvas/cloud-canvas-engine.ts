@@ -208,8 +208,20 @@ function rotatePoint(
   return { x, y, z };
 }
 
-/** Crowding auto-adjust: push tiles apart and shrink them past 18 images. */
+/**
+ * Density auto-adjust, symmetric around the ~16–18 tile sweet spot:
+ *   • CROWDING (>18): push tiles apart and shrink them so the formation
+ *     doesn't clog (saturates at 52).
+ *   • SPARSITY (<16): tighten the formation and grow the tiles so a small
+ *     filter subset (8 brandings, 6 misc) condenses into a compact, full
+ *     cloud instead of scattering over a 28-tile-sized sphere (saturates at
+ *     6 — spread ×0.68, size ×1.18, ≈ the "all" tab's coverage per surface).
+ */
 function densityFactors(total: number) {
+  if (total < 16) {
+    const sparsity = Math.min(1, (16 - total) / 10);
+    return { spread: 1 - sparsity * 0.32, size: 1 + sparsity * 0.18 };
+  }
   if (total <= 18) return { spread: 1, size: 1 };
   const pressure = Math.min(1, (total - 18) / 34);
   return { spread: 1 + pressure * 0.18, size: 1 - pressure * 0.22 };
@@ -291,6 +303,14 @@ export class CloudCanvasEngine {
   private filter: CloudFilter = "all";
   /** How many cards the active filter keeps — sizes the formation + density. */
   private visibleTotal = 0;
+
+  // Eased density factors. densityFactors() jumps the moment visibleTotal
+  // changes on a tab click; easing these alongside the re-form lerp makes the
+  // whole cloud contract/expand as one gesture instead of snapping radius.
+  private denSpread = 1;
+  private denSize = 1;
+  private denSpreadTarget = 1;
+  private denSizeTarget = 1;
 
   private cssW = 1;
   private cssH = 1;
@@ -442,6 +462,13 @@ export class CloudCanvasEngine {
       visible = visible.slice(0, Math.max(0, this.config.allMax));
     }
     this.visibleTotal = visible.length;
+    const density = densityFactors(this.visibleTotal || this.cards.length);
+    this.denSpreadTarget = density.spread;
+    this.denSizeTarget = density.size;
+    if (snap) {
+      this.denSpread = density.spread;
+      this.denSize = density.size;
+    }
     const chosen = new Set(visible.map((card) => card.index));
     visible.forEach((card, j) => {
       const p = formationPoint(j, visible.length, this.config.mode);
@@ -523,6 +550,8 @@ export class CloudCanvasEngine {
     // while the survivors are already sliding into the tighter formation.
     const reform = 1 - Math.pow(0.01, dt);
     const vis = 1 - Math.pow(0.02, dt);
+    this.denSpread += (this.denSpreadTarget - this.denSpread) * reform;
+    this.denSize += (this.denSizeTarget - this.denSize) * reform;
     for (const card of this.cards) {
       const focusTarget = card.index === this.focusedIndex ? 1 : 0;
       const hoverTarget = card.index === this.hoveredIndex ? 1 : 0;
@@ -543,11 +572,11 @@ export class CloudCanvasEngine {
 
     const centerX = this.cssW * 0.5;
     const centerY = this.cssH * this.config.centerY;
-    // Density follows the FILTERED count: a 6-project filter yields a small,
-    // dense formation with full-size tiles, not a 28-slot layout with holes.
-    const density = densityFactors(this.visibleTotal || this.cards.length);
+    // Density follows the FILTERED count (eased — see denSpread/denSize): a
+    // 6-project filter condenses into a small dense cloud, not a 28-slot
+    // layout with holes.
     const radius =
-      Math.min(this.cssW, this.cssH) * 0.45 * this.config.spread * density.spread * this.zoom;
+      Math.min(this.cssW, this.cssH) * 0.45 * this.config.spread * this.denSpread * this.zoom;
 
     const mode = this.config.mode;
     this.projected = this.cards.map((card) => {
@@ -590,7 +619,7 @@ export class CloudCanvasEngine {
 
     for (const p of this.projected) {
       if (p.fade <= 0.01) continue; // fully evaporated at the wrap seam
-      this.drawCard(p, density.size);
+      this.drawCard(p, this.denSize);
     }
   }
 
@@ -761,12 +790,11 @@ export class CloudCanvasEngine {
 
   /** Front-most tile whose (unrotated) screen box contains (x,y); -1 if none. */
   private hitTest(x: number, y: number): number {
-    const density = densityFactors(this.visibleTotal || this.cards.length);
     for (let i = this.projected.length - 1; i >= 0; i -= 1) {
       const p = this.projected[i];
       if (p.fade <= 0.01) continue; // evaporated tiles aren't clickable
       if (p.card.visTarget === 0) continue; // mid-evaporation: already leaving
-      const scale = this.cardScale(p, density.size);
+      const scale = this.cardScale(p, this.denSize);
       const halfW = (p.card.w * scale) / 2;
       const halfH = (p.card.h * scale) / 2;
       if (Math.abs(x - p.screenX) <= halfW && Math.abs(y - p.screenY) <= halfH) {
