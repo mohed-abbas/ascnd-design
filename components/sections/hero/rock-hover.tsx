@@ -82,6 +82,12 @@ export default function RockHover() {
         state.y = target.y;
         primed = true;
         apply();
+        // Un-hide the overlay on first interaction: it mounts at opacity-0 so
+        // Chrome's LCP heuristic (which ignores opacity:0 but NOT mask-hidden
+        // paint) never counts the invisible lazy grass as the page's LCP — see
+        // the LCP note in grass-rocks.tsx. Mask still hides everything outside
+        // the disc, so this flip has no visible effect. Idempotent on re-enter.
+        overlay.style.opacity = "1";
       }
       start();
       if (!active) {

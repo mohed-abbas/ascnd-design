@@ -31,8 +31,17 @@ import { useSyncExternalStore } from "react";
  * The wrapper `[data-grass-overlay]` <div> is ALWAYS rendered (even when the
  * images aren't), so rock-hover.tsx always finds its mask target — no
  * mount-timing race when it wires on the intro-skipped path. When the images do
- * render they're `loading="lazy"` (not `priority`): the overlay is never the LCP
- * (the bare <Rock> beneath it is), so it stays off the critical request path.
+ * render they're `loading="lazy"` (not `priority`) to stay off the critical
+ * request path.
+ *
+ * LCP workaround: Chrome's LCP heuristic ignores `opacity: 0` but NOT
+ * mask-hidden paint — so this full-height overlay, invisible at rest, was being
+ * attributed as the page's LCP element (a lazy 1.3MB image nobody sees). The
+ * wrapper therefore mounts at `opacity-0`, which removes it from LCP candidacy
+ * entirely; rock-hover.tsx flips it to 1 on the first pointer move over the
+ * hero (the moment the reveal could first matter). Do NOT "fix" the dev
+ * warning with loading="eager" — that would pull 1.3MB onto the critical path
+ * for an invisible image.
  */
 const GRASS = {
   left: { src: "/rocks/left-rock-grass.avif", width: 357, edge: "left-0" },
@@ -76,7 +85,11 @@ export default function GrassRocks() {
       // heavy images already never mount via useHoverEligible; this also covers
       // a ≤768px viewport that happens to report a fine pointer.) Desktop
       // unaffected — max-md:hidden only.
-      className="pointer-events-none absolute inset-0 z-[100] select-none max-md:hidden"
+      // opacity-0: keeps this mask-hidden overlay out of Chrome's LCP candidate
+      // set (see the LCP note in the header). rock-hover.tsx sets opacity 1 on
+      // the first pointer move over the hero; the reveal disc is mask-driven,
+      // so the flip itself is invisible.
+      className="pointer-events-none absolute inset-0 z-[100] select-none opacity-0 max-md:hidden"
     >
       {eligible &&
         (["left", "right"] as const).map((side) => {
