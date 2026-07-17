@@ -6,6 +6,7 @@ import Footer from "@/components/sections/footer/footer";
 import Hero from "@/components/sections/hero/hero";
 import IntroLoader from "@/components/sections/intro/intro-loader";
 import Pills from "@/components/sections/pills/pills";
+import Portfolio from "@/components/sections/portfolio/portfolio";
 import Pricing from "@/components/sections/pricing/pricing";
 import Tagline from "@/components/sections/tagline/tagline";
 import Testimonials from "@/components/sections/testimonials/testimonials";
@@ -46,6 +47,12 @@ export default function Home() {
           with thin orbit outlines ("testimonials"), over the shared sky. Sits
           before pricing. */}
       <Testimonials />
+      {/* Cloud-canvas image globe: project stills arranged on a Fibonacci
+          sphere (2D canvas, no WebGL) that auto-spins, drags to rotate, and
+          click-focuses a tile. Floats transparently over the shared sky — it
+          does NOT pin/scrub, so no shrink-0 wrapper is needed (unlike WhyStay).
+          Sits between testimonials and pricing. */}
+      <Portfolio />
       {/* Two-tier pricing ("simple pricing, pause anytime"): subscription +
           fixed-sprint glass cards joined by a dashed connector, over the shared
           sky. */}
