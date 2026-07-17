@@ -78,9 +78,14 @@ const REDUCE_MOTION = "(prefers-reduced-motion: reduce)";
 function hasWebGL(): boolean {
   try {
     const canvas = document.createElement("canvas");
-    return !!(
-      canvas.getContext("webgl") || canvas.getContext("experimental-webgl")
-    );
+    const gl = (canvas.getContext("webgl") ||
+      canvas.getContext("experimental-webgl")) as WebGLRenderingContext | null;
+    // Free the probe context immediately so it doesn't count against the
+    // browser's WebGL context budget (same pattern as cloud-layer.tsx). On
+    // Firefox this logs a benign "WebGL context was lost." line — that's the
+    // intentional teardown, not an error.
+    gl?.getExtension("WEBGL_lose_context")?.loseContext();
+    return !!gl;
   } catch {
     return false;
   }

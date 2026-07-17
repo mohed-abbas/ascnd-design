@@ -1,6 +1,10 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
+// The shared, module-cached WebGL probe (one context app-wide, released on
+// probe) — see lib/webgl-support.ts. Only called from the client snapshot in
+// useFooterGlassEligible; the server snapshot stays an explicit `false`.
+import { hasWebGL } from "@/lib/webgl-support";
 
 /**
  * Footer glass polish switches — flip any to `false` to remove that flourish with
@@ -20,20 +24,9 @@ export const FOOTER_GLASS = {
 } as const;
 
 // ── Eligibility (shared) ─────────────────────────────────────────────────────
-// WebGL support is static per device — detect once and cache.
-let webglSupport: boolean | null = null;
-function hasWebGL() {
-  if (webglSupport !== null) return webglSupport;
-  try {
-    const c = document.createElement("canvas");
-    const gl = c.getContext("webgl2") || c.getContext("webgl");
-    webglSupport = !!gl;
-    gl?.getExtension("WEBGL_lose_context")?.loseContext();
-  } catch {
-    webglSupport = false;
-  }
-  return webglSupport;
-}
+// WebGL support comes from the shared, module-cached probe in
+// lib/webgl-support.ts (imported at top) — one context app-wide, released on
+// probe; detection is static per device.
 
 const REDUCE_MOTION = "(prefers-reduced-motion: reduce)";
 const SMALL_SCREEN = "(max-width: 768px)";

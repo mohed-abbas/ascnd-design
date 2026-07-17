@@ -9,27 +9,14 @@ import {
 } from "@/components/sections/intro/intro-state";
 import { SKY_CLOUDS, ROCK_CLOUDS } from "./cloud-specs";
 import StaticCloudLayer from "./static-cloud-layer";
+// The shared, module-cached WebGL probe (one context ever, released on probe) —
+// see lib/webgl-support.ts. Only called from the client snapshot below; the
+// server snapshot stays an explicit `false`.
+import { hasWebGL } from "@/lib/webgl-support";
 
 // The WebGL canvas is client-only; ssr:false must live in a Client Component
 // (Next disallows it in Server Components).
 const CloudCanvas = dynamic(() => import("./cloud-canvas"), { ssr: false });
-
-// WebGL support is static per device — detect once and cache.
-let webglSupport: boolean | null = null;
-function hasWebGL() {
-  if (webglSupport !== null) return webglSupport;
-  try {
-    const c = document.createElement("canvas");
-    const gl = c.getContext("webgl2") || c.getContext("webgl");
-    webglSupport = !!gl;
-    // Free the probe context immediately so it doesn't count against the
-    // browser's WebGL context budget.
-    gl?.getExtension("WEBGL_lose_context")?.loseContext();
-  } catch {
-    webglSupport = false;
-  }
-  return webglSupport;
-}
 
 const REDUCE_MOTION = "(prefers-reduced-motion: reduce)";
 const SMALL_SCREEN = "(max-width: 768px)";

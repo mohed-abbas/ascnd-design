@@ -17,26 +17,14 @@ import {
   playTestimonialsReveal,
   resetTestimonialsReveal,
 } from "./testimonials-reveal";
+// The shared, module-cached WebGL probe (one context app-wide, as CloudLayer) —
+// see lib/webgl-support.ts. Client-snapshot-only; server snapshot stays `false`.
+import { hasWebGL } from "@/lib/webgl-support";
 
 // The WebGL canvas is client-only; ssr:false must live in a Client Component.
 const RocksCanvas = dynamic(() => import("./testimonial-rocks-canvas"), {
   ssr: false,
 });
-
-// WebGL support is static per device — detect once and cache (as CloudLayer).
-let webglSupport: boolean | null = null;
-function hasWebGL() {
-  if (webglSupport !== null) return webglSupport;
-  try {
-    const c = document.createElement("canvas");
-    const gl = c.getContext("webgl2") || c.getContext("webgl");
-    webglSupport = !!gl;
-    gl?.getExtension("WEBGL_lose_context")?.loseContext();
-  } catch {
-    webglSupport = false;
-  }
-  return webglSupport;
-}
 
 const REDUCE_MOTION = "(prefers-reduced-motion: reduce)";
 const SMALL_SCREEN = "(max-width: 768px)";
