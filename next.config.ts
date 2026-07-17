@@ -33,7 +33,36 @@ const nextConfig: NextConfig = {
   // the version on any model change (see testimonial-rocks-canvas.tsx header).
   // Headers are matched before the /public filesystem (Next headers() docs).
   async headers() {
+    // Every other /public asset keeps its default-cached bytes but pays a
+    // 304 revalidation round-trip PER FILE on every visit (the same failure
+    // mode as the GLB above — dozens of conditional requests contending with
+    // the intro's critical path on each reload). These filenames are NOT
+    // versioned, so `immutable` would pin a stale image forever after an
+    // in-place swap; `stale-while-revalidate` instead serves from cache with
+    // ZERO foreground requests and refreshes in the background — an in-place
+    // asset swap propagates within a day. If an asset ever needs instant
+    // propagation, version its filename and give it an `immutable` rule like
+    // the GLB (which stays last so its stronger header wins over /rocks).
+    const imageCache = {
+      key: "Cache-Control",
+      value: "public, max-age=86400, stale-while-revalidate=31536000",
+    };
+    const imageDirs = [
+      "brand",
+      "cards",
+      "clouds",
+      "footer",
+      "fonts",
+      "portfolio",
+      "rocks",
+      "shots",
+      "textures",
+    ];
     return [
+      ...imageDirs.map((dir) => ({
+        source: `/${dir}/:path*`,
+        headers: [imageCache],
+      })),
       {
         source: "/rocks/testimonial-rock.v1.glb",
         headers: [
