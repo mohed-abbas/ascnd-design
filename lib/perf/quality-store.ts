@@ -83,16 +83,34 @@ export function getRefreshHz(): number {
 }
 
 /**
- * The fps cap for the *heavy, look-invariant* effects — the intro liquid glass,
- * the tile conveyor, the portfolio cloud-canvas globe's ticker, and (via
- * makeCappedInvalidate) the scroll-driven canvas repaints in the cloud/intro
- * rigs. All are visually identical above 60 fps but
- * cost ~2× on a 120 Hz panel, so cap them to 60 on any fast panel OR any
- * stepped-down tier (audit item 9). Returns 0 = uncapped (ride the display) on
- * a 60 Hz high tier. The clouds' living morph is already 30 fps-throttled.
+ * The fps cap for the *heavy, SELF-ANIMATING* effects — the intro liquid
+ * glass's paint pump, the tile conveyor's drift, the footer glass, the
+ * portfolio globe's ticker. These have no on-screen reference frame, so they
+ * really are visually identical above 60 fps but cost ~2× on a 120 Hz panel —
+ * cap them to 60 on any fast panel OR any stepped-down tier (audit item 9).
+ * Returns 0 = uncapped (ride the display) on a 60 Hz high tier. The clouds'
+ * living morph is already 30 fps-throttled.
+ *
+ * NOT for scroll-linked repaints — those use scrollRepaintFpsCap() below.
  */
 export function heavyEffectFpsCap(): number {
   return refreshHz > 70 || currentTier !== "high" ? 60 : 0;
+}
+
+/**
+ * The repaint cap for SCROLL-LINKED demand-canvas repaints (the cloud/intro
+ * scroll rigs + the why-stay reel write, via makeCappedInvalidate). Unlike the
+ * self-animating effects above, these layers move in lockstep with DOM content
+ * that scrolls at the panel's native rate — capping them below it makes the
+ * weld visibly stagger (60 Hz rock-base clouds against 120 Hz cliffs, the
+ * tile field lagging the hero). So on the high tier they ride the display
+ * (0 = uncapped); stepped-down tiers keep 60, where the GPU is the scarcer
+ * resource and the stagger is the lesser evil. Affordable on high since the
+ * intro glass fix (2026-07-18, see intro-scene.tsx measurement note) removed
+ * the GPU backpressure the old blanket 60 cap was protecting against.
+ */
+export function scrollRepaintFpsCap(): number {
+  return currentTier !== "high" ? 60 : 0;
 }
 
 export function subscribeQuality(listener: () => void): () => void {

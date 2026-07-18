@@ -740,15 +740,38 @@ function ScrollRig({
     gsap.registerPlugin(ScrollTrigger);
     const worldPerPx = 8.284 / height;
     // Cap scroll-driven repaints (same as the clouds' rigs): position is still
-    // written per update, but paints past the heavy-effect cap are skipped with
+    // written per update, but paints past the scroll cap are skipped with
     // a trailing paint so the last update of a scrub always lands.
     const capped = makeCappedInvalidate(invalidate);
+    // Off-screen paint gate: the tile field lives in the hero collage, so once
+    // the hero has fully scrolled above the viewport nothing on this canvas is
+    // visible — keep WRITING the scroll position (so re-entry is already
+    // correct) but skip the repaints (uncapped scroll invalidates otherwise
+    // repainted this canvas 20–40×/s at the page bottom, measured 2026-07-18).
+    // Same "[data-hero] bottom top" gate the conveyor pause uses; one paint on
+    // the way back refreshes anything the skip left stale.
+    let offscreen = false;
     const apply = (scroll: number) => {
       const g = fieldRef.current;
       if (!g) return;
       g.position.y = scroll * worldPerPx;
-      capped();
+      if (!offscreen) capped();
     };
+    const heroEl = document.querySelector<HTMLElement>("[data-hero]");
+    const vis = heroEl
+      ? ScrollTrigger.create({
+          trigger: heroEl,
+          start: "bottom top", // hero's bottom passes the viewport top → gone
+          end: "max",
+          onEnter: () => {
+            offscreen = true;
+          },
+          onLeaveBack: () => {
+            offscreen = false;
+            invalidate();
+          },
+        })
+      : null;
     const st = ScrollTrigger.create({
       start: 0,
       end: "max",
@@ -772,6 +795,7 @@ function ScrollRig({
     return () => {
       ScrollTrigger.removeEventListener("refresh", onRefresh);
       st.kill();
+      vis?.kill();
       capped.cancel();
     };
   }, [height, invalidate, fieldRef]);
