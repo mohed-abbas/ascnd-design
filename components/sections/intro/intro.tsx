@@ -24,6 +24,7 @@ import {
   SHOT_BASE,
   SHOT_FRAME_RADIUS,
   SHOTS,
+  type ShotScatter,
 } from "@/components/sections/design-shots/shots-spec";
 import type {
   ConveyorArc,
@@ -335,19 +336,37 @@ export default function Intro() {
       arc: shot.arc,
     }));
     const tileNecklace: TilePose[] = SHOTS.map((shot) => slotPose[shot.arc]);
-    const tileScatter: (TilePose | null)[] = SHOTS.map((shot) => {
-      if (!shot.scatter) return null;
+
+    // De-crossed fly-out: keep the authored Figma scatter CONSTELLATION as-is,
+    // but give each flying tile the spot whose left-to-right rank matches its
+    // arc slot's rank. The raw Figma pairing sends e.g. shot7 (+417) to mid-L
+    // (−404) and shot8 (+687) to far-L (−476) — two tiles weaving through every
+    // other flight path, which read as visual churn during the dock. Rank-
+    // matching keeps the same spots on screen (identical bloom look) while
+    // every flight lane stays on its own side — parallel drape, no cross-over.
+    const flyIdx = SHOTS.map((s, i) => (s.scatter ? i : -1)).filter((i) => i >= 0);
+    const spotsByX = flyIdx
+      .map((i) => SHOTS[i].scatter as ShotScatter)
+      .sort((a, b) => a.dx - b.dx);
+    const scatterFor = new Map<number, ShotScatter>();
+    [...flyIdx]
+      .sort((a, b) => tileNecklace[a].x - tileNecklace[b].x)
+      .forEach((tileI, rank) => scatterFor.set(tileI, spotsByX[rank]));
+
+    const tileScatter: (TilePose | null)[] = SHOTS.map((_, i) => {
+      const spot = scatterFor.get(i);
+      if (!spot) return null;
       // DESIGN_GLASS_DY lifts the offset onto the glass centre (slightly above
       // the frame centre in the design).
-      const sx = glassScreenX + shot.scatter.dx * glassScale;
+      const sx = glassScreenX + spot.dx * glassScale;
       const sy =
         glassScreenY +
-        (shot.scatter.dy - DESIGN_GLASS_DY) * glassScale * TILE_SCATTER_VSCALE;
+        (spot.dy - DESIGN_GLASS_DY) * glassScale * TILE_SCATTER_VSCALE;
       const sWorld = toWorld(sx, sy);
       return {
         x: sWorld.x * TILE_DEPTH,
         y: sWorld.y * TILE_DEPTH,
-        scale: shot.scatter.size * glassScale * wpp * TILE_DEPTH,
+        scale: spot.size * glassScale * wpp * TILE_DEPTH,
       };
     });
 
