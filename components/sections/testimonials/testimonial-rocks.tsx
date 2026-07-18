@@ -21,8 +21,11 @@ import {
 // see lib/webgl-support.ts. Client-snapshot-only; server snapshot stays `false`.
 import { hasWebGL } from "@/lib/webgl-support";
 
-// The WebGL canvas is client-only; ssr:false must live in a Client Component.
-const RocksCanvas = dynamic(() => import("./testimonial-rocks-canvas"), {
+// The R3F rock view is client-only (pulls three/drei); ssr:false must live in a
+// Client Component. It renders NO DOM — it registers one view on the shared MID
+// plane (components/canvas/) via useSharedView; the host's fixed plane Canvas
+// scissors it to the track wrapper below.
+const RocksView = dynamic(() => import("./testimonial-rocks-canvas"), {
   ssr: false,
 });
 
@@ -77,6 +80,12 @@ export default function TestimonialRocks() {
   const hydrated = useSyncExternalStore(noopSubscribe, () => true, () => false);
 
   const wrapRef = useRef<HTMLDivElement>(null);
+  // The 120vw/120vh wrapper — doubles as the shared view's TRACK (drei <View>
+  // scissors + auto-frustums to its live rect) and its POINTER-EVENT target
+  // (pointer-events-auto; the rocks raycast through it via the plane's
+  // eventSource). In-flow, so it scrolls with the section and the host's
+  // IntersectionObserver on it gates paint to zero off-screen for free.
+  const trackRef = useRef<HTMLDivElement>(null);
   const [mounted, setMounted] = useState(false);
   const [inView, setInView] = useState(false);
 
@@ -181,19 +190,25 @@ export default function TestimonialRocks() {
     >
       {use3D
         ? mounted && (
-            // Canvas is oversized + centred on the group box so the rocks can fly
+            // The TRACK: oversized + centred on the group box so the rocks can fly
             // in from BEYOND the viewport edges — they start off-screen and ease
-            // to their ring. The section's overflow-hidden clips this to the
-            // viewport, so a rock is invisible until it crosses the screen edge.
-            // Mounted at idle (warm), paused off-screen so it idles to zero.
+            // to their ring. The section's overflow-hidden clips the painted view
+            // to the viewport, so a rock is invisible until it crosses the screen
+            // edge. In-flow (scrolls with the section); the host scissors the MID
+            // plane's <View> to this element's rect and gates paint off its
+            // visibility. Registered at idle (warm), idles to zero off-screen.
             //
             // pointer-events-auto (overriding the layer's none): the rocks are
-            // hover-interactive — R3F raycasts the meshes, so only an actual rock
-            // hit reacts (nudge + next quote); the rest of the canvas ignores the
-            // pointer. The quote sits ABOVE this layer (z-10), so its text stays
-            // selectable; nothing else interactive lives under the canvas.
-            <div className="pointer-events-auto absolute left-1/2 top-1/2 h-[120vh] w-[120vw] -translate-x-1/2 -translate-y-1/2">
-              <RocksCanvas paused={!inView} />
+            // hover-interactive — R3F raycasts the meshes through this element (the
+            // MID plane's eventSource routes pointer events here, and drei's <View>
+            // compute picks against it), so only an actual rock hit reacts (nudge +
+            // next quote). The quote sits ABOVE this layer (z-10), so its text
+            // stays selectable; nothing else interactive lives under the rocks.
+            <div
+              ref={trackRef}
+              className="pointer-events-auto absolute left-1/2 top-1/2 h-[120vh] w-[120vw] -translate-x-1/2 -translate-y-1/2"
+            >
+              <RocksView track={trackRef} inView={inView} />
             </div>
           )
         : UNITS.map((u, i) => (

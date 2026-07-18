@@ -27,13 +27,33 @@ export interface PlaneConfig {
    *  styles on its container that would override a className, so positioning
    *  goes through `style`, mirroring cloud-canvas.tsx). */
   readonly zIndex: number;
-  /** Hit-testing: "none" so scroll/clicks pass through to page DOM. Set "auto"
-   *  per-plane once a tenant needs drei View picking (Phase-3 rock hover-dodge). */
+  /** Hit-testing: "none" so scroll/clicks pass through to page DOM. Interactive
+   *  planes stay "none" AND set `interactive` (below) — drei <View> picking is
+   *  wired through the page's event source, not the fixed canvas. */
   readonly pointerEvents: "none" | "auto";
   /** GL `antialias` (context-creation flag — see the note above). */
   readonly antialias: boolean;
   /** GL `powerPreference` (context-creation flag). */
   readonly powerPreference: WebGLPowerPreference;
+  /**
+   * drei <View> POINTER PICKING (Phase 3 — testimonial rock hover-dodge).
+   *
+   * A fixed root-mounted plane canvas and a feature's track <div> live in
+   * SEPARATE DOM subtrees. drei's <View> gates picking on `event.target ===
+   * track.current` (node_modules/@react-three/drei/web/View.js compute), and the
+   * R3F event listeners are attached to whatever element the Canvas `connect`s to
+   * — the canvas wrapper by default, which is NOT an ancestor of the track, so a
+   * track-targeted pointer event NEVER bubbles to it. `setEvents({connected})`
+   * inside drei's Container only records the field; it does NOT re-attach DOM
+   * listeners (verified: fiber setEvents merges state, only `connect()` calls
+   * addEventListener). So picking is impossible unless the Canvas's `eventSource`
+   * is a shared ANCESTOR of the track. When true, the host points `eventSource`
+   * at document.documentElement (+ eventPrefix "client"), the canvas stays
+   * pointer-events:none (pointer passes through to the pointer-events:auto track),
+   * and drei's compute fires with event.target === track. One interactive view
+   * per plane (last-mounted-wins events.connected — Phase-1 known limitation).
+   */
+  readonly interactive?: boolean;
 }
 
 export const PLANE_CONFIG = {
@@ -46,6 +66,30 @@ export const PLANE_CONFIG = {
     pointerEvents: "none",
     antialias: false,
     powerPreference: "high-performance",
+    interactive: false,
+  },
+  /** MID — an in-band plane between the DOM sky/clouds and page content, for
+   *  effects that sit behind ONE section's own text rather than straddling all
+   *  page content: the testimonial GLB rocks (Phase 3). z 0 (NOT the z-61 FRONT
+   *  overlay) is the crux of the stacking investigation: the section's pull-quote
+   *  is `relative z-10` and its ring outlines are `absolute` (POSITIONED, z-auto).
+   *  A fixed z-0 canvas is a stack-level-0 positioned box, painted in the same
+   *  group as those z-auto rings in DOM-tree order — and SharedCanvasHost is
+   *  mounted BEFORE {children} in app/layout.tsx, so the canvas is tree-earlier
+   *  and paints BELOW the rings AND below the z-10 quote. Result: rocks < rings <
+   *  quote, exactly as the standalone canvas ordered them — with NO section-local
+   *  z tweaks. (z 0 also sits above the -z-20 sky / -z-10 clouds, so the rocks
+   *  float in the sky in front of the clouds.) antialias:true — the GLB rock
+   *  silhouette needs it (this plane is alone, so the FRONT AA conflict doesn't
+   *  apply here); powerPreference matches the standalone rock canvas's
+   *  "high-performance". `interactive` wires the hover-dodge picking (see the
+   *  PlaneConfig field doc). */
+  mid: {
+    zIndex: 0,
+    pointerEvents: "none",
+    antialias: true,
+    powerPreference: "high-performance",
+    interactive: true,
   },
   /** REAR — behind page content, above the -z-20 DOM sky backdrop: distant sky
    *  clouds. */
@@ -54,6 +98,7 @@ export const PLANE_CONFIG = {
     pointerEvents: "none",
     antialias: false,
     powerPreference: "default",
+    interactive: false,
   },
 } as const satisfies Record<string, PlaneConfig>;
 

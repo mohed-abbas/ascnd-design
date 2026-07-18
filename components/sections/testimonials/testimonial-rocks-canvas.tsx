@@ -1,8 +1,17 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Canvas, useThree, type ThreeEvent } from "@react-three/fiber";
-import { useCursor, useGLTF } from "@react-three/drei";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+  type RefObject,
+} from "react";
+import { useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
+import { OrthographicCamera, useCursor, useGLTF } from "@react-three/drei";
 import * as THREE from "three";
 import gsap from "gsap";
 import { GROUP_H, GROUP_W, REVEAL, UNITS } from "./testimonials-data";
@@ -12,14 +21,23 @@ import {
   onTestimonialsRevealReset,
 } from "./testimonials-reveal";
 import { requestQuoteAdvance } from "./testimonials-quote-advance";
-import { heavyEffectFpsCap } from "@/lib/perf/quality-store";
+import {
+  useSharedView,
+  type SharedViewControls,
+} from "@/components/canvas/use-shared-view";
+import { TESTIMONIAL_ROCKS_INDEX } from "@/components/canvas/indices";
+
+// AgX slightly darkens; this exposure lifts it back (the old canvas set it at
+// context creation). Shared by the per-view setter AND the warm precompile —
+// they must agree or the warm compiles the wrong program variant.
+const ROCKS_EXPOSURE = 1.15;
 
 /**
  * The four testimonials rocks as REAL 3D meshes — the "floating 3D rock" the
- * flat sprite couldn't give. One <Canvas> draws all four; each rock tumbles on
- * its own axes and orbits its ring centre. The rings + dots stay as DOM
- * (testimonials.tsx); this canvas layers over them, so a rock overflows and sits
- * in front of its outline exactly as in the Figma.
+ * flat sprite couldn't give. Each rock tumbles on its own axes and orbits its
+ * ring centre. The rings + dots stay as DOM (testimonials.tsx); the rocks render
+ * BEHIND them (the MID plane, z 0) and behind the z-10 pull-quote, so a rock
+ * that overflows its ring passes UNDER the white hoop exactly as in the Figma.
  *
  * The rocks are HOVER-INTERACTIVE: pointer over a rock (raycast against the
  * mesh) makes it dodge away from the cursor with a slight grow, and advances
@@ -41,32 +59,43 @@ import { heavyEffectFpsCap } from "@/lib/perf/quality-store";
  * model changes, and update the three refs here + the next.config.ts source.
  *
  * Realism pass (so the rocks sit IN the sky, not on it):
- *  - IBL: a procedural sky-gradient environment (useSkyEnvironment) — the main
+ *  - IBL: a procedural sky-gradient environment (buildSkyEnvMap) — the main
  *    lever; PBR needs surroundings to reflect or it looks lit-in-a-void.
  *  - Lights: low ambient + a shaping key (flat ambient was the "clay" tell),
  *    hemisphere/rim keep undersides off near-black — kept light for the Figma.
- *  - AgX tone mapping (was NoToneMapping/`flat`) for photographic highlights.
+ *  - AgX tone mapping (was NoToneMapping/`flat`) for photographic highlights —
+ *    now set per-view by the shared host (toneMapping + exposure on useSharedView).
  *  - Material: metalness 0.2, roughness 0.25 (a glossy wet-stone sheen off the
  *    IBL; was chalky 1.0), normalScale 1.4, envMapIntensity 0.6. (Metalness
  *    forced — glTF's absent factor defaults 1.)
  *
- * Placement: an ORTHOGRAPHIC camera in R3F maps 1 world unit → 1 px, so each
+ * Placement: an ORTHOGRAPHIC per-view camera maps 1 world unit → 1 px, so each
  * rock sits at its exact group-px centre and its `size` reads as px on screen —
  * no perspective drift to fight. The 3D read comes from the mesh + lights +
  * tumble, which is plenty at this scale.
  *
- * Heavy-effect contract (CLAUDE.md):
- * - Rides the shared GSAP ticker — frameloop="never" + advance(); NO private
- *   rAF (React-three's own loop is off). The ticker is added only while the
- *   section is in view or mid-reveal (`paused` from the wrapper's ScrollTrigger),
- *   so it IDLES TO ZERO off-screen.
- * - dpr capped at 1.5. Tier gating + the no-WebGL/reduced-motion/mobile fallback
- *   live in the wrapper (testimonial-rocks.tsx); this file only mounts when 3D
- *   is already chosen.
- * - WARMED AHEAD: the wrapper idle-mounts this canvas (after idle-preloading the
- *   GLB) long before the section is on screen, so useGLTF resolves from cache and
- *   the shader/PMREM/geometry upload happen on a calm main thread. The single
- *   warm frame paints at opacity 0; then zero frames until the reveal fades it in.
+ * RENDERING HOST (Phase 3, docs/canvas-consolidation-plan.md): this no longer
+ * owns a Canvas element. It registers ONE view on the shared MID plane
+ * (components/canvas/, z 0) via useSharedView, passing the rock scene as that
+ * view's `children`. The host wraps it in a drei <View> scissored to the `track`
+ * placeholder (the in-flow 120vw/120vh wrapper, which scrolls with the section),
+ * sets this view's AgX tone mapping + exposure at priority index-1, and paints it
+ * from the single ticker-end advance pump — NO private frameloop, no gsap.ticker,
+ * no explicit paint call. Paint cadence is expressed through the registration (mode/fpsCap)
+ * + markDirty/requestBurst; see the paint-policy block in the default export.
+ *
+ * Heavy-effect contract (CLAUDE.md), now delegated to the host:
+ * - The host pump is the sole paint driver (frameloop="never"); this view is
+ *   registered continuous "heavy" while the section is on screen / mid-reveal, so
+ *   it paints ≤60/s, and demand otherwise. The host IntersectionObserver on the
+ *   track idles it to zero off-screen.
+ * - dpr ≤1.5 is the plane's ceiling. Tier gating + the no-WebGL/reduced-motion/
+ *   mobile fallback live in the wrapper (testimonial-rocks.tsx).
+ * - WARMED AHEAD: the wrapper idle-mounts this view (after idle-preloading the
+ *   GLB) long before the section is on screen, so useGLTF resolves from cache;
+ *   Scene's gl.compileAsync warms the shader/PMREM off-screen on a calm main
+ *   thread, and a mount requestBurst(1) paints the (opacity-0) warm frame the
+ *   instant the track first becomes visible. Then zero frames until the reveal.
  */
 
 useGLTF.preload("/rocks/testimonial-rock.v1.glb");
@@ -89,7 +118,7 @@ type Motion = (typeof MOTION3D)[number];
 // re-aimed on every pointer move, so the rock keeps leaning away as you chase
 // it), and fires the next testimonial (requestQuoteAdvance →
 // testimonials-quote-reveal.tsx). k (grow) and the push offset are GSAP-tweened
-// values read by the render pump, so the nudge composes with the orbit +
+// values read by the render frame, so the nudge composes with the orbit +
 // fly-in offsets without touching them. The push is deliberately small vs the
 // rock (~7% of its size): the cursor stays inside the silhouette, so the dodge
 // can't push the rock out from under the pointer and jitter over/out.
@@ -98,7 +127,7 @@ const HOVER_PUSH = 0.16; // dodge distance as a fraction of the rock's size
 const HOVER_IN = { k: 1, duration: 0.45, ease: "back.out(2.5)" } as const;
 const HOVER_OUT = { k: 0, duration: 0.6, ease: "power2.out" } as const;
 // GLIDE, not push — a critically-damped spring integrated each frame by the
-// render pump. A re-targeted tween CANNOT glide here: it restarts its ease on
+// render loop. A re-targeted tween CANNOT glide here: it restarts its ease on
 // every pointer-move, so with any gentle (slow-start) ease the rock stayed
 // pinned in the first frames of the curve and the dodge read as unnoticeable.
 // The spring carries velocity across re-aims — it drifts into motion, tracks
@@ -112,7 +141,8 @@ const PUSH_DAMP = 2 * Math.sqrt(PUSH_SPRING); // critical damping — no oversho
  * sky colour + a faint sheen, which is what grounds the rocks IN the scene
  * instead of looking lit-in-a-void. The gradient echoes the page sky, and it's
  * attached to the MATERIAL (not scene.environment) so nothing mutates a hook
- * value and the one-time bake doesn't depend on the (never) render loop.
+ * value and the one-time bake doesn't depend on the (never) render loop. Baked
+ * from the SHARED plane renderer (useThree gl inside the view children).
  */
 function buildSkyEnvMap(gl: THREE.WebGLRenderer): THREE.Texture {
   const c = document.createElement("canvas");
@@ -167,7 +197,7 @@ function useRockAsset() {
     // the viewport; each RESET re-hides it. transparent stays on (depthWrite is
     // still true, so faces occlude normally — no ghosting); the 4 rocks don't
     // overlap, so blend cost is nil. If the reveal already played (context-loss
-    // canvas remount mid-view), build it visible — the rocks reappear at rest.
+    // plane remount mid-view), build it visible — the rocks reappear at rest.
     material.transparent = true;
     material.opacity = isTestimonialsRevealPlayed() ? 1 : 0;
     material.needsUpdate = true;
@@ -193,14 +223,12 @@ function Rock({
   index,
   geometry,
   material,
-  register,
 }: {
   unit: (typeof UNITS)[number];
   motion: Motion;
   index: number;
   geometry: THREE.BufferGeometry;
   material: THREE.Material;
-  register: (fn: (t: number) => void) => () => void;
 }) {
   const orbit = useRef<THREE.Group>(null);
   const tumble = useRef<THREE.Group>(null);
@@ -223,7 +251,7 @@ function Rock({
     if (on) requestQuoteAdvance();
   }, []);
 
-  // The dodge state: pos (px, world space) is what the pump applies; target is
+  // The dodge state: pos (px, world space) is what the frame applies; target is
   // where dodge() last aimed it (away from the cursor, zero on pointer-out);
   // vel makes it a spring — pos chases target with continuous velocity, so
   // re-aiming on every pointer move stays glassy-smooth.
@@ -261,12 +289,12 @@ function Rock({
     [],
   );
 
-  // Fly-in offset (px), added to the orbit position by the pump each frame.
+  // Fly-in offset (px), added to the orbit position by the render frame.
   // Parked at base × (flyFactor − 1) — so the rock sits at base × flyFactor,
   // well outside the viewport, along its own outward radial (the four thus
   // arrive from four directions) — and each PLAY eases it to 0, landing on the
   // ring; each RESET re-parks it so the entrance replays on the next pass. If
-  // the reveal already played (context-loss canvas remount mid-view), start at
+  // the reveal already played (context-loss plane remount mid-view), start at
   // rest — the rock reappears in place, it doesn't re-fly.
   const parkedX = baseX * (REVEAL.flyFactor - 1);
   const parkedY = baseY * (REVEAL.flyFactor - 1);
@@ -277,38 +305,40 @@ function Rock({
   );
 
   // The float: a slow orbit + 3D tumble about the base, plus the fly-in offset,
-  // plus the hover nudge (dodge spring + grow).
-  useEffect(() => {
-    const size = unit.size;
-    let last: number | undefined;
-    return register((t) => {
-      // Integrate the dodge spring. dt is clamped so a pump gap (section was
-      // off-screen, tab hidden) can't make one giant unstable step on resume.
-      const dt = Math.min(last === undefined ? 0 : t - last, 0.05);
-      last = t;
-      const p = push.current;
-      p.vel.x += ((p.target.x - p.pos.x) * PUSH_SPRING - p.vel.x * PUSH_DAMP) * dt;
-      p.vel.y += ((p.target.y - p.pos.y) * PUSH_SPRING - p.vel.y * PUSH_DAMP) * dt;
-      p.pos.x += p.vel.x * dt;
-      p.pos.y += p.vel.y * dt;
+  // plus the hover nudge (dodge spring + grow). Formerly a manual updater called
+  // by a private gsap.ticker pump; now a useFrame that runs on each host advance.
+  // The clock it reads is the plane pump's virtual clock (monotonic seconds,
+  // delta-clamped by the host) — the updaters only ever needed monotonic seconds
+  // (orbit/tumble absolute phase, dodge-spring delta), so this is a clean swap.
+  useFrame((state, delta) => {
+    const t = state.clock.elapsedTime; // host virtual clock, seconds
+    // Integrate the dodge spring. dt is clamped so a pump gap (section was
+    // off-screen, tab hidden) can't make one giant unstable step on resume; the
+    // host already clamps its virtual delta, and this belt-and-suspenders 0.05
+    // ceiling matches the standalone.
+    const dt = Math.min(delta, 0.05);
+    const p = push.current;
+    p.vel.x += ((p.target.x - p.pos.x) * PUSH_SPRING - p.vel.x * PUSH_DAMP) * dt;
+    p.vel.y += ((p.target.y - p.pos.y) * PUSH_SPRING - p.vel.y * PUSH_DAMP) * dt;
+    p.pos.x += p.vel.x * dt;
+    p.pos.y += p.vel.y * dt;
 
-      const a = motion.orbitPhase + t * (TAU / motion.orbitDur) * motion.orbitDir;
-      orbit.current?.position.set(
-        baseX + Math.cos(a) * motion.orbitR + offset.current.x + p.pos.x,
-        baseY + Math.sin(a) * motion.orbitR + offset.current.y + p.pos.y,
-        0,
-      );
-      tumble.current?.rotation.set(
-        motion.phase[0] + t * motion.spin[0],
-        motion.phase[1] + t * motion.spin[1],
-        motion.phase[2] + t * motion.spin[2],
-      );
-      mesh.current?.scale.setScalar((size / 2) * (1 + hover.current.k * HOVER_GROW));
-    });
-  }, [register, motion, baseX, baseY, unit.size]);
+    const a = motion.orbitPhase + t * (TAU / motion.orbitDur) * motion.orbitDir;
+    orbit.current?.position.set(
+      baseX + Math.cos(a) * motion.orbitR + offset.current.x + p.pos.x,
+      baseY + Math.sin(a) * motion.orbitR + offset.current.y + p.pos.y,
+      0,
+    );
+    tumble.current?.rotation.set(
+      motion.phase[0] + t * motion.spin[0],
+      motion.phase[1] + t * motion.spin[1],
+      motion.phase[2] + t * motion.spin[2],
+    );
+    mesh.current?.scale.setScalar((unit.size / 2) * (1 + hover.current.k * HOVER_GROW));
+  });
 
-  // PLAY: re-park off-screen, then ease the offset → 0 (the fly-in). The pump
-  // (running whenever the section is visible) renders every frame of it.
+  // PLAY: re-park off-screen, then ease the offset → 0 (the fly-in). The host
+  // pump (painting whenever the section is visible) renders every frame of it.
   // RESET (section fully left): kill any live tween and re-park, ready for the
   // next pass. Replays every time the section is passed through.
   useEffect(() => {
@@ -362,139 +392,94 @@ function Rock({
   );
 }
 
-function Scene({ paused }: { paused: boolean }) {
-  const asset = useRockAsset();
-  const advance = useThree((s) => s.advance);
-  const updaters = useRef(new Set<(t: number) => void>());
+/**
+ * The rock scene = the view's r3f children (the host wraps this in a drei <View>
+ * + per-view tone-mapping setter + Suspense). A per-view ORTHOGRAPHIC camera
+ * (makeDefault) gives 1 world unit = 1 px against the track rect — drei's <View>
+ * forces its frustum to the (120vw/120vh) track each frame, so the mapping the
+ * standalone orthographic canvas relied on is preserved with no code change.
+ */
+function Scene() {
+  const asset = useRockAsset(); // suspends on useGLTF; host Suspense catches it
+  // Store getter for the warm effect below — values fetched inside the effect
+  // (not hook returns), which is also what lets it mutate gl.toneMapping
+  // without tripping react-hooks/immutability.
+  const get = useThree((s) => s.get);
 
-  const register = useCallback((fn: (t: number) => void) => {
-    updaters.current.add(fn);
-    return () => {
-      updaters.current.delete(fn);
-    };
-  }, []);
-
-  // The render pump. frameloop="never", so a frame paints only when this calls
-  // advance(). It rides the shared GSAP ticker (LenisProvider's one loop) — no
-  // private rAF — which keeps ticking DURING scroll, so the reveal animates as
-  // you scroll in.
-  //
-  // ⚠️ Why this is imperative, not a plain `if (paused) …` effect: the reveal
-  // must START the pump the instant the shared gate fires, and that happens
-  // SYNCHRONOUSLY inside the scroll's IntersectionObserver callback. A React
-  // effect keyed on the `paused` prop is a PASSIVE effect — deferred while the
-  // main thread is busy scrolling — so the pump (and the rocks) only appeared
-  // once you STOPPED scrolling, while the rings (plain GSAP, fired in the same
-  // IO callback) revealed on time. So the gate turns the pump on synchronously
-  // (renders mid-scroll, in lockstep with the rings); `paused` only governs
-  // idling to zero once the reveal is over.
-  // Paint cap (heavy-effect contract #3): the orbit/tumble/dodge is
-  // self-animating — no on-screen reference frame — so painting past
-  // heavyEffectFpsCap() (60 on fast panels) is invisible. Uncapped, this
-  // advanced at the full 120Hz ticker: a 2721×1386 GLB scene painting ~110×/s
-  // for a slow drift (measured 2026-07-18; the testimonials "never reaches
-  // 120" report — the GPU was busy doubling frames nobody could tell apart).
-  // Same remainder-carry as IntroFrameCap so the 60 lands clean, not ~50; the
-  // clamp stops a pause from banking a catch-up burst. Updaters read absolute
-  // time, so skipped ticks are safe.
-  const lastPaintMs = useRef(-Infinity);
-  const pump = useCallback(
-    (t: number) => {
-      const cap = heavyEffectFpsCap();
-      if (cap > 0) {
-        const nowMs = t * 1000;
-        const budget = 1000 / cap;
-        if (nowMs - lastPaintMs.current < budget - 1) return;
-        lastPaintMs.current = Math.max(lastPaintMs.current + budget, nowMs - budget);
-      }
-      for (const fn of updaters.current) fn(t);
-      advance(t * 1000);
-    },
-    [advance],
-  );
-
-  const pausedRef = useRef(paused);
-  const revealingRef = useRef(false);
-  const addedRef = useRef(false);
-  const sync = useCallback(() => {
-    const want = !pausedRef.current || revealingRef.current;
-    if (want && !addedRef.current) {
-      gsap.ticker.add(pump);
-      addedRef.current = true;
-    } else if (!want && addedRef.current) {
-      gsap.ticker.remove(pump);
-      addedRef.current = false;
-    }
-  }, [pump]);
-
+  // WARM the pipeline off-screen: compile the shader program NOW (idle mount,
+  // calm main thread) so the reveal later is pure animation. Under the host the
+  // old "single warm paint" cannot fire off-screen (the pump only paints
+  // VISIBLE views), so compileAsync — which needs no paint — carries the warm;
+  // the mount requestBurst(1) (default export) covers the geometry/texture upload
+  // on the first visible frame, invisibly (material opacity 0). KHR_parallel_
+  // shader_compile overlaps the download where available.
   useEffect(() => {
-    pausedRef.current = paused;
-    sync();
-  }, [paused, sync]);
+    if (!asset) return;
+    // Compile under THIS view's tone mapping. toneMapping is part of three's
+    // program cache key, and the per-view AgX setter only runs during pump
+    // paints — at idle mount the renderer still holds R3F's default ACES, so a
+    // bare compileAsync would warm the WRONG variant and the first visible
+    // paint would recompile AgX in-band (the exact hitch this warm exists to
+    // kill). Set AgX for the compile, restore after.
+    const { gl: renderer, scene, camera } = get();
+    const prevTone = renderer.toneMapping;
+    const prevExp = renderer.toneMappingExposure;
+    renderer.toneMapping = THREE.AgXToneMapping;
+    renderer.toneMappingExposure = ROCKS_EXPOSURE;
+    renderer
+      .compileAsync(scene, camera)
+      .catch(() => {
+        /* a failed precompile just means the shader compiles in-band on entry */
+      })
+      .finally(() => {
+        renderer.toneMapping = prevTone;
+        renderer.toneMappingExposure = prevExp;
+      });
+  }, [asset, get]);
 
+  // Reveal fade on the shared material (all four rocks at once). The rocks are
+  // off-screen at the PLAY instant, so this quick fade is essentially unseen — it
+  // only softens the edge as each rock crosses into view. The per-rock fly-in
+  // lives in Rock; the rings draw in after (testimonials-drift.tsx). RESET parks
+  // it invisible for the next pass.
   useEffect(() => {
     if (!asset) return;
     const mat = asset.material;
-    // Keep the pump alive until the last rock has landed (+ a little slack).
-    const revealTotal = REVEAL.flyDelay(UNITS.length - 1) + REVEAL.flyDur + 0.4;
-    let done: gsap.core.Tween | undefined;
     let fade: gsap.core.Tween | undefined;
-    // (A canvas that (re)mounts AFTER the reveal already played builds its
-    // material visible — see useRockAsset — so there's no entrance to replay.)
     const unPlay = onTestimonialsRevealPlay(() => {
-      revealingRef.current = true;
-      sync(); // synchronous — pump starts mid-scroll, so the fly-in renders live
       fade?.kill();
-      done?.kill();
-      // Snap the shared material visible (all four at once). The rocks are still
-      // off-screen at this instant, so this quick fade is essentially unseen — it
-      // only softens the edge as each rock crosses into view. The per-rock fly-in
-      // lives in Rock; the rings draw in after (testimonials-drift.tsx).
       fade = gsap.to(mat, { opacity: 1, duration: 0.3, ease: "none" });
-      done = gsap.delayedCall(revealTotal, () => {
-        revealingRef.current = false;
-        sync();
-      });
     });
     const unReset = onTestimonialsRevealReset(() => {
-      // Section fully left — park invisible for the next pass. No tween needed:
-      // nothing is on screen to see the snap.
       fade?.kill();
-      done?.kill();
-      revealingRef.current = false;
-      sync();
       mat.opacity = 0;
     });
     return () => {
       unPlay();
       unReset();
-      done?.kill();
       fade?.kill();
-      if (addedRef.current) {
-        gsap.ticker.remove(pump);
-        addedRef.current = false;
-      }
     };
-  }, [sync, pump, asset]);
-
-  // Warm the pipeline before the section arrives: one render compiles the shader
-  // program and uploads geometry/textures NOW, at the idle mount, so the reveal
-  // later is pure animation — nothing left to load or compile. A single paint,
-  // not a loop; the material starts at opacity 0 (and the rocks off-screen), so
-  // this warm frame is invisible.
-  useEffect(() => {
-    if (!asset) return;
-    advance(performance.now());
-  }, [asset, advance]);
+  }, [asset]);
 
   if (!asset) return null;
 
   return (
     <>
-      {/* With the sky IBL (useSkyEnvironment) now carrying the fill, ambient is
-          low again so the form reads (flat ambient was the "clay" tell); the key
-          does the shaping and the hemisphere + rim keep the undersides from the
-          old near-black. Kept light overall to match the Figma. */}
+      {/* 1 world unit = 1 px: drei <View>.prepareSkissor forces this ortho
+          camera's frustum to the track rect each frame (it isn't `manual`), and
+          the track is the 120vw/120vh viewport-centred wrapper, so world origin =
+          viewport centre — exactly the standalone canvas's mapping. */}
+      <OrthographicCamera
+        makeDefault
+        position={[0, 0, 100]}
+        zoom={1}
+        near={0.1}
+        far={1000}
+      />
+      {/* With the sky IBL (buildSkyEnvMap) now carrying the fill, ambient is low
+          again so the form reads (flat ambient was the "clay" tell); the key does
+          the shaping and the hemisphere + rim keep the undersides from the old
+          near-black. Kept light overall to match the Figma. */}
       <ambientLight intensity={0.3} />
       <hemisphereLight args={[0xdcecff, 0x9fc4e8, 1.0]} />
       <directionalLight color={0xfff4e0} intensity={1.35} position={[4, 6, 6]} />
@@ -507,7 +492,6 @@ function Scene({ paused }: { paused: boolean }) {
           index={i}
           geometry={asset.geometry}
           material={asset.material}
-          register={register}
         />
       ))}
     </>
@@ -515,93 +499,109 @@ function Scene({ paused }: { paused: boolean }) {
 }
 
 /**
- * WebGL context-loss safety net (frameloop="never" variant of the cloud canvas'
- * ContextWatchdog). THREE handles lost/restored internally; here we only (a) push
- * one advance() after a restore (this canvas never free-runs, so nothing else
- * repaints it — without this it'd stay stuck on its last frame, reading as a
- * static image) and (b) if a restore never arrives within a few seconds, ask the
- * parent to remount the <Canvas> with a fresh context. This matters on Firefox,
- * which caps simultaneous WebGL contexts far lower than Chrome and evicts the
- * least-recently-used one — so scrolling away to another canvas-bearing section
- * can silently drop this one. All listeners/timers are cleaned up.
+ * Registers the rock scene as ONE view on the shared MID plane. Renders nothing
+ * in the DOM — the placeholder/track (the 120vw/120vh wrapper) is the caller's
+ * own (testimonial-rocks.tsx); the host's fixed plane Canvas scissors this view to
+ * the track's live rect.
+ *
+ * PAINT POLICY (mirrors the intro's descriptor-flip): continuous "heavy" while
+ * the section is on screen (`inView`) OR the fly-in is running (`revealing`) —
+ * the host pump paces it to ≤60/s and idles it to zero via the track
+ * IntersectionObserver when off-screen. Demand otherwise.
+ *
+ * ⚠️ The reveal fires SYNCHRONOUSLY inside a scroll ScrollTrigger callback (mid-
+ * scroll). Flipping `revealing` is a React state change → a DEFERRED effect →
+ * the descriptor would only go continuous once the scroll pauses (the historic
+ * "rocks only appear on scroll-stop" bug). So the PLAY handler also markDirty()s
+ * + requestBurst(1)s SYNCHRONOUSLY: those mutate the registry entry in place, so
+ * the host pump (running later in the SAME ticker tick) paints this tick — in
+ * lockstep with the rings — while the state-driven mode flip takes over next tick.
  */
-function ContextWatchdog({ onUnrecoverable }: { onUnrecoverable: () => void }) {
-  const gl = useThree((s) => s.gl);
-  const advance = useThree((s) => s.advance);
+export default function TestimonialRocksView({
+  track,
+  inView,
+}: {
+  track: RefObject<HTMLElement | null>;
+  inView: boolean;
+}) {
+  // Stable paint-control wrappers. useSharedView RETURNS the controls, but the
+  // scene `children` are an ARGUMENT to that same call, so the reveal handler
+  // (which fires before the hook's controls object is even assigned on first
+  // render) routes through a ref pointed at the stable controls right after.
+  const controlsRef = useRef<SharedViewControls | null>(null);
+  const markDirty = useCallback(() => controlsRef.current?.markDirty(), []);
+  const requestBurst = useCallback(
+    (n: number) => controlsRef.current?.requestBurst(n),
+    [],
+  );
 
+  // Reveal keepalive + synchronous paint start. `revealing` keeps the view
+  // continuous through the fly-in even if `inView` toggles under a fast scroll;
+  // it clears once the last rock has landed (+ slack).
+  const [revealing, setRevealing] = useState(false);
   useEffect(() => {
-    const canvas = gl.domElement;
-    let mounted = true;
-    let restoreTimer: ReturnType<typeof setTimeout> | undefined;
-
-    const onLost = () => {
-      // THREE already preventDefaults + restores recoverable losses on its own.
-      // Arm a fallback remount only for a loss that never restores.
-      if (restoreTimer) clearTimeout(restoreTimer);
-      restoreTimer = setTimeout(() => {
-        // Only remount a genuinely unrecoverable loss on a still-live, visible
-        // canvas — skips R3F's force-context-loss during unmount (canvas is
-        // detached by then) and stale timers from a prior Fast Refresh instance.
-        if (
-          mounted &&
-          canvas.isConnected &&
-          document.visibilityState === "visible"
-        ) {
-          onUnrecoverable();
-        }
-      }, 3000);
-    };
-    const onRestored = () => {
-      if (restoreTimer) clearTimeout(restoreTimer);
-      restoreTimer = undefined;
-      advance(performance.now()); // frameloop="never" — repaint explicitly
-    };
-
-    canvas.addEventListener("webglcontextlost", onLost, false);
-    canvas.addEventListener("webglcontextrestored", onRestored, false);
-
+    let done: gsap.core.Tween | undefined;
+    const revealTotal = REVEAL.flyDelay(UNITS.length - 1) + REVEAL.flyDur + 0.4;
+    const unPlay = onTestimonialsRevealPlay(() => {
+      setRevealing(true);
+      // Synchronous — start advancing THIS tick, mid-scroll, before the state
+      // flip commits (see the ⚠️ note above). The burst spans the WHOLE fly-in
+      // (~60/s worth), so even if the React commit that flips the descriptor
+      // to continuous lags under load, the fly-in never stutters — the burst
+      // alone carries it, and it's consumed/superseded once continuous lands.
+      markDirty();
+      requestBurst(Math.ceil(revealTotal * 60));
+      done?.kill();
+      done = gsap.delayedCall(revealTotal, () => setRevealing(false));
+    });
+    const unReset = onTestimonialsRevealReset(() => {
+      done?.kill();
+      setRevealing(false);
+    });
     return () => {
-      mounted = false;
-      if (restoreTimer) clearTimeout(restoreTimer);
-      canvas.removeEventListener("webglcontextlost", onLost, false);
-      canvas.removeEventListener("webglcontextrestored", onRestored, false);
+      unPlay();
+      unReset();
+      done?.kill();
     };
-  }, [gl, advance, onUnrecoverable]);
+  }, [markDirty, requestBurst]);
+
+  const active = inView || revealing;
+  const mode = active ? "continuous" : "demand";
+  // "heavy" → the host resolves heavyEffectFpsCap() each tick (60 on fast panels).
+  // The orbit/tumble/dodge self-animates with no on-screen reference, so painting
+  // past 60 was invisible GPU waste (the standalone measured ~110/s uncapped).
+  const fpsCap = "heavy";
+
+  const children: ReactNode = useMemo(() => <Scene />, []);
+
+  const controls = useSharedView({
+    plane: "mid",
+    index: TESTIMONIAL_ROCKS_INDEX,
+    track,
+    // AgX gives a photographic highlight roll-off (replaces the flat/clipped
+    // NoToneMapping "digital" look); exposure lifts AgX's slight darkening. The
+    // host sets both for this view at priority index-1 (replaces onCreated).
+    toneMapping: THREE.AgXToneMapping,
+    toneMappingExposure: ROCKS_EXPOSURE,
+    mode,
+    fpsCap,
+    children,
+  });
+  // Point the wrapper ref at the (stable) controls in the commit's LAYOUT phase —
+  // before any child passive effect, so the reveal handler is never a null no-op.
+  useLayoutEffect(() => {
+    controlsRef.current = controls;
+  }, [controls]);
+
+  // Warm frame: paint the (opacity-0) scene the instant the track first becomes
+  // visible, so geometry/texture upload happens before the reveal (Scene's
+  // compileAsync warms the programs off-screen). Declared AFTER useSharedView so
+  // it runs after the registration effect — fired earlier it would hit an empty
+  // registry and no-op (the host's canvas-mount burstAll masked that, but only
+  // for the very first mount).
+  useEffect(() => {
+    requestBurst(1);
+  }, [requestBurst]);
 
   return null;
-}
-
-export default function TestimonialRocksCanvas({ paused }: { paused: boolean }) {
-  // Bumping this remounts the <Canvas> with a fresh GL context — the last-resort
-  // recovery when a lost context never restores (see ContextWatchdog). The
-  // remount rebuilds everything (context, PMREM env map, geometry, material);
-  // if the reveal already played, Rock/Scene read isTestimonialsRevealPlayed()
-  // and reappear at rest rather than re-playing the fly-in.
-  const [canvasKey, setCanvasKey] = useState(0);
-  const remount = useCallback(() => setCanvasKey((k) => k + 1), []);
-
-  return (
-    <Canvas
-      key={canvasKey}
-      orthographic
-      dpr={[1, 1.5]}
-      frameloop="never"
-      gl={{
-        alpha: true,
-        antialias: true,
-        powerPreference: "high-performance",
-        // AgX gives a photographic highlight roll-off — replaces the flat/clipped
-        // NoToneMapping ("digital" look). Exposure lifts AgX's slight darkening.
-        toneMapping: THREE.AgXToneMapping,
-        toneMappingExposure: 1.15,
-      }}
-      camera={{ position: [0, 0, 100], zoom: 1, near: 0.1, far: 1000 }}
-      style={{ position: "absolute", inset: 0 }}
-    >
-      <Suspense fallback={null}>
-        <Scene paused={paused} />
-      </Suspense>
-      <ContextWatchdog onUnrecoverable={remount} />
-    </Canvas>
-  );
 }

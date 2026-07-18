@@ -31,10 +31,12 @@ export const FRONT_INDEX = {
 /**
  * Phase 3 — testimonial GLB rocks. Kept SEPARATE from FRONT_INDEX because the
  * audit found the rocks can't live on the FRONT plane (they'd cover the section's
- * pull-quote, which renders above them at z-10). They will likely land on a
- * future in-flow "MID" plane; the plane is chosen at the call site (the
- * `plane` arg to useSharedView), so moving them is a one-line change here + there.
- * The index only needs to be unique/spaced ≥2 on whatever plane they end up on.
+ * pull-quote, which renders above them at z-10). They land on the in-band "MID"
+ * plane (plane-config.ts `mid`, z 0 — below the rings/quote, above the clouds);
+ * the plane is chosen at the call site (the `plane: "mid"` arg to useSharedView),
+ * so moving them stays a one-line change here + there. As MID's only view the
+ * index just needs to be unique/spaced ≥2 — 30 leaves the tone setter slot (29)
+ * clear.
  */
 export const TESTIMONIAL_ROCKS_INDEX = 30;
 

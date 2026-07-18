@@ -151,6 +151,23 @@ export default function PlaneCanvas({ plane }: { plane: PlaneName }) {
         antialias: cfg.antialias,
         powerPreference: cfg.powerPreference,
       }}
+      // drei <View> picking (interactive planes only — Phase 3 rock hover-dodge).
+      // The R3F event layer must attach to a shared ANCESTOR of the feature's
+      // track <div>, which lives in the page DOM (a separate subtree from this
+      // fixed canvas). document.documentElement is that ancestor; the canvas then
+      // stays pointer-events:none (below), so a pointer passes through to the
+      // pointer-events:auto track and drei's compute fires with event.target ===
+      // track. eventPrefix "client" keeps the root-store compute on client coords
+      // to match drei View's own compute. Non-interactive planes pass undefined →
+      // R3F's default (connect to the canvas wrapper) is untouched. This host is
+      // ssr:false, so `document` is always defined here. See plane-config.ts
+      // PlaneConfig.interactive for the full node_modules-verified rationale.
+      eventSource={
+        cfg.interactive && typeof document !== "undefined"
+          ? document.documentElement
+          : undefined
+      }
+      eventPrefix={cfg.interactive ? "client" : undefined}
       camera={CAMERA}
       // Inline style (not className): R3F sets inline styles on its container
       // that would override positioning classes — mirrors cloud-canvas.tsx.
