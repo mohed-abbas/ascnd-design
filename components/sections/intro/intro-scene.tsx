@@ -1046,6 +1046,44 @@ export default function IntroScene({
   // group-translation pattern as the clouds), so the arc tracks the page 1:1.
   const fieldRef = useRef<Group>(null);
 
+  // Intro-phase canvas cost (measured 2026-07-18, frozen ?intropos=0.5 frames
+  // with per-context draw-call instrumentation on an M-series 120Hz MacBook):
+  // the glass's MAIN-PASS fragments at canvas resolution — NOT the MTM FBO the
+  // tiers tune — were the intro's boulder, and the cost of dpr × MSAA is
+  // multiplicative. At dpr 1.5 + 4×MSAA the glass paint took ~44ms (23 paints/s
+  // against the 60 cap) and GPU backpressure stalled the MAIN THREAD to
+  // 49 rAF/s — dragging the clouds, the DOM reveal cascade, and the fps meter
+  // down with it (and feeding the frame watchdog false main-thread signals).
+  // Solo fixes didn't cut it (dpr1 alone → 30 paints/s; no-MSAA alone → 33);
+  // together they hold ~55–60 paints/s with the main thread fully free (119
+  // rAF/s). So in production the intro runs at dpr 1 with MSAA off:
+  //   - dpr is LIVE-switchable (R3F setDpr): 1 during the welcome (the glass
+  //     is soft/refractive + constantly moving, so the softness doesn't read),
+  //     then back to [1, 1.5] at handoff so the persistent tile conveyor stays
+  //     crisp on retina.
+  //   - MSAA is a context-creation flag (not switchable) and stays OFF for
+  //     good: the steady-state scene is alpha-mapped quads whose edges MSAA
+  //     can't touch (texture alpha, not geometry), so it's free there.
+  //
+  // Dev A/B hooks (same query-param pattern as ?intropos):
+  //   ?introaa=1  — force MSAA back on (compare against the old look)
+  //   ?introdpr=N — override the INTRO-phase dpr (e.g. 1.5 = old behaviour)
+  //   ?noglass    — mount the scene WITHOUT the MTM glass (rocks/tiles/ready
+  //                 gate untouched), pricing the transmission pass wholesale
+  // Read once per mount — aa gates a canvas-creation prop, which doesn't
+  // apply live anyway.
+  const dev = useMemo(() => {
+    if (typeof window === "undefined")
+      return { aa: false, introDpr: 1, glass: true };
+    const q = new URLSearchParams(window.location.search);
+    const dpr = Number(q.get("introdpr"));
+    return {
+      aa: q.get("introaa") === "1",
+      introDpr: dpr > 0 ? Math.min(dpr, 2) : 1,
+      glass: !q.has("noglass"),
+    };
+  }, []);
+
   return (
     <Canvas
       // pointer-events:none — the necklace is a PASSIVE visual (no picking, no
@@ -1061,15 +1099,22 @@ export default function IntroScene({
       // intro's paint rate: heavyEffectFpsCap holds it to 60 on a 120Hz panel,
       // halving the MTM's frame cost through the compile window (audit R4 item 3).
       frameloop="demand"
-      // dpr capped at 1.5 (was 2): halves-ish the fragment cost of the persistent
-      // tile canvas's every-frame conveyor repaint on retina, with no visible
-      // softening of the shot images at this size (docs/performance-audit.md §6).
-      dpr={[1, 1.5]}
+      // Two-phase dpr (see the measurement note above): 1 while the glass is
+      // mounted (its main-pass fragments were the intro's dominant cost; the
+      // moving refractive glass hides the softness), then [1, 1.5] once the
+      // intro hands off so the persistent tile conveyor is crisp on retina.
+      // R3F applies dpr changes live (setDpr), so the swap is seamless — it
+      // lands after the glass has fully faded. Never raw devicePixelRatio
+      // (site-wide dpr ≤ 1.5 cap, docs/performance-audit.md §6).
+      dpr={introActive ? dev.introDpr : [1, 1.5]}
       // high-performance: ask for the discrete GPU on dual-GPU machines for the
       // intro's MTM burst. Intro-canvas ONLY — the always-mounted cloud canvases
       // stay on the default so laptops aren't pinned to the dGPU for ambience.
+      // antialias:false — see the measurement note above: MSAA × dpr cost is
+      // multiplicative on the glass's main pass, and post-intro the scene is
+      // alpha-mapped quads MSAA can't help. (?introaa=1 forces it back on.)
       gl={{
-        antialias: true,
+        antialias: dev.aa,
         alpha: true,
         powerPreference: "high-performance",
       }}
@@ -1095,13 +1140,17 @@ export default function IntroScene({
         {introActive && (
           <>
             <Rocks rocks={rocks} rockEntry={rockEntry} />
-            <Glass
-              anim={anim}
-              glassSize={glassSize}
-              glassGeomScale={glassGeomScale}
-              restY={restY}
-              font={font}
-            />
+            {/* ?noglass (dev A/B) skips ONLY the glass — the rocks, lights and
+                ready gate still run so the intro flows normally around it. */}
+            {dev.glass && (
+              <Glass
+                anim={anim}
+                glassSize={glassSize}
+                glassGeomScale={glassGeomScale}
+                restY={restY}
+                font={font}
+              />
+            )}
             <directionalLight position={[3, 5, 6]} intensity={1.2} />
             <ambientLight intensity={0.4} />
             <IntroFrameCap />
@@ -1129,7 +1178,7 @@ export default function IntroScene({
       {/* Local studio shine (see GlassEnvironment) — no network, so the glints
           are present on frame 1 instead of popping in late. Glass-only, so it
           rides the intro phase and unmounts with the glass. */}
-      {introActive && (
+      {introActive && dev.glass && (
         <GlassEnvironment
           environmentIntensity={1.85}
           frontFill={0.5}

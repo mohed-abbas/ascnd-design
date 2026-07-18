@@ -124,6 +124,13 @@ export default function CloudLayer() {
 
   if (!hydrated) return null;
 
+  // Dev A/B hook (perf isolation, same query-param pattern as the intro's
+  // ?intropos/?noglass): ?noclouds renders NEITHER cloud layer — not even the
+  // static fallback — to price the two fullscreen cloud canvases against the
+  // intro canvas with the DevTools FPS meter. Client-only: we're past the
+  // hydration gate, so reading location can't desync SSR.
+  if (new URLSearchParams(window.location.search).has("noclouds")) return null;
+
   // Static-sprite fallback for ineligible devices (mobile, reduced-motion,
   // no-WebGL): individual baked cloud sprites distributed across every section
   // and scroll-driven in DOM (GSAP transforms) — see static-cloud-layer.tsx
