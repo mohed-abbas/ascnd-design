@@ -62,7 +62,7 @@ export default function Pills() {
               key={p.id}
               data-pill
               data-node-id={p.id}
-              className="absolute flex h-[42px] items-center rounded-[20px] border-[1.5px] border-solid border-white/30 bg-gradient-to-b from-black/10 to-black/5 px-[15px] backdrop-blur-[2px] will-change-transform left-[var(--dl)] top-[var(--dt)] max-md:left-[var(--ml)] max-md:top-[var(--mt)]"
+              className="absolute flex h-[42px] items-center rounded-[20px] border-[1.5px] border-solid border-white/30 bg-gradient-to-b from-black/10 to-black/5 px-[15px] shadow-[inset_0_0_0_999px_rgba(255,255,255,0.06)] will-change-transform left-[var(--dl)] top-[var(--dt)] max-md:left-[var(--ml)] max-md:top-[var(--mt)]"
               // Desktop uses the design scatter (--dl/--dt); below md it switches
               // to the compact, provably non-overlapping layout (--ml/--mt) — see
               // pills-data.ts. Positions live in CSS vars so the switch is a pure

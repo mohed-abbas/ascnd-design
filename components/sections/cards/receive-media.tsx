@@ -182,10 +182,13 @@ export default function ReceiveMedia() {
         <div ref={gridRef} className="absolute left-[-75px] top-[-88px] h-[510px] w-[594px]">
           {SHOT_TILES.map((t) => (
             // Translucent-glass tile frame (Figma tile-frame nodes): a 0.5px
-            // white edge over an rgba-white mat with a soft backdrop blur. The
-            // shot is inset by `pad`, so the mat reads as a glass border. The
-            // rect (t.w × t.h) is the outer frame — footprint unchanged, so the
-            // collage layout and the disperse animation are untouched.
+            // white edge over an rgba-white mat. The shot is inset by `pad`, so
+            // the mat reads as a glass border. The rect (t.w × t.h) is the
+            // outer frame — footprint unchanged, so the collage layout and the
+            // disperse animation are untouched. Frost-swept 2026-07-18: the
+            // Figma `blur` re-rastered each full tile per scrolled frame while
+            // only the thin mat ring ever showed it, and the white/20 mat
+            // already carries the body (docs/backdrop-filter-sweep.md).
             <div
               key={t.src}
               className="absolute"
@@ -198,8 +201,6 @@ export default function ReceiveMedia() {
                 borderRadius: t.r,
                 border: "0.5px solid #ffffff",
                 background: "rgba(255,255,255,0.2)",
-                backdropFilter: `blur(${t.blur}px)`,
-                WebkitBackdropFilter: `blur(${t.blur}px)`,
               }}
             >
               <div className="relative h-full w-full overflow-hidden" style={{ borderRadius: t.ri }}>

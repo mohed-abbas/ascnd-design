@@ -14,9 +14,10 @@ import type { ReactNode } from "react";
  * inner glow here: the real node's interior is uniform edge-to-center (unlike
  * the navbar, which does carry an inset white shadow).
  *
- * backdrop-blur here is fine: the card is a sibling of the fixed <Background/>,
- * not an ancestor, so it doesn't turn the sky's fixed layers into a backdrop
- * root (see CLAUDE.md — the same reason the navbar's blur is allowed).
+ * No backdrop-blur (frost-swept 2026-07-18): the card only ever sits over the
+ * fixed sky, where the frost re-rastered ~193k px² per card per scrolled frame
+ * for no visible product. The white inset veil stands in for the frost's
+ * slight lift. See docs/backdrop-filter-sweep.md.
  */
 export default function CardShell({
   title,
@@ -31,7 +32,7 @@ export default function CardShell({
     <article
       data-card-shell
       data-card-id={title}
-      className="relative h-[438px] w-[440px] shrink-0 overflow-clip rounded-[20px] border-[1.5px] border-solid border-white/30 bg-gradient-to-b from-black/10 to-black/5 backdrop-blur-[2px]"
+      className="relative h-[438px] w-[440px] shrink-0 overflow-clip rounded-[20px] border-[1.5px] border-solid border-white/30 bg-gradient-to-b from-black/10 to-black/5 shadow-[inset_0_0_0_999px_rgba(255,255,255,0.06)]"
     >
       {children}
 

@@ -61,7 +61,7 @@ const VARIANT: Record<ButtonVariant, { root: string; fill: string }> = {
   },
   clear: {
     root: "text-white",
-    fill: "border border-solid border-white bg-white/10 backdrop-blur-[2px] transition-colors group-hover:bg-white/20",
+    fill: "border border-solid border-white bg-white/10 transition-colors group-hover:bg-white/20",
   },
 };
 

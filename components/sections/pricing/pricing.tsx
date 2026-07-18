@@ -19,10 +19,11 @@ import { FIXED_SPRINT, SUBSCRIPTION, type Plan } from "./pricing-data";
  * arrow all land where the design places them.
  *
  * Glass recipe (rounded-[20px] · border-white/30 · from-black/10→to-black/5 ·
- * backdrop-blur) is the site standard (card-shell.tsx / comparison.tsx); blur
- * is allowed because these cards are siblings of the fixed sky layers, never
- * ancestors (CLAUDE.md). CTAs reuse the shared <Button> (solid = white gradient
- * + rainbow hover aura; clear = liquid glass).
+ * white inset veil) is the site standard (card-shell.tsx / comparison.tsx).
+ * Frost-swept 2026-07-18: the cards' backdrop-blur (2.9px / the heavier 9.6px)
+ * re-rastered ~340k px² each per scrolled frame over a sky-only backdrop
+ * (docs/backdrop-filter-sweep.md). CTAs reuse the shared <Button> (solid =
+ * white gradient + rainbow hover aura; clear = liquid glass).
  */
 export default function Pricing() {
   return (
@@ -62,7 +63,7 @@ export default function Pricing() {
             plan={SUBSCRIPTION}
             cta="start your subscription"
             ctaVariant="solid"
-            className="left-0 top-[79px] backdrop-blur-[2.9px] max-md:mb-[40px]"
+            className="left-0 top-[79px] max-md:mb-[40px]"
             price={
               <p className="min-w-full">
                 <span className="text-[61px] leading-[normal] tracking-[-3.05px] max-md:text-[52px]">
@@ -92,7 +93,7 @@ export default function Pricing() {
             plan={FIXED_SPRINT}
             cta="book a 15-min intro call"
             ctaVariant="clear"
-            className="left-[591px] top-[169.54px] backdrop-blur-[9.6px]"
+            className="left-[591px] top-[169.54px]"
             columnPadY="py-[48px]"
             price={
               <p className="text-center">
@@ -190,7 +191,7 @@ function PlanCard({
 } & React.HTMLAttributes<HTMLDivElement>) {
   return (
     <div
-      className={`absolute w-[555px] overflow-clip rounded-[20px] border-[1.5px] border-solid border-white/30 bg-gradient-to-b from-black/10 to-black/5 max-md:static max-md:w-full ${className ?? ""}`}
+      className={`absolute w-[555px] overflow-clip rounded-[20px] border-[1.5px] border-solid border-white/30 bg-gradient-to-b from-black/10 to-black/5 shadow-[inset_0_0_0_999px_rgba(255,255,255,0.06)] max-md:static max-md:w-full ${className ?? ""}`}
       {...rest}
     >
       <div className={`mx-auto flex w-[408px] flex-col items-center gap-[30px] max-md:w-full max-md:gap-[24px] max-md:px-6 max-md:py-[36px] ${columnPadY}`}>

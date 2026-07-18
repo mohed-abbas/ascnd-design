@@ -293,7 +293,7 @@ export default function SubscribeMedia() {
           <div
             ref={fillRef}
             aria-hidden
-            className="pointer-events-none absolute inset-0 rounded-[42.667px] border border-solid border-white/50 bg-white/10 backdrop-blur-[2.667px]"
+            className="pointer-events-none absolute inset-0 rounded-[42.667px] border border-solid border-white/50 bg-white/10"
           />
 
           {/* gradient border ring (masked so only the 3px edge paints) */}

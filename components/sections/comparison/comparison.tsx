@@ -27,9 +27,10 @@ import {
  * can't do. The featured "ascnd" column gets a highlighted panel behind the
  * grid (node 469:554) whose edges serve as its own two dividers. Card glass
  * matches the house convention
- * (see cards/card-shell.tsx): 1.5px white/30 edge, black 10→5 gradient, 2px
- * backdrop-blur — a sibling of the fixed sky layers, never an ancestor, so the
- * blur is allowed (CLAUDE.md).
+ * (see cards/card-shell.tsx): 1.5px white/30 edge, black 10→5 gradient, and
+ * the white inset veil in place of backdrop-blur (frost-swept 2026-07-18 —
+ * this panel was the page's single largest frost, 1360×601 re-rastered per
+ * scrolled frame over a sky-only backdrop; docs/backdrop-filter-sweep.md).
  */
 
 // Column-divider x-positions (Figma Line223), for the three right-hand columns
@@ -99,7 +100,7 @@ export default function Comparison() {
             the rounded corners, so nothing else needs clipping. */}
         <div
           data-comparison-card
-          className="absolute left-0 top-[211px] h-[601px] w-[1360px] rounded-[20px] border-[1.5px] border-solid border-white/30 bg-gradient-to-b from-black/10 to-black/5 backdrop-blur-[2px] max-md:hidden"
+          className="absolute left-0 top-[211px] h-[601px] w-[1360px] rounded-[20px] border-[1.5px] border-solid border-white/30 bg-gradient-to-b from-black/10 to-black/5 shadow-[inset_0_0_0_999px_rgba(255,255,255,0.06)] max-md:hidden"
         >
           {/* Featured-column highlight (469:554): a brighter panel behind the
               grid over the "ascnd" track, at full card height, wearing the
@@ -155,7 +156,7 @@ export default function Comparison() {
           {COMPARISON_ROWS.map((row) => (
             <div
               key={row.label}
-              className="rounded-[20px] border-[1.5px] border-solid border-white/30 bg-gradient-to-b from-black/10 to-black/5 p-[20px] backdrop-blur-[2px]"
+              className="rounded-[20px] border-[1.5px] border-solid border-white/30 bg-gradient-to-b from-black/10 to-black/5 p-[20px] shadow-[inset_0_0_0_999px_rgba(255,255,255,0.06)]"
             >
               <h3 className="mb-[14px] text-body-lg font-bold leading-normal text-white">
                 {row.label}

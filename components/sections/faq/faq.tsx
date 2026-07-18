@@ -21,7 +21,9 @@ import { FAQS } from "./faq-data";
  *     same italic-feel accent the other sections use.
  *   • Pill stack (526:414, gap-15px): each pill (526:415) is 61px tall when
  *     collapsed — a glass card (rounded-20, 1.5px white edge, black 10→5
- *     gradient, 2.9px backdrop-blur, matching the page's card convention). The
+ *     gradient, white inset veil in place of the Figma 2.9px backdrop-blur —
+ *     frost-swept 2026-07-18, docs/backdrop-filter-sweep.md — matching the
+ *     page's card convention). The
  *     question (526:416) sits at left-31.5px; the two-tone toggle (526:417) at
  *     the right.
  *
@@ -76,7 +78,7 @@ export default function Faq() {
             return (
               <div
                 key={faq.question}
-                className="overflow-hidden rounded-[20px] border-[1.5px] border-solid border-white/30 bg-gradient-to-b from-black/10 to-black/5 backdrop-blur-[2.9px]"
+                className="overflow-hidden rounded-[20px] border-[1.5px] border-solid border-white/30 bg-gradient-to-b from-black/10 to-black/5 shadow-[inset_0_0_0_999px_rgba(255,255,255,0.06)]"
               >
                 {/* Question row (526:415/416/417) — the 61px collapsed pill. */}
                 <button
