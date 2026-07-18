@@ -1,7 +1,7 @@
 # Canvas consolidation plan — `enhancement/restructure-canvas`
 
-**Status: Phase 0 PASSED (2026-07-18) — see results below. Phases 1–5 not
-started.** Agreed after the fps campaign; see `docs/backdrop-filter-sweep.md`
+**Status: Phases 0–1 DONE (2026-07-18) — see results inline. Phases 2–5 not
+started.** Phase 2–4 feature-by-feature reference: `docs/canvas-migration-map.md`. Agreed after the fps campaign; see `docs/backdrop-filter-sweep.md`
 and the measurement history below for how we got here. Implementation happens
 on this branch so `main` stays shippable.
 
@@ -132,6 +132,25 @@ idle 0; band scroll 117–121 rAF).
   contract, the single ticker-end advance pump (idles to zero when no view
   is dirty/visible), one ContextWatchdog, dpr/caps read from the quality
   store. Nothing visual migrates yet; site renders unchanged.
+  **RESULT (2026-07-18): DONE — `components/canvas/` + `/lab/canvas-host`
+  demo (dev-only). Verified live through the production host on the 120 Hz
+  panel: uncapped continuous view → plane at display rate (120 = ticks =
+  advances, LOCKSTEP); "heavy"-capped view alone → clean 60; demand view
+  (markDirty on scroll, cap 30) → 30.0 while scrolling, 0.0 stopped; homepage
+  → zero host canvases and the plane-canvas chunk never downloads (the three
+  pre-existing canvases are untouched until their phases migrate them).
+  Post-review fixes baked in: per-view Suspense (one loading view can no
+  longer blank its plane), host-owned in-Canvas mount burst (fires on
+  watchdog remounts too), virtual-clock delta clamp (no gap-sized animation
+  pops), session warm latch (no context teardown when a plane transits
+  count 0), and a measured accumulator fix (the modulo remainder-carry
+  double-painted inside the 1 ms tolerance window → 48 pps on a 30 cap; the
+  `max(last+budget, now−budget)` idiom is the correct one — reuse it, never
+  the modulo form). Documented follow-ups (minor): IO rebuild on children
+  identity churn, track-ref-null re-observe, multi-view pointer contention
+  (only one interactive view per plane for now), live-dpr stale frame on
+  demand-only views.**
+
 - **Phase 2 — intro/conveyor tiles → FRONT canvas.** The riskiest migrant
   (welcome choreography, loader gating, dock handoff, dpr swap, ScrollRig +
   conveyor + off-screen gate). Full intro playthrough verification at
