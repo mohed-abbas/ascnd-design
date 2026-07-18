@@ -1,7 +1,7 @@
 # Canvas consolidation plan — `enhancement/restructure-canvas`
 
-**Status: Phases 0–3 DONE (2026-07-19) — see results inline. Phase 4 next;
-Phase 5 parked.** Phase 2–4 feature-by-feature reference: `docs/canvas-migration-map.md`. Agreed after the fps campaign; see `docs/backdrop-filter-sweep.md`
+**Status: Phases 0–4 DONE (2026-07-19) — see results inline. Phase 5 parked
+until the new footer lands.** Phase 2–4 reference: `docs/canvas-migration-map.md`. Agreed after the fps campaign; see `docs/backdrop-filter-sweep.md`
 and the measurement history below for how we got here. Implementation happens
 on this branch so `main` stays shippable.
 
@@ -203,6 +203,27 @@ idle 0; band scroll 117–121 rAF).
   the display via scrollRepaintFpsCap). Re-run the full-page scroll
   baseline; welded rock-clouds must track the cliffs with no half-rate
   stagger (the original judder complaint).
+  **RESULT (2026-07-19): DONE — FLAGS.clouds=true; cloud-canvas.tsx is a
+  registration module instantiated twice (SKY→REAR, ROCK→FRONT co-resident
+  with the intro, both ACES per-view). MorphRig/watchdog/private ticker
+  deleted; the descriptor is the policy: continuous while on-screen
+  (feature-side gates — fixed placeholders defeat host IO), fpsCap 30↔
+  "scroll" flipped on a trigger-less scroll-activity ST (stays true through
+  the whole Lenis glide; 0.15s release). Weld: max-wins lifts FRONT past
+  the intro's heavy-60 to display rate on high tier while the rock view is
+  scroll-dirty. Reveal moved in-scene (material opacity + world drift),
+  idempotency-latched (review caught a visible double-reveal at the dock).
+  Host hardening from review: mode/fpsCap are runtime fields now
+  (setPaintPolicy, no emit) — descriptor routing tore down the plane IO
+  per scroll gesture (also fixed a latent unregister-on-flip reset in
+  useSharedView). Verified live (dev, stepped-tier browser): 30pps morph
+  idle per cloud plane / tier-cap while scrolling / 0 off-band; clouds
+  white (ACES), weld glued, single reveal on the welcome; full-page warm
+  scroll settles 116–120 rAF in dev. AA delta signed off (REAR/FRONT
+  antialias:false vs old true — alpha sprites don't use MSAA edges).
+  Accepted ride-along: rock clouds paint at 60 (not 30) while the hero
+  conveyor runs. PROD RE-BASELINE still owed on the next prod build.**
+
 - **Phase 5 — footer glass** joins FRONT canvas whenever the new footer
   approach lands (`FLAGS.footer`). Out of scope until then.
 
