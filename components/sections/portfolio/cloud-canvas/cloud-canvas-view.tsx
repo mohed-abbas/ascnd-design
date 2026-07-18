@@ -34,7 +34,7 @@
  */
 import { useEffect, useRef } from "react";
 import gsap from "gsap";
-import { heavyEffectFpsCap } from "@/lib/perf/quality-store";
+import { heavyEffectFpsCap, scrollRepaintFpsCap } from "@/lib/perf/quality-store";
 import { CloudCanvasEngine } from "./cloud-canvas-engine";
 import {
   cloudProjects,
@@ -171,7 +171,17 @@ export default function CloudCanvasView({
           tickerFn = (_time, deltaTime) => {
             if (!inView) return;
             accMs += deltaTime;
-            const cap = engine.isLite ? 30 : heavyEffectFpsCap();
+            // Idle auto-drift is self-animating → the 60 cap is invisible.
+            // While the user steers (drag or live fling momentum) the CURSOR
+            // is the reference frame, so ride the display on the high tier
+            // (scrollRepaintFpsCap: 0 = uncapped, 60 on stepped-down tiers) —
+            // same input-linked rule as the scroll rigs. Lite engines stay at
+            // 30 regardless: software raster is too slow either way.
+            const cap = engine.isLite
+              ? 30
+              : engine.interacting
+                ? scrollRepaintFpsCap()
+                : heavyEffectFpsCap();
             // 1ms tolerance: on a 120Hz ticker two ~8.33ms deltas sum to
             // ~16.66ms — JUST under the 16.67ms budget — so without it every
             // second paint slipped a tick and the cadence degraded to a

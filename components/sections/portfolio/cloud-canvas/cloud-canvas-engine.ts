@@ -991,6 +991,24 @@ export class CloudCanvasEngine {
 
   // ── Pointer ──────────────────────────────────────────────────────────────────
 
+  /**
+   * True while the user is actively steering the globe — mid-drag, or while
+   * the release fling still carries visible momentum. Pointer-linked motion
+   * has the CURSOR as its on-screen reference frame, so a 60fps cap IS
+   * perceptible there (unlike the ambient auto-drift, which has none). The
+   * paint cap in cloud-canvas-view reads this to ride the display during
+   * interaction and fall back to the 60 cap once the fling has decayed
+   * (releaseYaw/Pitch shrink ~0.96×/frame, so the threshold releases the
+   * uncap roughly a second after the fling visually settles).
+   */
+  get interacting(): boolean {
+    return (
+      this.dragging ||
+      Math.abs(this.releaseYaw) > 0.001 ||
+      Math.abs(this.releasePitch) > 0.001
+    );
+  }
+
   pointerDown(x: number, y: number): void {
     this.dragging = true;
     this.lastX = x;
