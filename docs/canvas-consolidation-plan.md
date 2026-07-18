@@ -1,6 +1,6 @@
 # Canvas consolidation plan — `enhancement/restructure-canvas`
 
-**Status: Phases 0–1 DONE (2026-07-18) — see results inline. Phases 2–5 not
+**Status: Phases 0–2 DONE (2026-07-18) — see results inline. Phases 3–5 not
 started.** Phase 2–4 feature-by-feature reference: `docs/canvas-migration-map.md`. Agreed after the fps campaign; see `docs/backdrop-filter-sweep.md`
 and the measurement history below for how we got here. Implementation happens
 on this branch so `main` stays shippable.
@@ -155,6 +155,24 @@ idle 0; band scroll 117–121 rAF).
   (welcome choreography, loader gating, dock handoff, dpr swap, ScrollRig +
   conveyor + off-screen gate). Full intro playthrough verification at
   `?intropos` checkpoints + the per-second live-run trace.
+  **RESULT (2026-07-18): DONE — the intro no longer owns a Canvas; one FRONT
+  view via useSharedView (telephoto camera per-view via makeDefault on the
+  portal store; the fixed wrapper is the full-viewport track). IntroFrameCap
+  deleted — the host pump paces the welcome. Paint policy: continuous/heavy
+  while welcome/conveyor animates with the hero on screen (the fixed
+  placeholder defeats the host IO gate, so hero visibility gates feature-
+  side via the [data-hero] ScrollTrigger flipping the descriptor to
+  demand/scroll). dpr-1 welcome window = plane dpr override, released on
+  every exit path (reviewer-verified leak-free). ?intropos bursts on the
+  actual timeline seek. Verified live (dev server, 120 Hz): welcome
+  60/60/61 paints/s steady; conveyor 60 on-screen / 0 hero-gone / 60 on
+  return; frozen 0.5/0.85 checkpoints visually intact, idle 0 draws.
+  Conscious change: post-handoff dpr now respects the quality tier (1.25 on
+  low instead of hard 1.5) per the plan's dpr-from-quality-store intent.
+  ?introaa degrades to a warning (antialias is context-level now —
+  plane-config.ts). GL contexts on the homepage: down from 3 to 2 + globe
+  (intro merged; testimonial rocks migrate in Phase 3).**
+
 - **Phase 3 — testimonial rocks → FRONT canvas.** Resolve the stacking ⚠
   first (rocks vs quote text overlap); port the pump/reveal/dodge; verify
   60 pps cap + hover.
