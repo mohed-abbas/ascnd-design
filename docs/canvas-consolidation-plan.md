@@ -1,7 +1,7 @@
 # Canvas consolidation plan — `enhancement/restructure-canvas`
 
-**Status: Phases 0–2 DONE (2026-07-18) — see results inline. Phases 3–5 not
-started.** Phase 2–4 feature-by-feature reference: `docs/canvas-migration-map.md`. Agreed after the fps campaign; see `docs/backdrop-filter-sweep.md`
+**Status: Phases 0–3 DONE (2026-07-19) — see results inline. Phase 4 next;
+Phase 5 parked.** Phase 2–4 feature-by-feature reference: `docs/canvas-migration-map.md`. Agreed after the fps campaign; see `docs/backdrop-filter-sweep.md`
 and the measurement history below for how we got here. Implementation happens
 on this branch so `main` stays shippable.
 
@@ -176,6 +176,27 @@ idle 0; band scroll 117–121 rAF).
 - **Phase 3 — testimonial rocks → FRONT canvas.** Resolve the stacking ⚠
   first (rocks vs quote text overlap); port the pump/reveal/dodge; verify
   60 pps cap + hover.
+  **RESULT (2026-07-19): DONE — resolved as a NEW "mid" plane (user-approved),
+  not FRONT: z 0 sits under the section's positioned z-auto rings and z-10
+  quote by CSS tree order (host mounts before {children}) with zero
+  section-local z tweaks; antialias:true on MID (single tenant) dissolves
+  the AA conflict for the rocks. The in-flow 120vw wrapper is the View
+  track (scissor + host-IO idle gate) and pointer target. Two mechanisms
+  discovered/fixed en route: (1) interactive planes must set
+  eventSource=document.documentElement — fiber attaches DOM listeners only
+  at context creation, so a root-fixed canvas can never hear events
+  targeting an in-page track; drei's event.target===track gate then
+  filters (off-track moves early-return, no raycast). (2) warm
+  gl.compileAsync must run under the VIEW's tone mapping (program cache
+  key includes it) — a bare call compiled the default-ACES variants and
+  the AgX recompile hitch returned on the scroll path. Reveal starts
+  same-tick via markDirty + a fly-in-spanning burst. Virtual-clock note:
+  rocks now resume their pose after off-screen idle instead of advancing
+  on wall time (delta clamp hides it). Verified live: reveal paints
+  mid-scroll, 58–60 pps in view / 0 off-screen, hover-dodge + quote
+  advance work through the new routing, stacking rocks < rings < quote
+  intact.**
+
 - **Phase 4 — clouds return** (`FLAGS.clouds = true`): SKY specs → REAR
   canvas view, ROCK specs → FRONT canvas view, MorphRig/ScrollAnchorRig/
   SectionRig ported to the shared pump (morph stays 30 fps; scroll rides
