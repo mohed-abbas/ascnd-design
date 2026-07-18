@@ -618,6 +618,10 @@ export default function Intro() {
     const posParam = new URLSearchParams(window.location.search).get("intropos");
     if (posParam !== null) {
       tl.progress(Math.min(1, Math.max(0, Number(posParam)))).pause();
+      // The frozen view is demand-mode on the shared canvas — tell the scene the
+      // pose just landed so it burst-paints NOW (the mount-timed bursts can be
+      // consumed before a slow compile→ready→seek chain gets here).
+      window.dispatchEvent(new Event("intro:frozen-seek"));
       return () => {
         tl.kill();
         gsap.killTweensOf(animObj);
@@ -646,12 +650,18 @@ export default function Intro() {
   if (!play || !plan) return null;
 
   return (
+    // This wrapper renders NOTHING now — the WebGL moved to the shared FRONT
+    // plane canvas (components/canvas/, z-[61]). It's the empty full-viewport
+    // PLACEHOLDER the intro's <View> tracks: it must stay exactly `fixed inset-0`
+    // or intro.tsx's px→world mapping (wpp = 8.284/innerHeight, above) desyncs
+    // from the rendered scene. Kept pointer-events-none/aria-hidden as before.
     <div
       ref={wrapperRef}
       aria-hidden
       className="pointer-events-none fixed inset-0 z-[60]"
     >
       <IntroScene
+        track={wrapperRef}
         anim={anim}
         rocks={plan.rocks}
         rockEntry={rockEntries}

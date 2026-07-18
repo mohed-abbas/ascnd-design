@@ -25,9 +25,15 @@ import { ToneMapping } from "./tone-mapping";
 const DPR_CAP = 1.5;
 
 // Neutral shared camera (matches the Phase-0 spike, which rendered both the MTM
-// glass and the drei clouds under it). Per-view cameras are a Phase-2+ extension
-// to the descriptor if a migrant needs its own framing (drei <View> supports a
-// `camera` prop); not needed for Phase 1 or the demo.
+// glass and the drei clouds under it). This is the ROOT canvas camera; each drei
+// <View> renders through its OWN portal-scoped default camera, which starts as a
+// clone of this. A migrant that needs its own framing (Phase 2's intro telephoto:
+// z=40, fov 11.82) renders a `<PerspectiveCamera makeDefault>` INSIDE its view
+// children — makeDefault's set() runs on the portal store, so it swaps that
+// view's camera only, never this root one (verified against drei
+// core/PerspectiveCamera.js + web/View.js). No per-view `camera` prop on the
+// descriptor is needed (drei <View> ignores one anyway — it forwards only
+// events + size to createPortal).
 const CAMERA = { position: [0, 0, 8] as [number, number, number], fov: 45, near: 0.1, far: 100 };
 
 /**
