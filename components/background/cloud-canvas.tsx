@@ -71,8 +71,8 @@ import { CROSSFADE, PALETTES } from "@/lib/theme/palette";
 const CLOUD = {
   opacity: 0.8,
   fade: 10,
-  growth: 4,
-  speed: 0.25,
+  growth: 2,
+  speed: 0.1,
   color: "white",
 } as const;
 // Max cloud SEGMENTS rendered per <Clouds> batch. drei draws

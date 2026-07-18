@@ -46,10 +46,10 @@ export default function LenisProvider({
   // nothing scrolls. Memoising keeps one instance.
   //
   // `autoRaf: false` hands the rAF to GSAP's ticker (see effect below).
-  // `duration: 1.8` lengthens the scroll-smoothing time constant (Lenis default
+  // `duration: 3` lengthens the scroll-smoothing time constant (Lenis default
   // is 1.2) for a heavier, more gliding feel — paired with Lenis' default
   // easeOutExpo curve, which decelerates long and soft at this duration.
-  const options = useMemo(() => ({ autoRaf: false, duration: 1.8 }), []);
+  const options = useMemo(() => ({ autoRaf: false, duration: 3 }), []);
 
   useEffect(() => {
     gsap.registerPlugin(ScrollTrigger);
