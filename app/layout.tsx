@@ -5,6 +5,7 @@ import "./globals.css";
 import Background from "@/components/background/background";
 import CloudLayer from "@/components/background/cloud-layer";
 import Cursor from "@/components/cursor/cursor";
+import { FLAGS } from "@/lib/flags";
 import LenisProvider from "@/components/providers/lenis-provider";
 import QualityController from "@/components/providers/quality-controller";
 import ThemeDriver from "@/components/providers/theme-driver";
@@ -76,13 +77,17 @@ export default function RootLayout({
         {/* The volumetric clouds' sprite (cloud-canvas.tsx <Clouds texture>).
             Its ONLY consumer is THREE's ImageLoader, whose default is
             crossOrigin="anonymous" (a CORS image request) — so the preload
-            must say so too, or it never matches (audit H2). */}
-        <link
-          rel="preload"
-          href="/textures/cloud-puff.png"
-          as="image"
-          crossOrigin="anonymous"
-        />
+            must say so too, or it never matches (audit H2). Gated with the
+            cloud layer itself (lib/flags.ts) — an unconsumed preload is a
+            wasted download + console warning. */}
+        {FLAGS.clouds && (
+          <link
+            rel="preload"
+            href="/textures/cloud-puff.png"
+            as="image"
+            crossOrigin="anonymous"
+          />
+        )}
         {/* Always open at the hero on a reload. The browser's default
             `scrollRestoration: "auto"` restores the previous scroll offset on
             refresh, which (a) drops the visitor mid-page instead of at the top
@@ -134,9 +139,11 @@ export default function RootLayout({
           {/* Two independent fixed layers at the root: the sky backdrop
               (-z-20) and the volumetric clouds (-z-10), with page content
               stacking above both. Both must stay at the root — a blurred
-              ancestor would break their `position: fixed`. */}
+              ancestor would break their `position: fixed`. The cloud layer is
+              flag-benched (lib/flags.ts): flipped off, neither cloud canvas
+              mounts and no cloud chunk/texture is ever fetched. */}
           <Background />
-          <CloudLayer />
+          {FLAGS.clouds && <CloudLayer />}
           {children}
           {/* Custom cursor — last child so it paints on top (its glass lens
               samples everything behind it), and a sibling of the fixed sky

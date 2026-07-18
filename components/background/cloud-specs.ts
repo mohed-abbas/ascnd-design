@@ -205,16 +205,16 @@ export const SKY_CLOUDS: CloudSpec[] = [
   // below rest — the `ndc` rest is therefore set HIGH (above the visible target)
   // to compensate, and the cloud settles into view at the page bottom without ever
   // touching rest. Shrinking `travel` re-parks it on-screen — don't.
-  {
-    key: "footer-bl-behind",
-    ndc: [-0.7, -0.24],
-    dist: 24,
-    seed: 11,
-    bounds: [5, 1.6, 1],
-    volume: 6,
-    section: { trigger: "[data-footer]", travel: 0.7 },
-    perspectiveScroll: false,
-  },
+  // {
+  //   key: "footer-bl-behind",
+  //   ndc: [-0.7, -0.24],
+  //   dist: 24,
+  //   seed: 11,
+  //   bounds: [5, 1.6, 1],
+  //   volume: 6,
+  //   section: { trigger: "[data-footer]", travel: 0.7 },
+  //   perspectiveScroll: false,
+  // },
 ];
 
 // Rock-base banks — a WIDE, SHALLOW strip that just skirts the foot of each
@@ -231,14 +231,14 @@ export const ROCK_CLOUDS: CloudSpec[] = [
   // the counterpart to footer-bl-behind. Wide + shallow bounds = a thin band, not
   // a puff. Section-bound to the footer; small `travel` for the same page-end
   // reason as its sibling (see footer-bl-behind in SKY_CLOUDS).
-  {
-    key: "footer-br-front",
-    ndc: [0.8, -0.8],
-    dist: 22,
-    seed: 7,
-    bounds: [3.5, 0.4, 1],
-    volume: 4,
-    section: { trigger: "[data-footer]", travel: 0.35 },
-    perspectiveScroll: false,
-  },
+  // {
+  //   key: "footer-br-front",
+  //   ndc: [0.8, -0.8],
+  //   dist: 22,
+  //   seed: 7,
+  //   bounds: [3.5, 0.4, 1],
+  //   volume: 4,
+  //   section: { trigger: "[data-footer]", travel: 0.35 },
+  //   perspectiveScroll: false,
+  // },
 ];
