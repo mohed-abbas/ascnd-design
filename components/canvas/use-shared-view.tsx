@@ -6,6 +6,7 @@ import type * as THREE from "three";
 import {
   markDirty as registryMarkDirty,
   requestBurst as registryRequestBurst,
+  setPaintPolicy,
   unregisterView,
   upsertView,
   type FpsCap,
@@ -72,9 +73,24 @@ export function useSharedView(opts: SharedViewOptions): SharedViewControls {
   // Stable per-instance id (survives re-renders; unique across instances).
   const id = useId();
 
-  // Register on mount / update the descriptor on any change / unregister on
-  // unmount. upsertView preserves runtime state (visible/dirty/burst) across an
-  // update, so a children change never resets an in-flight burst.
+  // Paint policy is a RUNTIME field, not a structural one: the pump reads
+  // mode/fpsCap live each tick, so flipping them must not re-register the view
+  // (an upsert emit rebuilds the plane snapshot → PlaneCanvas re-render → IO
+  // teardown — per-scroll-gesture churn, caught in the Phase-4 review). This
+  // effect is declared FIRST so on mount the ref is seeded before the
+  // structural effect below creates the entry; on later flips setPaintPolicy
+  // mutates the live entry with zero React involvement.
+  const policyRef = useRef({ mode, fpsCap });
+  useEffect(() => {
+    policyRef.current = { mode, fpsCap };
+    setPaintPolicy(plane, id, mode, fpsCap);
+  }, [plane, id, mode, fpsCap]);
+
+  // Register on mount / update the descriptor on STRUCTURAL change / unregister
+  // on unmount. upsertView preserves runtime state (visible/dirty/burst) across
+  // an update, so a children change never resets an in-flight burst. Note the
+  // cleanup ordering: a structural dep change unregisters then re-creates the
+  // entry — features keep `children` memoized so this is mount/unmount-rare.
   useEffect(() => {
     upsertView(plane, id, {
       track,
@@ -82,11 +98,10 @@ export function useSharedView(opts: SharedViewOptions): SharedViewControls {
       toneMapping,
       toneMappingExposure,
       children,
-      mode,
-      fpsCap,
+      ...policyRef.current,
     });
     return () => unregisterView(plane, id);
-  }, [plane, id, track, index, toneMapping, toneMappingExposure, children, mode, fpsCap]);
+  }, [plane, id, track, index, toneMapping, toneMappingExposure, children]);
 
   const markDirty = useCallback(() => registryMarkDirty(plane, id), [plane, id]);
   const requestBurst = useCallback(

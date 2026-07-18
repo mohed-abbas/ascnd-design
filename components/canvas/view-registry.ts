@@ -189,6 +189,26 @@ export function setVisible(plane: PlaneName, id: string, visible: boolean) {
   if (e) e.visible = visible;
 }
 
+/** Update a view's paint policy IN PLACE — no emit, no snapshot rebuild, no
+ *  React re-render. mode/fpsCap are read live by the pump each tick, so they
+ *  never needed to be React-visible; routing them through upsertView made every
+ *  scroll start/stop tear down the plane's IntersectionObserver and reconcile
+ *  the <View> list (the exact scroll-path churn this architecture removes).
+ *  useSharedView calls this from its policy effect; features just flip their
+ *  descriptor as before. */
+export function setPaintPolicy(
+  plane: PlaneName,
+  id: string,
+  mode: PaintMode,
+  fpsCap: FpsCap,
+) {
+  const e = planes[plane].entries.get(id);
+  if (e) {
+    e.mode = mode;
+    e.fpsCap = fpsCap;
+  }
+}
+
 /** Burst every view on a plane (context restore / tab re-show). */
 export function burstAll(plane: PlaneName, n: number) {
   for (const e of planes[plane].entries.values()) e.burst = Math.max(e.burst, n);
