@@ -1,8 +1,9 @@
 # Canvas consolidation plan — `enhancement/restructure-canvas`
 
-**Status: PLANNED (2026-07-18). Not started.** Agreed after the fps campaign;
-see `docs/backdrop-filter-sweep.md` and the measurement history below for how
-we got here. Implementation happens on this branch so `main` stays shippable.
+**Status: Phase 0 PASSED (2026-07-18) — see results below. Phases 1–5 not
+started.** Agreed after the fps campaign; see `docs/backdrop-filter-sweep.md`
+and the measurement history below for how we got here. Implementation happens
+on this branch so `main` stays shippable.
 
 ## Decision
 
@@ -93,6 +94,39 @@ idle 0; band scroll 117–121 rAF).
   and a drei `<Clouds>` (ACES). Prove: per-view tone mapping, MTM FBO
   isolation, ticker-end `advance()` lockstep. If any fails with no
   workaround → stop, document, revisit.
+  **RESULT (2026-07-18): ALL THREE PROVEN — spike lives at
+  `app/lab/canvas-spike/` (dev-only route, 404s in prod via the lab gate).
+  Measured on the 120Hz MacBook, dev server:**
+  - **Lockstep:** ticker ticks/s = advance()/s = paint bursts/s = 120.1 with
+    one view on screen, and still 120.1 with BOTH views sharing the frame.
+    No half-rate. Idle (both views scrolled off): advance/draws/bursts all 0
+    while the ticker holds 120 — the gate idles to zero by not calling
+    `advance()`.
+  - **Per-view tone mapping:** glass view renders under NoToneMapping (0),
+    clouds under ACESFilmic (4), same renderer, same frame — identical
+    emissive spheres visibly clip (glass) vs roll off (clouds). Mechanism:
+    a setter `useFrame` at priority `index−1` inside each View (all portal
+    subscribers share the root's one priority-sorted list). Safe because
+    three r183 keys shader programs on toneMapping PER MATERIAL — a material
+    that only ever renders under one tone mapping compiles once. Load-bearing
+    rule: **never share a material instance across views with different tone
+    mappings.**
+  - **MTM FBO isolation:** `state.scene` inside a View's portal resolves to
+    the view's own virtual scene, so MTM's transmission FBO captures only its
+    view (verified: saturated red probe in the clouds scene never refracts
+    through the glass; the glass's own orange backdrop does).
+  - **Two findings the plan must carry into Phase 1:**
+    1. `invalidate()` is a NO-OP under `frameloop="never"` (fiber early-
+       returns). Every migrated rig must be rewired to a dirty-flag →
+       ticker-end `advance()` pump; `advance()` renders unconditionally, so
+       idle-to-zero means *not calling it*.
+    2. drei View sets `gl.autoClear=false` and never clears per frame → a
+       transparent multi-view canvas ghosts. The shared host needs the
+       spike's leading full-canvas clear (`useFrame` at the lowest positive
+       priority: scissor test off, clearAlpha 0, clear color+depth).
+    Also: `advance(t)` takes SECONDS (`gsap.ticker.time`), not the ms form
+    Lenis.raf uses — ms silently corrupts MTM time and cloud morph/rotation.
+
 - **Phase 1 — shared canvas host:** `components/canvas/` — `SharedCanvas`
   (front + rear instances mounted in layout), a `useView` registration
   contract, the single ticker-end advance pump (idles to zero when no view
