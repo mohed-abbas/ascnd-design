@@ -172,7 +172,13 @@ export default function CloudCanvasView({
             if (!inView) return;
             accMs += deltaTime;
             const cap = engine.isLite ? 30 : heavyEffectFpsCap();
-            if (cap > 0 && accMs < 1000 / cap) return;
+            // 1ms tolerance: on a 120Hz ticker two ~8.33ms deltas sum to
+            // ~16.66ms — JUST under the 16.67ms budget — so without it every
+            // second paint slipped a tick and the cadence degraded to a
+            // 16.7/25ms mix: a measured ~44fps presented with visible beat
+            // (the "portfolio stuck at 45fps" report, 2026-07-18). With the
+            // tolerance the cap lands a stable every-2nd-tick 60.
+            if (cap > 0 && accMs < 1000 / cap - 1) return;
             engine.tick(accMs / 1000);
             accMs = 0;
           };

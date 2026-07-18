@@ -12,6 +12,7 @@ import {
   onTestimonialsRevealReset,
 } from "./testimonials-reveal";
 import { requestQuoteAdvance } from "./testimonials-quote-advance";
+import { heavyEffectFpsCap } from "@/lib/perf/quality-store";
 
 /**
  * The four testimonials rocks as REAL 3D meshes — the "floating 3D rock" the
@@ -387,8 +388,25 @@ function Scene({ paused }: { paused: boolean }) {
   // IO callback) revealed on time. So the gate turns the pump on synchronously
   // (renders mid-scroll, in lockstep with the rings); `paused` only governs
   // idling to zero once the reveal is over.
+  // Paint cap (heavy-effect contract #3): the orbit/tumble/dodge is
+  // self-animating — no on-screen reference frame — so painting past
+  // heavyEffectFpsCap() (60 on fast panels) is invisible. Uncapped, this
+  // advanced at the full 120Hz ticker: a 2721×1386 GLB scene painting ~110×/s
+  // for a slow drift (measured 2026-07-18; the testimonials "never reaches
+  // 120" report — the GPU was busy doubling frames nobody could tell apart).
+  // Same remainder-carry as IntroFrameCap so the 60 lands clean, not ~50; the
+  // clamp stops a pause from banking a catch-up burst. Updaters read absolute
+  // time, so skipped ticks are safe.
+  const lastPaintMs = useRef(-Infinity);
   const pump = useCallback(
     (t: number) => {
+      const cap = heavyEffectFpsCap();
+      if (cap > 0) {
+        const nowMs = t * 1000;
+        const budget = 1000 / cap;
+        if (nowMs - lastPaintMs.current < budget - 1) return;
+        lastPaintMs.current = Math.max(lastPaintMs.current + budget, nowMs - budget);
+      }
       for (const fn of updaters.current) fn(t);
       advance(t * 1000);
     },
