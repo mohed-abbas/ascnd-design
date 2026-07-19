@@ -151,7 +151,7 @@ const DEFAULT_SCROLL_FACTOR = 1;
 // the original MorphRig cadence and dropped sections to ~97-110 rAF; 20 read
 // visually identical and recovered most of it. Values above 20 spend frame
 // budget fast — at 120 every tick is a full-plane cloud repaint.
-const MORPH_FPS = 120;
+const MORPH_FPS = 20;
 
 // How long after the last scroll update to treat the field as "scrolling" — the
 // window over which the view holds fpsCap "scroll" (display rate) so the weld
