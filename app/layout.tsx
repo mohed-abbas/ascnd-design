@@ -4,6 +4,7 @@ import localFont from "next/font/local";
 import "./globals.css";
 import Background from "@/components/background/background";
 import CloudLayer from "@/components/background/cloud-layer";
+import SharedCanvasHost from "@/components/canvas/shared-canvas-host";
 import Cursor from "@/components/cursor/cursor";
 import { FLAGS } from "@/lib/flags";
 import LenisProvider from "@/components/providers/lenis-provider";
@@ -144,6 +145,15 @@ export default function RootLayout({
               mounts and no cloud chunk/texture is ever fetched. */}
           <Background />
           {FLAGS.clouds && <CloudLayer />}
+          {/* Shared-canvas host (docs/canvas-consolidation-plan.md Phase 1): two
+              fixed effect planes (FRONT z-61 / REAR -z-10) that mount a <Canvas>
+              only while a feature has registered a view via useSharedView. A
+              sibling of the fixed sky layers (never an ancestor with a
+              filter/backdrop-filter), and inside LenisProvider so its ticker-end
+              advance pump rides the one shared GSAP ticker. With no views
+              registered — every route but the /lab demo today — it renders
+              nothing and creates no GL context. */}
+          <SharedCanvasHost />
           {children}
           {/* Custom cursor — last child so it paints on top (its glass lens
               samples everything behind it), and a sibling of the fixed sky

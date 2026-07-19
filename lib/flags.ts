@@ -12,11 +12,13 @@
  */
 export const FLAGS = {
   /**
-   * The fixed cloud layers (volumetric WebGL canvases on desktop, static DOM
-   * sprites on mobile/reduced-motion) and the cloud-sprite preload in
-   * layout.tsx. Benched 2026-07-18 during the fps campaign.
+   * The fixed cloud layers (volumetric WebGL views on the shared REAR/FRONT
+   * canvas planes on desktop, static DOM sprites on mobile/reduced-motion) and
+   * the cloud-sprite preload in layout.tsx. Benched 2026-07-18 during the fps
+   * campaign; returned 2026-07-19 as shared-canvas views (Phase 4,
+   * docs/canvas-consolidation-plan.md).
    */
-  clouds: false,
+  clouds: true,
   /**
    * The footer (mountain range + liquid-glass wordmark). Benched pending a
    * different approach.

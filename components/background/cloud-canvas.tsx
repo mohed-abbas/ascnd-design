@@ -1,108 +1,137 @@
 "use client";
 
-import { Canvas, useThree } from "@react-three/fiber";
-import { Cloud, Clouds } from "@react-three/drei";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useThree } from "@react-three/fiber";
+import { Cloud, Clouds, PerspectiveCamera } from "@react-three/drei";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+  type RefObject,
+} from "react";
 import * as THREE from "three";
 import type { Group } from "three";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import type { CloudSpec } from "./cloud-specs";
-import { useQuality } from "@/lib/perf/use-quality";
 import { getQualityConfig } from "@/lib/perf/quality-store";
-import { makeCappedInvalidate } from "@/lib/perf/capped-invalidate";
 import { useMode } from "@/lib/theme/use-mode";
 import { getMode } from "@/lib/theme/mode-store";
 import { CROSSFADE, PALETTES } from "@/lib/theme/palette";
+import {
+  introWillPlay,
+  INTRO_REVEAL_EVENT,
+  INTRO_START_EVENT,
+} from "@/components/sections/intro/intro-state";
+import {
+  useSharedView,
+  type SharedViewControls,
+} from "@/components/canvas/use-shared-view";
+import {
+  setPlaneDprOverride,
+  type PlaneName,
+} from "@/components/canvas/view-registry";
 
 /**
  * Volumetric cloud field (Three.js / R3F + drei <Clouds>).
  *
  * This is the /lab/clouds reference cloud ported into the global background:
  * lit drei <Cloud>s on a <MeshLambertMaterial>, framed from a 3/4 above-front
- * camera. Lighting is a white directional key + ambient (CLOUD_THEME) — chosen
- * over the lab's positioned spotlights so every cloud is lit identically
+ * camera. Lighting is a white directional key + ambient (PALETTES[mode].cloud) —
+ * chosen over the lab's positioned spotlights so every cloud is lit identically
  * wherever it's placed (uniformly white, no position tint) and so theme modes
  * (evening/night) drop in as light-colour swaps. The look was tuned in
  * /lab/clouds and baked below (no leva here). Each hero cloud is anchored to a
- * screen spot via NDC (top-right corner + the two rock bases) by
- * <CloudPlacement>. More clouds/sections to come — this is the hero set.
+ * screen spot via NDC (top-right corner + the two rock bases) by <CloudPlacement>.
  *
- * Render strategy (see docs/cloud-rendering-research.md §9) is unchanged from
- * the previous cloud and deliberately diverges from the lab:
- * - frameloop="demand": no free-running rAF. We paint on change — scroll
- *   parallax, the first mount frames (drei builds geometry + loads the texture
- *   over several frames), tab re-show, WebGL context restore — plus a THROTTLED
- *   ~30fps pump (<MorphRig>) that drives the clouds' slow living morph without a
- *   second rAF (it rides GSAP's ticker, which the browser parks on hidden tabs).
- *   (The lab auto-rotates on a continuous loop; here the field instead translates
- *   vertically with page scroll via <ScrollAnchorRig>, so clouds move with the
- *   document rather than staying pinned to the viewport.)
- * - Transparent canvas (alpha): the cloud composites over the DOM sky — the
- *   flat #62abff fill + grain stay in <Background/>. (The lab paints a drei
- *   <Sky>; we keep the confirmed flat sky, so no <Sky> here.)
- * - Self-hosted sprite texture (/textures/cloud-puff.png) — a LOCAL COPY of
- *   drei's detailed cloud sprite (the one the lab gets from its CDN default),
- *   not hit at runtime (reliability/offline/privacy mandate, §9). It must be a
- *   detailed painted puff: the old /textures/cloud.png was a featureless radial
- *   blob, which is why the cloud rendered as a washed-out blur with no form.
- * - antialias ON and dpr up to 2 (was off/1.5) so the sprite detail isn't
- *   softened on retina — this matches the lab's crisp render. Single batched
- *   <Clouds> draw, no shadows; still desktop-only (gated ≤768px), so affordable.
+ * RENDERING HOST (Phase 4, docs/canvas-consolidation-plan.md): this file no longer
+ * owns a <Canvas>. `CloudView` (default export) registers ONE view on a shared
+ * plane via useSharedView, passing the cloud scene as that view's `children`.
+ * cloud-layer.tsx instantiates it TWICE — SKY_CLOUDS on the REAR plane
+ * (components/canvas/, z -10, behind content) and ROCK_CLOUDS on the FRONT plane
+ * (z 61, over the cliffs). The host wraps each in a drei <View> scissored to its
+ * fixed inset-0 `track` div, sets ACESFilmicToneMapping for the view at priority
+ * index-1, and paints it from the single ticker-end advance pump — NO private
+ * frameloop, no invalidate(), no gsap.ticker.add here.
+ *
+ * Paint policy (see the default export). The clouds' fixed inset-0 placeholder
+ * ALWAYS intersects the viewport, so the host IntersectionObserver can't idle
+ * them — visibility gating is feature-side (`onScreen`, from the field pumpUntilVh
+ * gate + the section activeClouds set). While on screen the view is CONTINUOUS at
+ * 30 fps (the slow living billow; morph advances only on a paint, so 30 fps of
+ * paints = the old MorphRig cadence with no private ticker). While SCROLLING it
+ * flips to fpsCap "scroll" (uncapped on high) so the field rides the display —
+ * this is the weld: ROCK_CLOUDS track the cliff feet with no half-rate stagger.
+ * Off screen it idles to DEMAND (nothing dirties it → zero paints).
+ *
+ * Look constants preserved from the standalone canvas:
+ * - Self-hosted sprite texture (/textures/cloud-puff.png) — a LOCAL COPY of drei's
+ *   detailed cloud sprite (never hits the CDN at runtime; reliability/offline/
+ *   privacy mandate, docs/cloud-rendering-research.md §9). It must be a detailed
+ *   painted puff: the old /textures/cloud.png was a featureless radial blob.
  * - frustumCulled={false} on <Clouds>: the internal InstancedMesh has a stale
- *   bounding sphere under parallax, which would cull the whole batch and make
- *   the cloud vanish on scroll. One batched mesh, so always-drawing is cheap.
- * - Tone mapping is left at R3F's default (ACES), matching the lab — the bright
- *   key light carries the white, so the old NoToneMapping override (needed by
- *   the previous unlit MeshBasicMaterial path) is gone.
+ *   bounding sphere under parallax, which would cull the whole batch and make the
+ *   cloud vanish on scroll. One batched mesh, so always-drawing is cheap.
+ * - Tone mapping is ACESFilmic (R3F's default; declared on the descriptor so the
+ *   per-view setter restores it before the cloud renders — on FRONT it alternates
+ *   with the intro's NoToneMapping). The bright key light carries the white.
+ * - dpr is a PLANE-level ceiling now ([1, cloudDprMax] live in plane-canvas.tsx),
+ *   NOT set here; only `cloudSegments` stays a per-feature mount snapshot below.
  *
- * Context-loss resilience: we rely on THREE.WebGLRenderer's BUILT-IN
- * webglcontextlost/restored handling — no manual preventDefault() (a documented
- * anti-pattern that leaks across Fast Refresh). <ContextWatchdog> only repaints
- * on restore and remounts the <Canvas> if a real driver reset never restores.
+ * Context-loss resilience is the host's ContextWatchdog (one per plane); the
+ * clouds' own watchdog + canvas-remount key are gone.
  */
 
 // Shared cloud look (tuned in /lab/clouds; the dev leva panel is gone). Size,
 // seed and placement are per-cloud in the specs. `speed` is small + non-zero so
-// the puffs slowly morph (lively, not churning); <MorphRig> pumps the demand
-// loop at ~30fps so that morph actually advances. To re-tune the look, play in
-// /lab/clouds. `segments` (the fill-rate knob) is tiered — see cloudSegments
-// in lib/perf/tiers.ts, snapshotted at mount in <CloudCanvas>.
+// the puffs slowly morph (lively, not churning); the CONTINUOUS-30 paint policy
+// (default export) advances that morph at ~30 fps. `segments` (the fill-rate
+// knob) is tiered — see cloudSegments in lib/perf/tiers.ts, snapshotted at mount.
+// Master switch for the living billow. false = fully STATIC cloud shapes:
+// drei scales BOTH the morph phase (sin(t·density·speed)) and each segment's
+// rotationFactor by `speed` (node_modules/@react-three/drei/core/Cloud.js:185),
+// so speed 0 freezes shape and rotation alike — the site's original static
+// look. The paint policy below follows it: with the morph off the view never
+// runs continuous, so still clouds cost ZERO paints (scroll/theme/reveal
+// repaints still work via markDirty — weld, parallax and retint unaffected).
+// Flip to true to bring the billow back at MORPH_FPS.
+const MORPH_CLOUDS = false;
+
+// (speed lives on the <Cloud> prop, derived from the toggle + ?morphfps hook
+// inside CloudView — see cloudSpeed there.)
 const CLOUD = {
   opacity: 0.8,
   fade: 10,
   growth: 2,
-  speed: 0.1,
   color: "white",
 } as const;
 // Max cloud SEGMENTS rendered per <Clouds> batch. drei draws
 // count = min(limit, range, totalSegments) sprites, where each <Cloud> expands
 // into `segments` billboards (cloudSegments: 20 on the high tier). So this is a
 // hard ceiling on the CLOUD COUNT: range/segments = 400/20 = 20 high-tier clouds
-// per canvas. It was 100 (= only 5 high-tier clouds — a 6th silently dropped its
-// segments). Kept equal to `limit` below so the buffer, not this, is the ceiling.
-// Raising it is free until the segments actually exist — cost tracks the clouds
-// you place (on-screen overdraw), not this cap. Bump `limit` too if you exceed 20.
+// per canvas. Kept equal to `limit` below so the buffer, not this, is the ceiling.
 const RANGE = 400;
 
 // Cloud placements (NDC/dist/size) live in cloud-specs.ts — see CloudSpec.
 
-// Baked camera — a 3/4 above-front view; the angle plus the sprite's own
-// painted shading is what makes the billboards read as dimensional.
+// Baked camera — a 3/4 above-front view; the angle plus the sprite's own painted
+// shading is what makes the billboards read as dimensional. Rendered as a
+// per-view <PerspectiveCamera makeDefault> so the shared host's neutral camera is
+// untouched; <CameraRig> aims it at the origin (the old onCreated lookAt).
 const CAMERA = { position: [0, 11, 18] as [number, number, number], fov: 50 };
 
 // Cloud lighting is position-INDEPENDENT (only ambient + directional, no spot
 // lights) so a cloud is lit identically wherever it sits — which is exactly what
 // makes theming a clean colour swap. The per-mode ambient/key colours+intensities
-// now live in lib/theme/palette.ts (PALETTES[mode].cloud); <ThemeRig> tweens the
-// two lights when the mode changes, in lockstep with the DOM sky (same CROSSFADE).
-// The key light's DIRECTION is mode-invariant, so it stays here (it's a direction —
-// light → origin — not a place, so there's no distance falloff).
+// live in lib/theme/palette.ts (PALETTES[mode].cloud); <ThemeRig> tweens the two
+// lights when the mode changes, in lockstep with the DOM sky (same CROSSFADE).
+// The key light's DIRECTION is mode-invariant, so it stays here.
 const KEY_LIGHT_POSITION = [0, 20, 12] as [number, number, number];
 
-// Flip to false to REVERT to always-white clouds (day lighting in every mode):
-// <ThemeRig> won't mount and the lights initialise to the day palette, so the sky
-// gradient still changes but the clouds stop retinting. See palette.ts.
+// Flip to false to REVERT to always-white clouds (day lighting in every mode).
 const RETINT_CLOUDS = true;
 
 const REDUCE_MOTION = "(prefers-reduced-motion: reduce)";
@@ -112,19 +141,28 @@ const REDUCE_MOTION = "(prefers-reduced-motion: reduce)";
 // them. Clouds at other depths get a subtle parallax, which is fine.
 const REF_DIST = 22;
 
-// Scroll parallax damping: how far the cloud field travels per unit of page
-// scroll. 1 = locked 1:1 to the page (welded to the rocks); < 1 = the clouds
-// drift slower than the content for a calmer, more background-like motion. The
-// SAME factor scales the anchorVh offset in <CloudPlacement>, so each section's
-// clouds still arrive at their rest spot exactly when its scroll is reached —
-// only the speed of travel changes, not where they settle.
-//
-// This is PER-LAYER (a prop, not a constant): the FRONT rock-base clouds MUST
-// stay at 1.0 — they're glued to the cliff feet, which are page content scrolling
-// 1:1, so any value < 1 makes them slide off the rocks. Only the distant SKY
-// clouds are damped (slower-than-page parallax reads as depth, and is where
-// "calmer scroll motion" actually belongs). cloud-layer.tsx sets each.
+// Scroll parallax damping (a prop): 1 = welded to the page (rock-base clouds MUST
+// stay 1.0 — glued to the cliff feet, which scroll 1:1); < 1 = slower, calmer
+// background drift. cloud-layer.tsx sets each layer's value.
 const DEFAULT_SCROLL_FACTOR = 1;
+
+// Billow cadence WHEN MORPH_CLOUDS IS ON — dormant while the morph is off.
+// Perf reference (measured 2026-07-19 on the drop-prone dev profile): 30 was
+// the original MorphRig cadence and dropped sections to ~97-110 rAF; 20 read
+// visually identical and recovered most of it. Values above 20 spend frame
+// budget fast — at 120 every tick is a full-plane cloud repaint.
+const MORPH_FPS = 20;
+
+// How long after the last scroll update to treat the field as "scrolling" — the
+// window over which the view holds fpsCap "scroll" (display rate) so the weld
+// doesn't stagger, before dropping back to the 30 fps morph cadence.
+const SCROLL_IDLE_S = 0.15;
+
+// Reveal fade/drift (mirrors the old CSS wrapper reveal, now in-scene because the
+// clouds render on the shared plane, not inside the DOM wrapper): ~matches the
+// rocks' 1.1s drift so they settle together, from 14px up + transparent.
+const REVEAL_DUR = 1.1;
+const REVEAL_DRIFT_PX = 14;
 
 /** NDC (z=0.5) → world point walked `dist` along the camera ray. */
 function placeOnRay(
@@ -145,6 +183,8 @@ const _vBot = new THREE.Vector3();
  * World-Y span of the full viewport at REF_DIST — the conversion factor between
  * scroll pixels and cloud world translation. One viewport of scroll moves the
  * field by exactly this much, so a cloud at REF_DIST tracks the page 1:1.
+ * Aspect-independent (unprojects NDC x=0), so it's stable under the per-view
+ * <View> camera whose horizontal aspect drei forces to the track rect each frame.
  */
 function viewportWorldHeight(camera: THREE.Camera) {
   placeOnRay(camera, 0, 1, REF_DIST, _vTop);
@@ -156,9 +196,7 @@ function viewportWorldHeight(camera: THREE.Camera) {
  * Full world-space length of the viewport's vertical edge at REF_DIST — the
  * scroll→world factor for FLAT (perspective-off) clouds. Both edge points sit
  * exactly REF_DIST from the camera, so translating a cloud along the camera-up
- * axis between them moves it up the screen at CONSTANT distance-to-camera (no
- * swell) — unlike viewportWorldHeight()'s world-Y span, which the ~31° tilt
- * turns into a depth (size) change.
+ * axis between them moves it up the screen at CONSTANT distance-to-camera.
  */
 function viewportUpSpan(camera: THREE.Camera) {
   placeOnRay(camera, 0, 1, REF_DIST, _vTop);
@@ -169,48 +207,76 @@ function viewportUpSpan(camera: THREE.Camera) {
 /**
  * The camera's up-axis in world space (matrixWorld column 1). This is the FLAT
  * scroll axis: perpendicular to the view direction, so travelling along it is
- * pure screen-vertical motion with no depth (size) change. The camera is static,
- * so this is constant — computed once per rig/placement, never per frame.
+ * pure screen-vertical motion with no depth (size) change.
  */
 function cameraUp(camera: THREE.Camera) {
   return new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 1).normalize();
 }
 
+/** The shared cloud material the drei <Clouds> instances — traversed for the
+ *  reveal fade (diffuseColor.a * vOpacity, so material.opacity scales all). */
+function findCloudMaterial(root: THREE.Object3D | null): THREE.Material | null {
+  if (!root) return null;
+  let mat: THREE.Material | null = null;
+  root.traverse((o) => {
+    const m = o as THREE.InstancedMesh;
+    if (!mat && m.isInstancedMesh && m.material)
+      mat = m.material as THREE.Material;
+  });
+  return mat;
+}
+
+/**
+ * Per-view perspective camera. drei's <View> renders each portal with its
+ * portal-scoped default camera; <PerspectiveCamera makeDefault> swaps THAT one
+ * (not the host's root camera). <CameraRig> then aims it at the origin — the old
+ * onCreated lookAt — and sets its aspect from the (full-viewport) track size so
+ * the placement math is exact before the rigs' passive effects read it (View
+ * re-forces the same aspect each frame). Layout effect → runs before the rigs.
+ */
+function CameraRig() {
+  const get = useThree((s) => s.get);
+  const width = useThree((s) => s.size.width);
+  const height = useThree((s) => s.size.height);
+  useLayoutEffect(() => {
+    const { camera } = get();
+    const persp = camera as THREE.PerspectiveCamera;
+    if (persp.isPerspectiveCamera && height > 0) persp.aspect = width / height;
+    camera.lookAt(0, 0, 0);
+    camera.updateProjectionMatrix();
+    camera.updateMatrixWorld();
+  }, [get, width, height]);
+  return null;
+}
+
 /**
  * Anchors each cloud to its target screen position. For each CloudSpec it
- * unprojects the NDC through the camera to a ray, walks `dist` down that ray,
- * and writes the world point to the cloud's group — so the cloud sits at that
- * screen spot at any aspect. `anchorVh` then pushes it down the world by that
- * many viewports, so section-N clouds start off-screen-below and <ScrollAnchorRig>
- * lifts them into view at the right scroll. Recomputes on resize; demand mode,
- * so invalidate() to paint. (Mutating group.position via a ref is fine — only
- * `camera` would trip the immutability rule, and we only read it.)
+ * unprojects the NDC through the camera to a ray, walks `dist` down that ray, and
+ * writes the world point to the cloud's group. `anchorVh` then pushes it down the
+ * world by that many viewports, so section-N clouds start off-screen-below and
+ * <ScrollAnchorRig> lifts them into view at the right scroll. Recomputes on
+ * resize; markDirty()s the demand view to repaint the new layout.
  */
 function CloudPlacement({
   clouds,
   cloudRefs,
   scrollFactor,
   perspective,
+  markDirty,
 }: {
   clouds: CloudSpec[];
-  cloudRefs: React.RefObject<(Group | null)[]>;
+  cloudRefs: RefObject<(Group | null)[]>;
   scrollFactor: number;
-  /**
-   * Match the cloud's <ScrollAnchorRig>: offset the anchorVh baseline along
-   * world-Y (true) or the camera-up axis (false), so the cloud still arrives at
-   * its rest spot at the right scroll whichever axis it travels on.
-   */
+  /** Match the cloud's <ScrollAnchorRig>: offset the anchorVh baseline along
+   *  world-Y (true) or the camera-up axis (false). */
   perspective: boolean;
+  markDirty: () => void;
 }) {
   const camera = useThree((s) => s.camera);
   const width = useThree((s) => s.size.width);
   const height = useThree((s) => s.size.height);
-  const invalidate = useThree((s) => s.invalidate);
 
   useEffect(() => {
-    // anchorVh is baked along the SAME axis the cloud scrolls on: world-Y for
-    // perspective clouds, camera-up (with its own edge-length calibration) for
-    // flat ones. All current field clouds use anchorVh 0..3.
     const vwh = viewportWorldHeight(camera);
     const upSpan = viewportUpSpan(camera);
     const camUp = cameraUp(camera);
@@ -227,8 +293,8 @@ function CloudPlacement({
         g.position.set(v.x - camUp.x * off, v.y - camUp.y * off, v.z - camUp.z * off);
       }
     });
-    invalidate();
-  }, [clouds, camera, width, height, invalidate, cloudRefs, scrollFactor, perspective]);
+    markDirty();
+  }, [clouds, camera, width, height, cloudRefs, scrollFactor, perspective, markDirty]);
 
   return null;
 }
@@ -237,45 +303,40 @@ function CloudPlacement({
  * Scroll anchoring (approach C): translate the whole cloud field UP in world
  * space as the page scrolls, so clouds move with the document instead of being
  * pinned to the viewport. The conversion (scroll px → world units) is calibrated
- * to REF_DIST, then damped by SCROLL_FACTOR so the clouds drift slower than the
- * page (calmer, background-like) while still settling at their rest spot. Each
- * section's clouds (anchorVh) rise into frame as you reach them.
+ * to REF_DIST, then damped by scrollFactor. Each section's clouds (anchorVh) rise
+ * into frame as you reach them.
+ *
+ * HOST: the position is written on EVERY scroll update (so a re-entry is already
+ * correct), but the paint is markDirty()'d only while some cloud is on screen
+ * (onScreenRef) — off screen the demand view idles to zero. The view's fpsCap
+ * "scroll" (uncapped on high) is what lets the field ride the display, so no
+ * per-rig capping (the old makeCappedInvalidate) is needed.
  */
 function ScrollAnchorRig({
   groupRef,
   scrollFactor,
   perspective,
+  markDirty,
+  onScreenRef,
 }: {
-  groupRef: React.RefObject<Group | null>;
+  groupRef: RefObject<Group | null>;
   scrollFactor: number;
-  /**
-   * true → travel along world-Y (the ~31° tilt makes clouds swell toward the
-   * camera as they rise — the perspective look). false → travel along the
-   * camera-up axis, so clouds move up the screen at CONSTANT size (flat). Set
-   * per cloud via `perspectiveScroll` in cloud-specs.ts.
-   */
   perspective: boolean;
+  markDirty: () => void;
+  onScreenRef: RefObject<boolean>;
 }) {
   const camera = useThree((s) => s.camera);
   const width = useThree((s) => s.size.width);
   const height = useThree((s) => s.size.height);
-  const invalidate = useThree((s) => s.invalidate);
 
   useEffect(() => {
     gsap.registerPlugin(ScrollTrigger);
-    // Each mode has its own scroll→world calibration — the world-Y span for
-    // perspective, the full camera-up edge length for flat — so both travel one
-    // screen-viewport per scrolled viewport. camUp is only used by the flat path.
     const worldPerPx =
       (perspective ? viewportWorldHeight(camera) : viewportUpSpan(camera)) /
       window.innerHeight;
     const camUp = perspective ? null : cameraUp(camera);
-    // Scroll updates arrive at up to panel rate (120 Hz); repaints past the
-    // heavy-effect cap buy nothing visible, so throttle with a trailing paint
-    // (the group position is still written per update — only paints are capped).
-    const capped = makeCappedInvalidate(invalidate);
 
-    const apply = (scroll: number) => {
+    const apply = (scroll: number, paint: boolean) => {
       const g = groupRef.current;
       if (!g) return;
       const d = scroll * worldPerPx * scrollFactor;
@@ -284,98 +345,73 @@ function ScrollAnchorRig({
       } else {
         g.position.set(camUp!.x * d, camUp!.y * d, camUp!.z * d);
       }
-      capped();
+      if (paint) markDirty();
     };
 
     const st = ScrollTrigger.create({
       start: 0,
       end: "max",
       scrub: true,
-      onUpdate: (self) => apply(self.scroll()),
+      onUpdate: (self) => apply(self.scroll(), onScreenRef.current),
     });
 
     // Seed the position for a load that restores mid-page (scrub fires lazily).
-    apply(window.scrollY || 0);
+    apply(window.scrollY || 0, onScreenRef.current);
 
-    // Re-seed after every refresh. ScrollTrigger.refresh() (fired on ANY resize)
-    // reverts the scroller to 0 to measure, which runs the scrub onUpdate above
-    // with scroll=0 and snaps this whole field group back to position.y=0 — its
-    // hero anchor — so on a demand canvas the field clouds flash back onto the
-    // hero for a frame or two, whatever the actual scroll, until the next scroll
-    // corrects it. Re-applying the true scroll once the refresh has restored the
-    // scroller overwrites that stale frame. st.scroll() (not window.scrollY,
-    // which can read 0 for a tick under Lenis) reflects the restored position.
-    // (SectionRig doesn't need this — it already re-seeds via onRefresh.)
-    const onRefresh = () => apply(st.scroll());
+    // Re-seed after every refresh. ScrollTrigger.refresh() reverts the scroller
+    // to 0 to measure, snapping this field back to its hero anchor; re-applying
+    // the true scroll (st.scroll(), robust to Lenis reading 0 for a tick) once the
+    // refresh restores overwrites that stale frame. Paint unconditionally so an
+    // on-screen field corrects immediately.
+    const onRefresh = () => apply(st.scroll(), true);
     ScrollTrigger.addEventListener("refresh", onRefresh);
 
     return () => {
       ScrollTrigger.removeEventListener("refresh", onRefresh);
       st.kill();
-      capped.cancel();
     };
-    // width/height: recompute worldPerPx when the viewport (and thus the world
-    // height at REF_DIST) changes.
-  }, [groupRef, camera, width, height, invalidate, scrollFactor, perspective]);
+  }, [groupRef, camera, width, height, scrollFactor, perspective, markDirty, onScreenRef]);
 
   return null;
 }
 
 /**
- * Section-anchored clouds. Like the field clouds (hero + rock bases) they drift
- * continuously with scroll, but a section cloud is driven by ITS OWN section's
- * scroll crossing (a scrubbed ScrollTrigger on the section element) rather than
- * by an absolute `anchorVh` — so it needs no viewport-height counting and is
- * robust to sections being reordered above it. These clouds sit OUTSIDE the
- * parallax field group, so only this rig moves them.
- *
- * Motion — Option B, continuous monotonic drift: a single LINEAR mapping over the
- * whole crossing (section top at viewport bottom -> section bottom at viewport
- * top). The cloud drifts at CONSTANT velocity from `travel` below its `ndc` rest
- * spot, through rest exactly when the section is centred, up to `travel` above as
- * it leaves — no hold. It rises slowly, passes through its corner and keeps
- * floating out, matching the anchorVh clouds' feel.
- *
- * This replaced an earlier slide -> HOLD -> slide curve (fixed 0.7vh slides + a
- * motionless middle) that felt too fast on entry and read as "pinned" while
- * docked. That docking behaviour — useful for a cloud that should pin beside a
- * PINNED section — is preserved as a documented future opt-in (Option C: a
- * `hold?` flag on SectionBind that restores the piecewise curve, using
- * `bind.slide`). See docs/cloud-rendering-research.md § "Section-cloud motion".
- * Demand mode, so each update invalidate()s a repaint.
- *
- * The drift axis honours each cloud's `perspectiveScroll` (cloud-specs.ts): flat
- * clouds (default) drift along the camera-up axis at constant size; perspective
- * clouds drift along world-Y and swell toward the lens — same toggle the field
- * rig uses, so section and field clouds behave consistently.
+ * Section-anchored clouds — driven by their OWN section's scroll crossing (a
+ * scrubbed ScrollTrigger on the section element) rather than an absolute
+ * `anchorVh`, so they need no viewport-height counting and are robust to sections
+ * being reordered above them. Motion is Option B (constant-velocity drift through
+ * the `ndc` rest spot). It also reports each cloud's on-screen state into the
+ * shared activeClouds set (so the registration module keeps `onScreen` true while
+ * a section cloud is visible) via onActiveChange.
  */
 function SectionRig({
   clouds,
   cloudRefs,
   activeClouds,
+  markDirty,
+  onScreenRef,
+  onActiveChange,
 }: {
   clouds: CloudSpec[];
-  cloudRefs: React.RefObject<(Group | null)[]>;
-  /** Shared with <MorphRig>: which section clouds are on screen right now. */
-  activeClouds: React.RefObject<Set<string>>;
+  cloudRefs: RefObject<(Group | null)[]>;
+  /** Which section clouds are on screen right now (read by the reg. module). */
+  activeClouds: RefObject<Set<string>>;
+  markDirty: () => void;
+  onScreenRef: RefObject<boolean>;
+  /** Notify the registration module that activeClouds changed (recompute onScreen). */
+  onActiveChange: () => void;
 }) {
   const camera = useThree((s) => s.camera);
   const width = useThree((s) => s.size.width);
   const height = useThree((s) => s.size.height);
-  const invalidate = useThree((s) => s.invalidate);
 
   useEffect(() => {
     gsap.registerPlugin(ScrollTrigger);
-    // Both slide axes: world-Y span (perspective — swells) and camera-up edge
-    // length (flat — constant size). Per-cloud `perspectiveScroll` picks which.
     const vwh = viewportWorldHeight(camera);
     const upSpan = viewportUpSpan(camera);
     const camUp = cameraUp(camera);
     const rest = new THREE.Vector3();
     const triggers: ScrollTrigger[] = [];
-    // One shared cap across all section clouds — they repaint the same canvas,
-    // so a single trailing paint covers every cloud's last update.
-    const capped = makeCappedInvalidate(invalidate);
 
     clouds.forEach((c, i) => {
       const bind = c.section;
@@ -383,30 +419,14 @@ function SectionRig({
       const section = document.querySelector<HTMLElement>(bind.trigger);
       if (!section) return;
 
-      // Rest world point at the cloud's ndc/dist — where it holds while its
-      // section is on screen.
       placeOnRay(camera, c.ndc[0], c.ndc[1], c.dist, rest);
       const restX = rest.x;
       const restY = rest.y;
       const restZ = rest.z;
 
-      // Flat clouds drift along the camera-up axis (calibrated by upSpan);
-      // perspective clouds drift along world-Y (vwh) and swell as they go.
       const persp = !!c.perspectiveScroll;
-      const travel = (bind.travel ?? 1) * (persp ? vwh : upSpan); // world units swept to each side of rest
+      const travel = (bind.travel ?? 1) * (persp ? vwh : upSpan);
 
-      // Option B — continuous monotonic drift. A single LINEAR mapping over the
-      // whole crossing, no hold: progress 0 (section entering at viewport bottom)
-      // -> d = -1 (travel below rest); progress 0.5 (section centred) -> d = 0
-      // (rest at the cloud's ndc spot); progress 1 (section leaving at viewport
-      // top) -> d = +1 (travel above). Constant velocity, so the cloud drifts
-      // slowly up, passes through its corner rest spot and keeps floating out —
-      // the anchorVh field-cloud feel, but section-anchored (no viewport-height
-      // counting). This replaced an earlier slide -> HOLD -> slide curve whose
-      // fixed 0.7vh slides felt fast and whose motionless middle read as "pinned".
-      // (`bind.slide` is intentionally unused here; it returns only if the docking
-      // hold is reintroduced as an opt-in — Option C, see
-      // docs/cloud-rendering-research.md § "Section-cloud motion".)
       const apply = (self: ScrollTrigger) => {
         const g = cloudRefs.current[i];
         if (!g) return;
@@ -421,15 +441,14 @@ function SectionRig({
             restZ + camUp.z * off,
           );
         }
-        capped();
+        if (onScreenRef.current) markDirty();
       };
 
-      // Report on-screen state to the shared set so <MorphRig> keeps the
-      // living morph pumping while this cloud is visible. Set add/delete is
-      // idempotent, so refresh-time re-fires are harmless.
       const setActive = (isActive: boolean) => {
+        const before = activeClouds.current.size;
         if (isActive) activeClouds.current.add(c.key);
         else activeClouds.current.delete(c.key);
+        if (activeClouds.current.size !== before) onActiveChange();
       };
 
       const st = ScrollTrigger.create({
@@ -450,220 +469,65 @@ function SectionRig({
     const active = activeClouds.current;
     return () => {
       triggers.forEach((t) => t.kill());
-      capped.cancel();
-      clouds.forEach((c) => active.delete(c.key));
+      active.clear();
+      onActiveChange();
     };
-    // width/height: rest point + vwh depend on the projected viewport.
-  }, [clouds, cloudRefs, activeClouds, camera, width, height, invalidate]);
+  }, [clouds, cloudRefs, activeClouds, camera, width, height, markDirty, onScreenRef, onActiveChange]);
 
   return null;
 }
 
 /**
- * Living-morph pump. The clouds carry a small `speed`, but drei advances that
- * morph inside a useFrame that only runs when a frame is requested — and we
- * render on demand. So we request frames on a THROTTLED cadence (~30fps; a slow
- * billow needs no more) off GSAP's ticker — the same one Lenis drives, so there
- * is still no second rAF loop. The browser parks rAF on hidden tabs, so this
- * idles automatically when the page isn't visible. Desktop-gated upstream, and
- * reduced-motion never mounts the canvas, so the steady repaint is affordable.
- *
- * The pump must run for as long as ANY cloud is on screen, or a visible cloud
- * freezes its morph — and, because drei drives the billow off the clock's
- * ABSOLUTE elapsedTime with a demand-mode getDelta() (real wall-clock between
- * repaints), the next scroll-driven repaint after an idle gap lands a huge
- * delta and POPS the morph forward in one frame (the stutter this rig exists to
- * prevent). The field clouds parallax with the page, so each reaches its rest
- * spot at scroll = anchorVh viewports and clears the top edge ~1.5 vh later
- * (scrollFactor cancels in that settle math). `pumpUntilVh` is therefore the
- * LAST cloud's anchorVh + that margin — computed from the specs in <CloudCanvas>
- * so the pump covers the real cloud range (the cards/why-stay clouds sit at
- * anchorVh up to ~4), not a fixed hero-only cutoff. The <SectionRig> path is
- * kept for any future `section`-bound clouds.
+ * Demand-mode painting helper. drei's <Clouds> builds its instanced geometry and
+ * loads the texture over several frames, and its per-frame instance update lives
+ * in a useFrame that only runs on a paint — so a single mount frame can paint
+ * blank. We requestBurst a short run after mount (the host's canvas-mount burst
+ * does NOT cover a view registering onto an ALREADY-mounted plane — on FRONT the
+ * intro mounts the canvas first), plus a few delayed nudges for slower texture
+ * decode, and a burst whenever the tab becomes visible again.
  */
-function MorphRig({
-  activeClouds,
-  pumpUntilVh,
-}: {
-  /** Section clouds currently on screen, maintained by <SectionRig>. */
-  activeClouds: React.RefObject<Set<string>>;
-  /**
-   * Scroll depth (in viewport-heights) below which some field cloud is still on
-   * screen, so the morph must keep pumping. = max field anchorVh + slide-out
-   * margin; see <CloudCanvas>.
-   */
-  pumpUntilVh: number;
-}) {
-  const invalidate = useThree((s) => s.invalidate);
-
+function InvalidateOnReady({ requestBurst }: { requestBurst: (n: number) => void }) {
   useEffect(() => {
-    gsap.registerPlugin(ScrollTrigger);
-    const STEP = 1 / 30; // seconds between repaints
-    let last = 0;
-    // Pause the pump only once EVERY field cloud has scrolled off the top and no
-    // section cloud is reported on screen — i.e. nothing morphing is visible. A
-    // frozen morph off-screen costs nothing and is invisible; we repaint once on
-    // the way back so the clouds are current when they re-enter (audit R5).
-    let cloudsOnScreen = true;
-    // gsap.ticker passes elapsed time in seconds; throttle to STEP. `last`
-    // advances in whole STEPs (not `last = time`) so the leftover fraction of a
-    // tick carries over — a true 30 fps average instead of drifting to ~27.
-    const tick = (time: number) => {
-      if (!cloudsOnScreen && activeClouds.current.size === 0) return;
-      if (time - last >= STEP) {
-        last = time - ((time - last) % STEP);
-        invalidate();
-      }
-    };
-    gsap.ticker.add(tick);
-
-    // Trigger-less ScrollTrigger: active once scrolled past the last field
-    // cloud's on-screen range, where the parallaxing clouds are all gone.
-    // `start` is a function so it re-resolves on resize/refresh.
-    const st = ScrollTrigger.create({
-      start: () => window.innerHeight * pumpUntilVh,
-      end: "max",
-      onToggle: (self) => {
-        cloudsOnScreen = !self.isActive;
-        if (cloudsOnScreen) invalidate(); // repaint the skipped frame on return
-      },
-    });
-
-    return () => {
-      gsap.ticker.remove(tick);
-      st.kill();
-    };
-  }, [invalidate, activeClouds, pumpUntilVh]);
-
-  return null;
-}
-
-/**
- * Demand-mode painting helper. drei's <Clouds> builds its instanced geometry
- * and loads the texture over several frames, and its per-frame instance update
- * lives in a useFrame that only runs when a frame is requested — so a single
- * mount frame can paint blank. We pump invalidate() for a short burst after
- * mount (and a few delayed nudges to cover slower texture decode), then repaint
- * whenever the tab becomes visible again (throttled tabs drop the last frame).
- */
-function InvalidateOnReady() {
-  const invalidate = useThree((s) => s.invalidate);
-
-  useEffect(() => {
-    let raf = 0;
-    let frames = 0;
-    const pump = () => {
-      invalidate();
-      if (++frames < 8) raf = requestAnimationFrame(pump);
-    };
-    pump();
-
-    // Insurance against texture decode landing after the rAF burst.
-    const timers = [100, 300, 600].map((ms) => setTimeout(invalidate, ms));
-
+    requestBurst(8);
+    const timers = [100, 300, 600].map((ms) =>
+      window.setTimeout(() => requestBurst(1), ms),
+    );
     const onVisible = () => {
-      if (document.visibilityState === "visible") invalidate();
+      if (document.visibilityState === "visible") requestBurst(1);
     };
     document.addEventListener("visibilitychange", onVisible);
-
     return () => {
-      cancelAnimationFrame(raf);
-      timers.forEach(clearTimeout);
+      timers.forEach((t) => window.clearTimeout(t));
       document.removeEventListener("visibilitychange", onVisible);
     };
-  }, [invalidate]);
-
+  }, [requestBurst]);
   return null;
 }
 
 /**
- * WebGL context-loss safety net. THREE handles lost/restored internally; here
- * we only (a) repaint after a restore (demand mode needs an explicit frame) and
- * (b) if a restore never arrives within a few seconds (unrecoverable driver
- * reset), ask the parent to remount the <Canvas> with a fresh context. All
- * listeners/timers are cleaned up, so nothing accumulates across Strict Mode /
- * Fast Refresh.
- */
-function ContextWatchdog({
-  onUnrecoverable,
-}: {
-  onUnrecoverable: () => void;
-}) {
-  const gl = useThree((s) => s.gl);
-  const invalidate = useThree((s) => s.invalidate);
-
-  useEffect(() => {
-    const canvas = gl.domElement;
-    let mounted = true;
-    let restoreTimer: ReturnType<typeof setTimeout> | undefined;
-
-    const onLost = () => {
-      // THREE already calls preventDefault() and will restore on its own for
-      // recoverable losses. Arm a fallback only for a loss that never restores.
-      if (restoreTimer) clearTimeout(restoreTimer);
-      restoreTimer = setTimeout(() => {
-        // Remount ONLY a genuinely unrecoverable loss on a still-live, visible
-        // canvas. This skips R3F's intentional force-context-loss during
-        // unmount (the canvas is detached by the time the timer fires) and
-        // stale timers from a previous Strict Mode / Fast Refresh instance —
-        // both of which would otherwise cause a needless remount.
-        if (
-          mounted &&
-          canvas.isConnected &&
-          document.visibilityState === "visible"
-        ) {
-          onUnrecoverable();
-        }
-      }, 4000);
-    };
-    const onRestored = () => {
-      if (restoreTimer) clearTimeout(restoreTimer);
-      restoreTimer = undefined;
-      invalidate();
-    };
-
-    canvas.addEventListener("webglcontextlost", onLost, false);
-    canvas.addEventListener("webglcontextrestored", onRestored, false);
-
-    return () => {
-      mounted = false;
-      if (restoreTimer) clearTimeout(restoreTimer);
-      canvas.removeEventListener("webglcontextlost", onLost, false);
-      canvas.removeEventListener("webglcontextrestored", onRestored, false);
-    };
-  }, [gl, invalidate, onUnrecoverable]);
-
-  return null;
-}
-
-/**
- * Cloud retint driver (theme controller). Renders nothing. On a mode change it
- * GSAP-tweens the ambient + key lights' colour and intensity from their current
- * values to PALETTES[mode].cloud over the shared CROSSFADE — the same duration/
- * ease the DOM sky uses (theme-driver.tsx), so sky and clouds recolour together.
- *
- * House-rules compliance:
- * - Rides GSAP's shared ticker (no private rAF); the demand loop is pumped by a
- *   CAPPED invalidate() each tick (heavyEffectFpsCap), and only during a switch.
- * - IDLES TO ZERO: a settled mode runs no tween and paints nothing.
- * - First mount does nothing — the lights are initialised to the mount mode's
- *   palette in <CloudCanvas>. Reduced-motion snaps (no animation).
- * Only mounted when RETINT_CLOUDS is true.
+ * Cloud retint driver (theme controller). On a mode change it GSAP-tweens the
+ * ambient + key lights' colour and intensity from their current values to
+ * PALETTES[mode].cloud over the shared CROSSFADE — the same duration/ease the DOM
+ * sky uses (theme-driver.tsx), so sky and clouds recolour together. Each tween
+ * tick markDirty()s the demand view (during the welcome/on-screen the view is
+ * already painting; the markDirty makes it correct for any demand moment).
+ * IDLES TO ZERO: a settled mode runs no tween and paints nothing. First mount does
+ * nothing — the lights are initialised to the mount mode's palette below.
  */
 function ThemeRig({
   ambientRef,
   keyRef,
+  markDirty,
 }: {
-  ambientRef: React.RefObject<THREE.AmbientLight | null>;
-  keyRef: React.RefObject<THREE.DirectionalLight | null>;
+  ambientRef: RefObject<THREE.AmbientLight | null>;
+  keyRef: RefObject<THREE.DirectionalLight | null>;
+  markDirty: () => void;
 }) {
   const mode = useMode();
-  const invalidate = useThree((s) => s.invalidate);
   const mounted = useRef(false);
   const tweenRef = useRef<gsap.core.Tween | null>(null);
 
   useEffect(() => {
-    // First run: lights already initialised to this mode's palette (CloudCanvas).
     if (!mounted.current) {
       mounted.current = true;
       return;
@@ -683,19 +547,14 @@ function ThemeRig({
       ambient.intensity = target.ambient.intensity;
       key.color.copy(tk);
       key.intensity = target.key.intensity;
-      invalidate();
+      markDirty();
       return;
     }
 
-    // Snapshot the outgoing light state, then lerp both lights off one proxy so
-    // colour + intensity share the ease/duration. A capped invalidate() repaints
-    // the demand canvas through the crossfade (trailing paint guarantees the
-    // final frame lands on the target).
     const a0 = ambient.color.clone();
     const ai0 = ambient.intensity;
     const k0 = key.color.clone();
     const ki0 = key.intensity;
-    const capped = makeCappedInvalidate(invalidate);
     const proxy = { p: 0 };
     tweenRef.current = gsap.to(proxy, {
       p: 1,
@@ -706,209 +565,458 @@ function ThemeRig({
         ambient.intensity = ai0 + (target.ambient.intensity - ai0) * proxy.p;
         key.color.copy(k0).lerp(tk, proxy.p);
         key.intensity = ki0 + (target.key.intensity - ki0) * proxy.p;
-        capped();
+        markDirty();
       },
-      onComplete: () => capped.cancel(),
     });
 
     return () => {
       tweenRef.current?.kill();
-      capped.cancel();
     };
-  }, [mode, ambientRef, keyRef, invalidate]);
+  }, [mode, ambientRef, keyRef, markDirty]);
 
   return null;
 }
 
-export default function CloudCanvas({
+/**
+ * Intro reveal — the fade + downward settle the clouds do WITH the rock entrance.
+ * The old CSS fade lived on the DOM wrapper; under the host the clouds render on
+ * the shared plane, so the reveal is in-scene: material.opacity 0→1 (the drei
+ * cloud fragment is diffuseColor.a * vOpacity, so material opacity scales every
+ * cloud) + a small world-Y drift of the whole field. Seeded hidden only when the
+ * intro will play; shown immediately otherwise (returning mid-page, skipped
+ * intro). markDirty()s each tick. Reduced-motion devices never mount the WebGL
+ * clouds (cloud-layer eligibility), so no snap branch is needed here.
+ */
+function RevealRig({
+  cloudsRef,
+  fieldRef,
+  markDirty,
+}: {
+  cloudsRef: RefObject<Group | null>;
+  fieldRef: RefObject<Group | null>;
+  markDirty: () => void;
+}) {
+  const camera = useThree((s) => s.camera);
+
+  // Seed hidden BEFORE the first paint if the intro will play, so the clouds
+  // never flash in at full opacity under the welcome loader.
+  useLayoutEffect(() => {
+    if (!introWillPlay()) return;
+    const mat = findCloudMaterial(cloudsRef.current);
+    if (mat) {
+      mat.transparent = true;
+      mat.opacity = 0;
+    }
+  }, [cloudsRef]);
+
+  useEffect(() => {
+    if (!introWillPlay()) return;
+    let tween: gsap.core.Tween | undefined;
+    // Idempotency latch: START, REVEAL, and the failsafe ALL route here, and a
+    // normal welcome fires the first two seconds apart — an unguarded reveal
+    // would re-hide the settled clouds and fade them in a second time at the
+    // dock (mirrors the `revealed` latch intro.tsx itself uses).
+    let done = false;
+    const reveal = () => {
+      if (done) return;
+      done = true;
+      const mat = findCloudMaterial(cloudsRef.current);
+      const g = fieldRef.current;
+      // 14px of screen travel → world-Y at the field's reference depth. The
+      // clouds start this far UP (invisible) and settle to rest as they fade in.
+      const drift =
+        (REVEAL_DRIFT_PX * viewportWorldHeight(camera)) / window.innerHeight;
+      if (g) g.position.y = drift;
+      const proxy = { p: 0 };
+      tween?.kill();
+      tween = gsap.to(proxy, {
+        p: 1,
+        duration: REVEAL_DUR,
+        ease: "power2.out",
+        onUpdate: () => {
+          if (mat) mat.opacity = proxy.p;
+          if (g) g.position.y = drift * (1 - proxy.p);
+          markDirty();
+        },
+      });
+    };
+    window.addEventListener(INTRO_START_EVENT, reveal, { once: true });
+    window.addEventListener(INTRO_REVEAL_EVENT, reveal, { once: true });
+    const failsafe = window.setTimeout(reveal, 7000);
+    return () => {
+      window.removeEventListener(INTRO_START_EVENT, reveal);
+      window.removeEventListener(INTRO_REVEAL_EVENT, reveal);
+      window.clearTimeout(failsafe);
+      tween?.kill();
+    };
+  }, [cloudsRef, fieldRef, camera, markDirty]);
+
+  return null;
+}
+
+/**
+ * Registers ONE cloud view on a shared plane. Renders nothing in the DOM — the
+ * track/placeholder (a fixed inset-0 div) is the caller's own (cloud-layer.tsx);
+ * the host's fixed plane Canvas scissors this view to the track's rect.
+ *
+ * PAINT POLICY (see the module header). `onScreen` = a field cloud is still
+ * within pumpUntilVh of the top OR a section cloud is active. `scrolling` = a
+ * scroll happened within SCROLL_IDLE_S. From those two booleans:
+ *   - onScreen  → mode "continuous" (paint every visible tick, so the billow
+ *                 advances); else "demand" (idle to zero — the fixed placeholder
+ *                 defeats the host IO gate, so this feature-side gate is the idle).
+ *   - scrolling → fpsCap "scroll" (uncapped on high → the field rides the display,
+ *                 THE WELD); else MORPH_FPS 30 (the slow living billow's cadence).
+ * On FRONT the ROCK view's "scroll" cap, dirty from scroll, wins the pump's
+ * max-cap composition over the intro view's "heavy" 60 → the plane paints at
+ * display rate and the rock clouds track the cliff feet with no half-rate stagger.
+ */
+export default function CloudView({
+  plane,
+  index,
+  track,
   clouds,
   scrollFactor = DEFAULT_SCROLL_FACTOR,
 }: {
+  plane: PlaneName;
+  index: number;
+  track: RefObject<HTMLElement | null>;
   clouds: CloudSpec[];
   /** Per-layer scroll damping (1 = welded to page; < 1 = slower parallax). */
   scrollFactor?: number;
 }) {
-  // Field clouds (hero + rock bases) parallax with the page via <ScrollAnchorRig>
-  // + <CloudPlacement>; section clouds (bound to a section) slide/hold/slide via
-  // <SectionRig>. Split so each set gets the right rig and its own ref list.
-  const fieldClouds = clouds.filter((c) => !c.section);
-  const sectionClouds = clouds.filter((c) => c.section);
-  // Field clouds split again by SCROLL AXIS (perspectiveScroll): perspective
-  // clouds travel along world-Y and swell toward the camera; flat clouds travel
-  // along the camera-up axis at constant size. Each axis gets its own wrapper
-  // group + rig, so the perspective path stays identical to before and the flat
-  // path is a clean parallel. Groups with no clouds render nothing and get no rig.
-  const perspFieldClouds = fieldClouds.filter((c) => c.perspectiveScroll);
-  const flatFieldClouds = fieldClouds.filter((c) => !c.perspectiveScroll);
-
-  // How deep (in viewport-heights of scroll) the field clouds stay on screen —
-  // the last cloud reaches its rest at scroll = anchorVh vh and clears the top
-  // edge ~1.5 vh after, so <MorphRig> must keep pumping until then or that cloud
-  // freezes its morph while still visible. For the rock-base layer (anchorVh 0)
-  // this is ~1.5 vh, matching the old hero-only cutoff; for the sky layer it
-  // extends to cover the cards/why-stay clouds (anchorVh up to ~4).
-  const PUMP_MARGIN_VH = 1.5;
-  const fieldMaxAnchorVh = fieldClouds.reduce(
-    (max, c) => Math.max(max, c.anchorVh ?? 0),
-    0,
+  // Stable paint-control wrappers. useSharedView RETURNS the controls, but the
+  // scene `children` are an ARGUMENT to that same call, so they can't close over
+  // the returned object — route through a ref pointed at the (stable) controls in
+  // the commit's layout phase (before any child passive effect).
+  const controlsRef = useRef<SharedViewControls | null>(null);
+  const markDirty = useCallback(() => controlsRef.current?.markDirty(), []);
+  const requestBurst = useCallback(
+    (n: number) => controlsRef.current?.requestBurst(n),
+    [],
   );
-  const pumpUntilVh = fieldMaxAnchorVh + PUMP_MARGIN_VH;
 
+  // Split the specs once. Field clouds (anchorVh) parallax with the page via
+  // <ScrollAnchorRig>+<CloudPlacement>, split again by axis (perspectiveScroll);
+  // section clouds drift via <SectionRig>. pumpUntilVh = how deep (in vh of
+  // scroll) some field cloud stays on screen (last anchorVh + slide-out margin).
+  const split = useMemo(() => {
+    const fieldClouds = clouds.filter((c) => !c.section);
+    const sectionClouds = clouds.filter((c) => c.section);
+    const perspFieldClouds = fieldClouds.filter((c) => c.perspectiveScroll);
+    const flatFieldClouds = fieldClouds.filter((c) => !c.perspectiveScroll);
+    const fieldMaxAnchorVh = fieldClouds.reduce(
+      (max, c) => Math.max(max, c.anchorVh ?? 0),
+      0,
+    );
+    const PUMP_MARGIN_VH = 1.5;
+    return {
+      fieldClouds,
+      sectionClouds,
+      perspFieldClouds,
+      flatFieldClouds,
+      pumpUntilVh: fieldMaxAnchorVh + PUMP_MARGIN_VH,
+    };
+  }, [clouds]);
+  const { sectionClouds, perspFieldClouds, flatFieldClouds, pumpUntilVh } = split;
+  const hasField = split.fieldClouds.length > 0;
+
+  // ── Feature-side visibility + scroll gates (drive the descriptor) ──
+  // Section clouds currently on screen — mutated by <SectionRig>, read here to
+  // keep `onScreen` true while a section cloud is visible.
+  const activeClouds = useRef<Set<string>>(new Set());
+  const [fieldOnScreen, setFieldOnScreen] = useState(hasField);
+  const [sectionOnScreen, setSectionOnScreen] = useState(false);
+  const [scrolling, setScrolling] = useState(false);
+  const onScreen = fieldOnScreen || sectionOnScreen;
+
+  // Ref mirror for the scroll rigs (so they gate markDirty without re-running).
+  const onScreenRef = useRef(onScreen);
+  useEffect(() => {
+    onScreenRef.current = onScreen;
+  }, [onScreen]);
+
+  const onActiveChange = useCallback(() => {
+    setSectionOnScreen(activeClouds.current.size > 0);
+  }, []);
+
+  // Field on-screen gate: active once scrolled past the last field cloud's
+  // on-screen range (trigger-less ST; `start` is a function so it re-resolves on
+  // resize/refresh). cloudsOnScreen = !isActive.
+  useEffect(() => {
+    if (!hasField) return;
+    gsap.registerPlugin(ScrollTrigger);
+    // Seeded on screen by useState(hasField) — layout.tsx forces every load to
+    // the top (manual scrollRestoration), so the field clouds (anchorVh 0) start
+    // visible; onToggle tracks it from there (matches the old MorphRig seed).
+    const st = ScrollTrigger.create({
+      start: () => window.innerHeight * pumpUntilVh,
+      end: "max",
+      onToggle: (self) => setFieldOnScreen(!self.isActive),
+    });
+    return () => st.kill();
+  }, [hasField, pumpUntilVh]);
+
+  // Scroll-activity gate: hold fpsCap "scroll" (display rate) for SCROLL_IDLE_S
+  // after the last scroll update, then drop back to the 30 fps morph cadence.
+  useEffect(() => {
+    gsap.registerPlugin(ScrollTrigger);
+    let clear: gsap.core.Tween | undefined;
+    const st = ScrollTrigger.create({
+      start: 0,
+      end: "max",
+      onUpdate: () => {
+        setScrolling(true); // idempotent — React bails when already true
+        clear?.kill();
+        clear = gsap.delayedCall(SCROLL_IDLE_S, () => setScrolling(false));
+      },
+    });
+    return () => {
+      st.kill();
+      clear?.kill();
+    };
+  }, []);
+
+  // Repaint on re-entry: when the field/section comes back on screen, burst a few
+  // frames so the (delta-clamped) morph is current when it re-appears.
+  useEffect(() => {
+    if (onScreen) requestBurst(2);
+  }, [onScreen, requestBurst]);
+
+  // Dev A/B hooks (2026-07-19 morph-cost tuning): ?morphfps=N overrides the
+  // still-billow cadence; ?reardpr=N pins the REAR plane's dpr. Client-only
+  // module (dynamic ssr:false), so reading location here is safe.
+  const dev = useMemo(() => {
+    if (typeof window === "undefined") return { morphFps: null as number | null, rearDpr: null as number | null };
+    const q = new URLSearchParams(window.location.search);
+    const m = Number(q.get("morphfps"));
+    const d = Number(q.get("reardpr"));
+    return {
+      morphFps: m > 0 ? Math.min(m, 60) : null,
+      rearDpr: d > 0 ? Math.min(d, 1.5) : null,
+    };
+  }, []);
+  useEffect(() => {
+    if (plane !== "rear" || dev.rearDpr === null) return;
+    setPlaneDprOverride("rear", dev.rearDpr);
+    return () => setPlaneDprOverride("rear", null);
+  }, [plane, dev.rearDpr]);
+
+  // With the morph off (MORPH_CLOUDS false) the shapes are frozen, so there is
+  // nothing to paint while still: the view stays DEMAND everywhere and repaints
+  // ride markDirty alone (scroll rigs at the "scroll" cap, theme tween, reveal,
+  // placement). Still clouds = zero paints. ?morphfps=N re-enables the billow
+  // for A/B without flipping the constant.
+  const morphOn = MORPH_CLOUDS || dev.morphFps !== null;
+  const mode = morphOn && onScreen ? "continuous" : "demand";
+  const fpsCap = scrolling || !morphOn ? "scroll" : (dev.morphFps ?? MORPH_FPS);
+
+  // The two theme lights — <ThemeRig> tweens their colour/intensity on a mode
+  // change. Initialised to the CURRENT mode's palette so the first paint is
+  // correct; when RETINT_CLOUDS is off they stay on the day palette.
+  const ambientRef = useRef<THREE.AmbientLight | null>(null);
+  const keyRef = useRef<THREE.DirectionalLight | null>(null);
+  const [initialCloud] = useState(
+    () => (RETINT_CLOUDS ? PALETTES[getMode()] : PALETTES.day).cloud,
+  );
+
+  // Billboards per cloud — SNAPSHOT at mount (same pattern as the intro glass):
+  // segments drive drei's instanced geometry, so honouring a mid-session tier
+  // step-down live would rebuild the whole visible cloud field. dpr is a plane
+  // ceiling (plane-canvas.tsx) and stays live because re-applying it is cheap.
+  const [cloudSegments] = useState(() => getQualityConfig().cloudSegments);
+
+  const cloudsRef = useRef<Group | null>(null);
+  const fieldRootRef = useRef<Group | null>(null); // reveal drift wrapper
   const perspFieldRef = useRef<Group | null>(null);
   const flatFieldRef = useRef<Group | null>(null);
   const perspRefs = useRef<(Group | null)[]>([]);
   const flatRefs = useRef<(Group | null)[]>([]);
   const sectionRefs = useRef<(Group | null)[]>([]);
-  // The two theme lights — <ThemeRig> tweens their colour/intensity on a mode
-  // change. Initialised (below) to the CURRENT mode's palette so the first paint
-  // is already correct; when RETINT_CLOUDS is off they stay on the day palette.
-  const ambientRef = useRef<THREE.AmbientLight | null>(null);
-  const keyRef = useRef<THREE.DirectionalLight | null>(null);
-  // Snapshot at mount (the canvas is ssr:false, so getMode() reads the real
-  // persisted mode here). Not bound to live mode — ThemeRig owns the lights
-  // imperatively so a switch TWEENS rather than snapping via a prop change.
-  const [initialCloud] = useState(
-    () => (RETINT_CLOUDS ? PALETTES[getMode()] : PALETTES.day).cloud,
-  );
-  // Which section clouds are on screen — written by <SectionRig>, read by
-  // <MorphRig> to keep their living morph pumping while visible. Empty on a
-  // field-only canvas (the ROCK layer), which keeps the plain 1.5 vh rule.
-  const activeClouds = useRef<Set<string>>(new Set());
-  // Bumping this remounts the <Canvas> with a fresh GL context — last resort
-  // when a lost context never restores. See <ContextWatchdog>.
-  const [canvasKey, setCanvasKey] = useState(0);
-  const remount = useCallback(() => setCanvasKey((k) => k + 1), []);
 
-  // Adaptive dpr cap (docs/performance-audit.md §6): the soft sprite hides low
-  // device-pixel-ratio, so a struggling machine can drop the ceiling (high 2 →
-  // low 1.25) to quarter the FBO fragment count. R3F re-applies dpr on change.
-  const { cloudDprMax } = useQuality();
-  // Billboards per cloud — SNAPSHOT at mount (same pattern as the intro glass):
-  // segments drive drei's instanced geometry, so honouring a mid-session tier
-  // step-down live would rebuild the whole visible cloud field. dpr above stays
-  // live because re-applying it is cheap and invisible.
-  const [cloudSegments] = useState(() => getQualityConfig().cloudSegments);
-
-  // One <Cloud> body for every group — only the seed/bounds/volume differ. The
-  // owning <group>'s ref callback stays inline per map (the lint rule needs the
-  // ref write in a callback it can see, not passed through a helper).
-  const cloudBody = (c: CloudSpec) => (
-    <Cloud
-      {...CLOUD}
-      segments={cloudSegments}
-      seed={c.seed}
-      bounds={c.bounds}
-      volume={c.volume}
-    />
+  // speed follows the morph toggle (drei scales morph phase AND rotation by it,
+  // so 0 = fully frozen shapes); the ?morphfps hook re-enables it for A/B.
+  const cloudSpeed = morphOn ? 0.1 : 0;
+  const cloudBody = useCallback(
+    (c: CloudSpec) => (
+      <Cloud
+        {...CLOUD}
+        speed={cloudSpeed}
+        segments={cloudSegments}
+        seed={c.seed}
+        bounds={c.bounds}
+        volume={c.volume}
+      />
+    ),
+    [cloudSegments, cloudSpeed],
   );
 
-  return (
-    <Canvas
-      key={canvasKey}
-      frameloop="demand"
-      dpr={[1, cloudDprMax]}
-      gl={{ antialias: true, alpha: true }}
-      camera={{ position: CAMERA.position, fov: CAMERA.fov }}
-      // Aim the static camera at the origin once, before the first frame, so
-      // <CloudPlacement>'s unproject reads a settled view matrix.
-      onCreated={({ camera }) => {
-        camera.lookAt(0, 0, 0);
-        camera.updateProjectionMatrix();
-        camera.updateMatrixWorld();
-      }}
-      // pointer-events:none is REQUIRED here: R3F sets the <canvas> to
-      // pointer-events:auto (it manages its own 3D pointer events), which
-      // overrides the wrapper's `pointer-events-none`. Without this, the
-      // full-viewport front canvas (z-[1]) swallows every pointermove and the
-      // hero's grass-rock hover (rock-hover.tsx, listening on [data-hero])
-      // never fires. The clouds are purely decorative, so no interaction is lost.
-      style={{ position: "absolute", inset: 0, pointerEvents: "none" }}
-    >
-      {/* Position-independent light rig: a directional key + ambient fill light
-          every cloud identically, wherever it sits, so they carry no position
-          tint. Colour/intensity come from the current mode's palette (initialCloud)
-          and are tweened per-mode by <ThemeRig> (mounted below when retinting). */}
-      <ambientLight
-        ref={ambientRef}
-        color={initialCloud.ambient.color}
-        intensity={initialCloud.ambient.intensity}
-      />
-      <directionalLight
-        ref={keyRef}
-        color={initialCloud.key.color}
-        intensity={initialCloud.key.intensity}
-        position={KEY_LIGHT_POSITION}
-      />
+  const children: ReactNode = useMemo(
+    () => (
+      <>
+        {/* Per-view camera + origin aim (replaces the standalone Canvas camera +
+            onCreated lookAt). */}
+        <PerspectiveCamera
+          makeDefault
+          position={CAMERA.position}
+          fov={CAMERA.fov}
+          near={0.1}
+          far={1000}
+        />
+        <CameraRig />
 
-      <Clouds
-        material={THREE.MeshLambertMaterial}
-        texture="/textures/cloud-puff.png"
-        limit={400}
-        range={RANGE}
-        frustumCulled={false}
-      >
-        {/* Perspective field clouds: <ScrollAnchorRig> translates this whole
-            group along world-Y on scroll (swell); each sits at its own screen-
-            anchored position inside it (set by <CloudPlacement>). */}
-        <group ref={perspFieldRef}>
-          {perspFieldClouds.map((c, i) => (
-            <group
-              key={c.key}
-              ref={(el) => {
-                perspRefs.current[i] = el;
-              }}
-            >
-              {cloudBody(c)}
+        {/* Position-independent light rig: a directional key + ambient fill light
+            every cloud identically. Colour/intensity from the current mode's
+            palette; <ThemeRig> tweens them per mode. */}
+        <ambientLight
+          ref={ambientRef}
+          color={initialCloud.ambient.color}
+          intensity={initialCloud.ambient.intensity}
+        />
+        <directionalLight
+          ref={keyRef}
+          color={initialCloud.key.color}
+          intensity={initialCloud.key.intensity}
+          position={KEY_LIGHT_POSITION}
+        />
+
+        <Clouds
+          ref={cloudsRef}
+          material={THREE.MeshLambertMaterial}
+          texture="/textures/cloud-puff.png"
+          limit={400}
+          range={RANGE}
+          frustumCulled={false}
+        >
+          {/* Reveal-drift wrapper: <RevealRig> translates this whole field on the
+              intro settle; the rigs below translate the inner groups on scroll, so
+              the two compose. */}
+          <group ref={fieldRootRef}>
+            {/* Perspective field clouds: <ScrollAnchorRig> translates this group
+                along world-Y on scroll (swell). */}
+            <group ref={perspFieldRef}>
+              {perspFieldClouds.map((c, i) => (
+                <group
+                  key={c.key}
+                  ref={(el) => {
+                    perspRefs.current[i] = el;
+                  }}
+                >
+                  {cloudBody(c)}
+                </group>
+              ))}
             </group>
-          ))}
-        </group>
 
-        {/* Flat field clouds: same idea, but the group is translated along the
-            camera-up axis so they move up the screen at constant size. */}
-        <group ref={flatFieldRef}>
-          {flatFieldClouds.map((c, i) => (
-            <group
-              key={c.key}
-              ref={(el) => {
-                flatRefs.current[i] = el;
-              }}
-            >
-              {cloudBody(c)}
+            {/* Flat field clouds: translated along the camera-up axis (constant size). */}
+            <group ref={flatFieldRef}>
+              {flatFieldClouds.map((c, i) => (
+                <group
+                  key={c.key}
+                  ref={(el) => {
+                    flatRefs.current[i] = el;
+                  }}
+                >
+                  {cloudBody(c)}
+                </group>
+              ))}
             </group>
-          ))}
-        </group>
 
-        {/* Section clouds: OUTSIDE the field groups (no page parallax); driven by
-            their section's crossing via <SectionRig> (slide in → hold → slide out). */}
-        {sectionClouds.map((c, i) => (
-          <group
-            key={c.key}
-            ref={(el) => {
-              sectionRefs.current[i] = el;
-            }}
-          >
-            {cloudBody(c)}
+            {/* Section clouds: driven by their section's crossing via <SectionRig>. */}
+            {sectionClouds.map((c, i) => (
+              <group
+                key={c.key}
+                ref={(el) => {
+                  sectionRefs.current[i] = el;
+                }}
+              >
+                {cloudBody(c)}
+              </group>
+            ))}
           </group>
-        ))}
-      </Clouds>
+        </Clouds>
 
-      {perspFieldClouds.length > 0 && (
-        <>
-          <CloudPlacement clouds={perspFieldClouds} cloudRefs={perspRefs} scrollFactor={scrollFactor} perspective />
-          <ScrollAnchorRig groupRef={perspFieldRef} scrollFactor={scrollFactor} perspective />
-        </>
-      )}
-      {flatFieldClouds.length > 0 && (
-        <>
-          <CloudPlacement clouds={flatFieldClouds} cloudRefs={flatRefs} scrollFactor={scrollFactor} perspective={false} />
-          <ScrollAnchorRig groupRef={flatFieldRef} scrollFactor={scrollFactor} perspective={false} />
-        </>
-      )}
-      <SectionRig clouds={sectionClouds} cloudRefs={sectionRefs} activeClouds={activeClouds} />
-      <MorphRig activeClouds={activeClouds} pumpUntilVh={pumpUntilVh} />
-      <InvalidateOnReady />
-      <ContextWatchdog onUnrecoverable={remount} />
-      {RETINT_CLOUDS && <ThemeRig ambientRef={ambientRef} keyRef={keyRef} />}
-    </Canvas>
+        {perspFieldClouds.length > 0 && (
+          <>
+            <CloudPlacement
+              clouds={perspFieldClouds}
+              cloudRefs={perspRefs}
+              scrollFactor={scrollFactor}
+              perspective
+              markDirty={markDirty}
+            />
+            <ScrollAnchorRig
+              groupRef={perspFieldRef}
+              scrollFactor={scrollFactor}
+              perspective
+              markDirty={markDirty}
+              onScreenRef={onScreenRef}
+            />
+          </>
+        )}
+        {flatFieldClouds.length > 0 && (
+          <>
+            <CloudPlacement
+              clouds={flatFieldClouds}
+              cloudRefs={flatRefs}
+              scrollFactor={scrollFactor}
+              perspective={false}
+              markDirty={markDirty}
+            />
+            <ScrollAnchorRig
+              groupRef={flatFieldRef}
+              scrollFactor={scrollFactor}
+              perspective={false}
+              markDirty={markDirty}
+              onScreenRef={onScreenRef}
+            />
+          </>
+        )}
+        <SectionRig
+          clouds={sectionClouds}
+          cloudRefs={sectionRefs}
+          activeClouds={activeClouds}
+          markDirty={markDirty}
+          onScreenRef={onScreenRef}
+          onActiveChange={onActiveChange}
+        />
+        <InvalidateOnReady requestBurst={requestBurst} />
+        {RETINT_CLOUDS && (
+          <ThemeRig ambientRef={ambientRef} keyRef={keyRef} markDirty={markDirty} />
+        )}
+        <RevealRig cloudsRef={cloudsRef} fieldRef={fieldRootRef} markDirty={markDirty} />
+      </>
+    ),
+    [
+      perspFieldClouds,
+      flatFieldClouds,
+      sectionClouds,
+      scrollFactor,
+      initialCloud,
+      cloudBody,
+      markDirty,
+      requestBurst,
+      onActiveChange,
+    ],
   );
+
+  const controls = useSharedView({
+    plane,
+    index,
+    track,
+    // ACESFilmic (R3F's default): the bright key light carries the cloud white.
+    // Declared here so the host's per-view setter restores it before the cloud
+    // renders — on FRONT it alternates with the intro view's NoToneMapping.
+    toneMapping: THREE.ACESFilmicToneMapping,
+    mode,
+    fpsCap,
+    children,
+  });
+  // Point the wrapper ref at the (stable) controls in the commit's LAYOUT phase —
+  // before any child passive effect (e.g. ScrollAnchorRig's seed markDirty), so
+  // those wrappers are never a null no-op.
+  useLayoutEffect(() => {
+    controlsRef.current = controls;
+  }, [controls]);
+
+  return null;
 }

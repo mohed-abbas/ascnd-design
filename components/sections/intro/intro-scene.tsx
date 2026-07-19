@@ -1,31 +1,39 @@
 "use client";
 
-import { Canvas, useFrame, useThree } from "@react-three/fiber";
+import { useFrame, useThree } from "@react-three/fiber";
 import {
   Center,
   Environment,
   Lightformer,
   MeshTransmissionMaterial,
+  PerspectiveCamera,
   Text3D,
   useTexture,
 } from "@react-three/drei";
 import {
   Suspense,
+  useCallback,
   useEffect,
   useLayoutEffect,
   useMemo,
   useRef,
   useState,
+  type ReactNode,
 } from "react";
 import * as THREE from "three";
 import type { Group, Mesh } from "three";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
-import { getQualityConfig, heavyEffectFpsCap } from "@/lib/perf/quality-store";
-import { makeCappedInvalidate } from "@/lib/perf/capped-invalidate";
+import { getQualityConfig } from "@/lib/perf/quality-store";
 import { useMode } from "@/lib/theme/use-mode";
 import { CROSSFADE, PALETTES } from "@/lib/theme/palette";
 import { makeSkyBackdrop } from "@/lib/theme/sky-backdrop";
+import {
+  useSharedView,
+  type SharedViewControls,
+} from "@/components/canvas/use-shared-view";
+import { FRONT_INDEX } from "@/components/canvas/indices";
+import { setPlaneDprOverride } from "@/components/canvas/view-registry";
 import {
   SHOT_BASE,
   SHOT_FRAME_RADIUS,
@@ -56,7 +64,17 @@ for (const n of [2, 3, 4, 5, 6, 7, 8, 9]) useTexture.preload(`/shots/shot${n}.av
  * footer glass) — fills the transmission where the scene is empty (open sky).
  *
  * Transforms are driven imperatively from <Intro>'s GSAP timeline via the shared
- * `anim` ref; frameloop is "always" for the brief intro.
+ * `anim` ref.
+ *
+ * RENDERING HOST (Phase 2, docs/canvas-consolidation-plan.md): this component no
+ * longer owns a <Canvas>. It registers a single view on the shared FRONT plane
+ * (components/canvas/, z-[61]) via useSharedView, passing the intro's r3f scene
+ * as that view's `children`. The host wraps it in a drei <View> that scissors to
+ * the `track` placeholder (a fixed inset-0 div in <Intro>'s DOM), sets this
+ * view's tone mapping (NoToneMapping) at priority index-1, and paints it from the
+ * single ticker-end advance pump — no private frameloop, no invalidate(). Paint
+ * cadence is expressed through the registration (mode/fpsCap) + markDirty/
+ * requestBurst; see the paint-policy block in the default export.
  */
 
 export type GlassAnim = {
@@ -121,6 +139,11 @@ export type TileEntry = {
 };
 
 export type IntroSceneProps = {
+  /** The full-viewport (fixed inset-0) placeholder the shared FRONT <View>
+   *  tracks. MUST stay exactly full-viewport or intro.tsx's px→world mapping
+   *  (wpp = 8.284/innerHeight) desyncs — the scene would no longer line up with
+   *  the DOM hero. */
+  track: React.RefObject<HTMLElement | null>;
   anim: React.RefObject<GlassAnim>;
   rocks: RockLayout[];
   /** Per-rock entrance (opacity + settle), index-matched to `rocks`. */
@@ -131,7 +154,7 @@ export type IntroSceneProps = {
   tileEntry: React.RefObject<TileEntry[]>;
   /** Arc slot path (world units) for the steady-state conveyor. */
   arc: ConveyorArc;
-  /** Intro phase: glass + rocks mounted, frameloop "always". Off → steady state. */
+  /** Intro phase: glass + rocks mounted, view continuous "heavy". Off → steady state. */
   introActive: boolean;
   /** Run the steady-state conveyor (starts when the intro fly-in lands). */
   conveyor: boolean;
@@ -612,111 +635,102 @@ const EDGE_FADE = 0.35; // slots over which a tile fades out/in across the retur
 
 /**
  * Steady-state conveyor. Once the intro hands off (`running`), it loops a phase
- * p∈[0,1) at constant speed and writes each tile's base pose (x/y/scale/opacity)
- * from the arc path — the WebGL twin of design-shots-reveal's rotation. The tiles
- * were left exactly on their slots by the intro fly-in (p=0 passes through the
- * slot points), so the handoff has no jump. demand-mode: invalidate() each tick.
+ * p∈[0,1) at constant speed; each PAINT it writes every tile's base pose
+ * (x/y/scale/opacity) from the arc path — the WebGL twin of design-shots-reveal's
+ * rotation. The tiles were left exactly on their slots by the intro fly-in (p=0
+ * passes through the slot points), so the handoff has no jump.
+ *
+ * HOST MAPPING (Phase 2): the private heavyEffectFpsCap throttle + invalidate()
+ * are gone — the host pump paces the paint (this view is registered continuous
+ * "heavy" while the conveyor runs and the hero is on screen). The tween is now a
+ * pure pose CLOCK (it only advances `p`); the pose RECOMPUTE moved into a
+ * useFrame, which under frameloop="never" runs only when the plane actually
+ * paints — so poses recompute at exactly the capped cadence, never faster.
+ * Off-screen the hero-gone gate PAUSES the tween (freezes p, so re-entry can't
+ * jump) and the host idles the view to zero (no paints → no recompute); the view
+ * flips continuous→demand in the parent, and a burst on return repaints.
  */
 function ConveyorRig({
   tiles,
   arc,
   running,
+  heroGone,
   tileEntry,
 }: {
   tiles: TileLayout[];
   arc: ConveyorArc;
   running: boolean;
+  /** Hero fully scrolled above the viewport — pause the pose clock. */
+  heroGone: boolean;
   tileEntry: React.RefObject<TileEntry[]>;
 }) {
-  const invalidate = useThree((s) => s.invalidate);
+  // The pose clock the tween advances and the useFrame reads (shared via a ref so
+  // the pause/resume effect can touch the tween without recreating it).
+  const clock = useRef({ p: 0 });
+  const twRef = useRef<gsap.core.Tween | null>(null);
 
+  // Create the looping pose clock once the conveyor starts. No onUpdate: the
+  // tween just advances `p`; the useFrame below turns `p` into poses at paint
+  // cadence.
   useEffect(() => {
     if (!running) return;
     const N = arc.xs.length; // 8 slots: 7 visible (0..6) + the return (7)
-    const FRONT = N - 2; // last visible slot (far-R = 6); 7 is the hidden return
     const REVOLUTION = SLOT_TIME * N;
-    const state = { p: 0 };
-
-    // Repaint cap: the tween's onUpdate advances `state.p` every ticker tick
-    // (cheap), but we only recompute poses + invalidate() at the bounded rate
-    // heavyEffectFpsCap() gives — 60fps on a 120Hz panel, display-rate on a 60Hz
-    // one (cap 0 = ride the display) — mirroring the intro's IntroFrameCap so the
-    // necklace drifts as smoothly as the rest of the page. This was a flat ~30fps
-    // (docs/performance-audit.md R3), but at 30 the slow drift read as stuttery
-    // next to the 60/120fps DOM animations. Affordable at 60: the steady scene is
-    // just 8 unlit textured quads (the glass/rocks are unmounted) at dpr≤1.5, and
-    // it still pauses entirely off-screen (below), so it stays well within budget.
-    let lastRender = -Infinity;
-
-    const render = () => {
-      const cap = heavyEffectFpsCap(); // 0 = ride the display (≤60Hz), else 60
-      if (cap > 0) {
-        const now = performance.now() / 1000;
-        const period = 1 / cap;
-        if (now - lastRender < period) return;
-        // Carry the remainder (see IntroFrameCap): snapping lastRender to `now`
-        // re-anchors the window late every paint and beats 60 down to ~50.
-        lastRender = Math.max(lastRender + period, now - period);
-      }
-      const entries = tileEntry.current;
-      if (!entries) return;
-      tiles.forEach((t, i) => {
-        const e = entries[i];
-        if (!e) return;
-        const s = ((state.p + t.arc / N) % 1) * N; // this tile's phase in [0, N)
-        e.x = crClosed(arc.xs, s);
-        e.y = crClosed(arc.ys, s);
-        e.scale = crClosed(arc.sizes, s);
-        // Solid across the whole front arc; fade out/in only on the off-screen
-        // return leg so the wrap is seamless (no ghost, no empty slot).
-        if (s <= FRONT) {
-          e.opacity = 1;
-        } else {
-          const u = s - FRONT;
-          const span = N - FRONT;
-          e.opacity =
-            u < EDGE_FADE
-              ? 1 - u / EDGE_FADE
-              : u > span - EDGE_FADE
-                ? (u - (span - EDGE_FADE)) / EDGE_FADE
-                : 0;
-        }
-      });
-      invalidate();
-    };
-
-    const tw = gsap.to(state, {
-      p: 1,
-      duration: REVOLUTION,
-      ease: "none",
-      repeat: -1,
-      onUpdate: render,
-    });
-
-    // Off-screen pause: the tiles live in the hero collage, so once the hero has
-    // fully scrolled above the viewport the conveyor is invisible — stop it
-    // entirely (0 GPU) and resume when it scrolls back. Gated on the hero
-    // element being fully gone, so it never pauses while any tile is visible.
-    gsap.registerPlugin(ScrollTrigger);
-    const heroEl = document.querySelector<HTMLElement>("[data-hero]");
-    const vis = heroEl
-      ? ScrollTrigger.create({
-          trigger: heroEl,
-          start: "bottom top", // hero's bottom passes the viewport top → fully gone
-          end: "max",
-          onEnter: () => tw.pause(),
-          onLeaveBack: () => {
-            tw.resume();
-            invalidate();
-          },
-        })
-      : null;
-
+    const c = clock.current;
+    c.p = 0;
+    const tw = gsap.to(c, { p: 1, duration: REVOLUTION, ease: "none", repeat: -1 });
+    twRef.current = tw;
     return () => {
       tw.kill();
-      vis?.kill();
+      twRef.current = null;
     };
-  }, [running, tiles, arc, tileEntry, invalidate]);
+  }, [running, arc]);
+
+  // Off-screen pause: the tiles live in the hero collage, so once the hero has
+  // fully scrolled above the viewport the conveyor is invisible. Pause the clock
+  // (0 work; freezes p so the wrap doesn't jump on return) WITHOUT recreating the
+  // tween. The parent flips the view continuous→demand in the same beat, so the
+  // host stops painting too.
+  useEffect(() => {
+    const tw = twRef.current;
+    if (!tw) return;
+    if (heroGone) tw.pause();
+    else tw.resume();
+  }, [heroGone, running]);
+
+  // Recompute poses from the clock — runs ONLY on an actual paint (frameloop
+  // "never" → useFrame fires per advance), so this is the capped-cadence pose
+  // write the old throttled onUpdate used to do.
+  useFrame(() => {
+    if (!running) return;
+    const entries = tileEntry.current;
+    if (!entries) return;
+    const N = arc.xs.length;
+    const FRONT = N - 2; // last visible slot (far-R = 6); 7 is the hidden return
+    const p = clock.current.p;
+    tiles.forEach((t, i) => {
+      const e = entries[i];
+      if (!e) return;
+      const s = ((p + t.arc / N) % 1) * N; // this tile's phase in [0, N)
+      e.x = crClosed(arc.xs, s);
+      e.y = crClosed(arc.ys, s);
+      e.scale = crClosed(arc.sizes, s);
+      // Solid across the whole front arc; fade out/in only on the off-screen
+      // return leg so the wrap is seamless (no ghost, no empty slot).
+      if (s <= FRONT) {
+        e.opacity = 1;
+      } else {
+        const u = s - FRONT;
+        const span = N - FRONT;
+        e.opacity =
+          u < EDGE_FADE
+            ? 1 - u / EDGE_FADE
+            : u > span - EDGE_FADE
+              ? (u - (span - EDGE_FADE)) / EDGE_FADE
+              : 0;
+      }
+    });
+  });
 
   return null;
 }
@@ -730,48 +744,38 @@ function ConveyorRig({
  */
 function ScrollRig({
   fieldRef,
+  heroGone,
+  markDirty,
 }: {
   fieldRef: React.RefObject<Group | null>;
+  /** Hero fully scrolled above the viewport — keep writing position, gate paint. */
+  heroGone: boolean;
+  markDirty: () => void;
 }) {
   const height = useThree((s) => s.size.height);
-  const invalidate = useThree((s) => s.invalidate);
+
+  // Read heroGone through a ref so the scrub effect (below) never re-runs — and
+  // so kills/re-creates the ScrollTriggers — just because the gate toggled.
+  const heroGoneRef = useRef(heroGone);
+  useEffect(() => {
+    heroGoneRef.current = heroGone;
+  }, [heroGone]);
 
   useEffect(() => {
     gsap.registerPlugin(ScrollTrigger);
     const worldPerPx = 8.284 / height;
-    // Cap scroll-driven repaints (same as the clouds' rigs): position is still
-    // written per update, but paints past the scroll cap are skipped with
-    // a trailing paint so the last update of a scrub always lands.
-    const capped = makeCappedInvalidate(invalidate);
     // Off-screen paint gate: the tile field lives in the hero collage, so once
-    // the hero has fully scrolled above the viewport nothing on this canvas is
-    // visible — keep WRITING the scroll position (so re-entry is already
-    // correct) but skip the repaints (uncapped scroll invalidates otherwise
-    // repainted this canvas 20–40×/s at the page bottom, measured 2026-07-18).
-    // Same "[data-hero] bottom top" gate the conveyor pause uses; one paint on
-    // the way back refreshes anything the skip left stale.
-    let offscreen = false;
+    // the hero has fully scrolled above the viewport nothing here is visible —
+    // keep WRITING the scroll position (so re-entry is already correct) but skip
+    // the markDirty so the demand view idles to zero. (While the hero is on
+    // screen the view is continuous, so markDirty is a cheap no-op-along; the
+    // gate is what makes the scrolled-away hero cost nothing.)
     const apply = (scroll: number) => {
       const g = fieldRef.current;
       if (!g) return;
       g.position.y = scroll * worldPerPx;
-      if (!offscreen) capped();
+      if (!heroGoneRef.current) markDirty();
     };
-    const heroEl = document.querySelector<HTMLElement>("[data-hero]");
-    const vis = heroEl
-      ? ScrollTrigger.create({
-          trigger: heroEl,
-          start: "bottom top", // hero's bottom passes the viewport top → gone
-          end: "max",
-          onEnter: () => {
-            offscreen = true;
-          },
-          onLeaveBack: () => {
-            offscreen = false;
-            invalidate();
-          },
-        })
-      : null;
     const st = ScrollTrigger.create({
       start: 0,
       end: "max",
@@ -784,21 +788,25 @@ function ScrollRig({
     // reverts the scroller to 0 to take measurements, which makes the scrub
     // onUpdate above run with scroll=0 for a frame or two — snapping the whole
     // tile field back to position.y=0, i.e. its measured TOP-OF-PAGE origin. On a
-    // demand canvas that repaints as a flash of the necklace at the top of
-    // whatever section is on screen, and it sticks until the next scroll (the
-    // internal scroll-restore doesn't re-fire onUpdate). Re-applying the true
-    // scroll once refresh has restored the scroller overwrites that stale frame
-    // immediately. Use st.scroll(), not window.scrollY — under Lenis the native
-    // value can still read 0 for a tick right after the refresh.
+    // demand view that repaints as a flash of the necklace at the top of whatever
+    // section is on screen, and it sticks until the next scroll (the internal
+    // scroll-restore doesn't re-fire onUpdate). Re-applying the true scroll once
+    // refresh has restored the scroller overwrites that stale frame immediately.
+    // Use st.scroll(), not window.scrollY — under Lenis the native value can
+    // still read 0 for a tick right after the refresh.
     const onRefresh = () => apply(st.scroll());
     ScrollTrigger.addEventListener("refresh", onRefresh);
     return () => {
       ScrollTrigger.removeEventListener("refresh", onRefresh);
       st.kill();
-      vis?.kill();
-      capped.cancel();
     };
-  }, [height, invalidate, fieldRef]);
+  }, [height, markDirty, fieldRef]);
+
+  // Repaint once on hero re-entry so any frame the off-screen skip left stale is
+  // refreshed (mirrors the old onLeaveBack invalidate()).
+  useEffect(() => {
+    if (!heroGone) markDirty();
+  }, [heroGone, markDirty]);
 
   return null;
 }
@@ -855,6 +863,7 @@ function Glass({
   glassGeomScale,
   restY,
   font = FONT,
+  markDirty,
 }: {
   anim: React.RefObject<GlassAnim>;
   glassSize: number;
@@ -863,6 +872,8 @@ function Glass({
   /** World y the glass rests at after the reveal — the slide-up target. */
   restY: number;
   font?: string;
+  /** Flag the shared view dirty so the host paints the sky-crossfade step. */
+  markDirty: () => void;
 }) {
   // Scale every ABSOLUTE-world glass length by the geometry factor so a small
   // glyph's bevel/thickness/attenuation stay in the same ratio to the stroke as
@@ -877,10 +888,10 @@ function Glass({
   // sky-backdrop, shared with the footer glass) — a flat mid colour read wrong
   // against the graded DOM sky, especially two-tone sunrise/sunset. On a mode
   // switch the stops tween in lockstep with the site-wide sky CROSSFADE, each
-  // step redrawing the tiny gradient + invalidate()-ing the demand canvas (the
-  // welcome's own frames also pick it up while IntroFrameCap is running).
+  // step redrawing the tiny gradient + markDirty()-ing the shared view (during
+  // the welcome the view is continuous, so the crossfade paints along regardless;
+  // the markDirty makes it correct on its own for any demand moment).
   const mode = useMode();
-  const invalidate = useThree((s) => s.invalidate);
   const [sky] = useState(() => makeSkyBackdrop(mode));
   useEffect(() => {
     return () => sky.texture.dispose();
@@ -913,13 +924,13 @@ function Glass({
         sky.stops.mid.copy(from.mid).lerp(to.mid, proxy.p);
         sky.stops.bottom.copy(from.bottom).lerp(to.bottom, proxy.p);
         sky.redraw();
-        invalidate();
+        markDirty();
       },
     });
     return () => {
       tween.kill();
     };
-  }, [mode, sky, invalidate]);
+  }, [mode, sky, markDirty]);
 
   // Adaptive glass quality (docs/performance-audit.md §6): the MTM is the intro's
   // heaviest frame cost (~3 scene renders/frame with backside on). Snapshot the
@@ -971,7 +982,7 @@ function Glass({
       <Center>
         {/* Flat glass TEXT, not a 3D object: a very thin slab + soft bevel for
             the refractive edge. Side faces are killed mainly by the telephoto
-            camera (see <Canvas>), which views the glyphs almost head-on. The
+            camera (the per-view PerspectiveCamera), which views the glyphs almost head-on. The
             glassiness comes from the transmission/bevel, not from depth. */}
         <Text3D
           ref={textRef}
@@ -1014,44 +1025,8 @@ function Glass({
   );
 }
 
-/**
- * Drives the intro's paint loop off the single shared GSAP ticker, capped by
- * heavyEffectFpsCap() (0 = ride the display on a 60Hz high tier; 60 on a fast
- * panel or a stepped-down tier). With the canvas on frameloop="demand", this is
- * what keeps the glass + rock entrance animating during the welcome — at a
- * bounded rate, so a 120Hz panel doesn't pay double for the heavy MTM.
- */
-function IntroFrameCap() {
-  const invalidate = useThree((s) => s.invalidate);
-
-  useEffect(() => {
-    let last = -Infinity;
-    const tick = (time: number) => {
-      const cap = heavyEffectFpsCap();
-      if (cap <= 0) {
-        invalidate();
-        return;
-      }
-      const period = 1 / cap;
-      if (time - last < period) return;
-      // Advance the window by whole periods (carrying the remainder) instead of
-      // snapping `last` to the tick that passed the test. Snapping re-anchors
-      // the window to a tick that always lands a hair LATE, so on a 120Hz
-      // ticker the 16.7ms cadence degrades into a 16.7/25ms mix — a measured
-      // ~50fps presented with visible beat, not the intended 60. The clamp
-      // keeps `last` within one period of `time` so a pause (tab hidden,
-      // ticker stall) can't bank a catch-up burst.
-      last = Math.max(last + period, time - period);
-      invalidate();
-    };
-    gsap.ticker.add(tick);
-    return () => gsap.ticker.remove(tick);
-  }, [invalidate]);
-
-  return null;
-}
-
 export default function IntroScene({
+  track,
   anim,
   rocks,
   rockEntry,
@@ -1070,149 +1045,264 @@ export default function IntroScene({
   // group-translation pattern as the clouds), so the arc tracks the page 1:1.
   const fieldRef = useRef<Group>(null);
 
-  // Intro-phase canvas cost (measured 2026-07-18, frozen ?intropos=0.5 frames
-  // with per-context draw-call instrumentation on an M-series 120Hz MacBook):
-  // the glass's MAIN-PASS fragments at canvas resolution — NOT the MTM FBO the
-  // tiers tune — were the intro's boulder, and the cost of dpr × MSAA is
-  // multiplicative. At dpr 1.5 + 4×MSAA the glass paint took ~44ms (23 paints/s
-  // against the 60 cap) and GPU backpressure stalled the MAIN THREAD to
-  // 49 rAF/s — dragging the clouds, the DOM reveal cascade, and the fps meter
-  // down with it (and feeding the frame watchdog false main-thread signals).
-  // Solo fixes didn't cut it (dpr1 alone → 30 paints/s; no-MSAA alone → 33);
-  // together they hold ~55–60 paints/s with the main thread fully free (119
-  // rAF/s). So in production the intro runs at dpr 1 with MSAA off:
-  //   - dpr is LIVE-switchable (R3F setDpr): 1 during the welcome (the glass
-  //     is soft/refractive + constantly moving, so the softness doesn't read),
-  //     then back to [1, 1.5] at handoff so the persistent tile conveyor stays
-  //     crisp on retina.
-  //   - MSAA is a context-creation flag (not switchable) and stays OFF for
-  //     good: the steady-state scene is alpha-mapped quads whose edges MSAA
-  //     can't touch (texture alpha, not geometry), so it's free there.
+  // Intro-phase cost (measured 2026-07-18, frozen ?intropos=0.5 frames with
+  // per-context draw-call instrumentation on an M-series 120Hz MacBook): the
+  // glass's MAIN-PASS fragments at canvas resolution — NOT the MTM FBO the tiers
+  // tune — were the intro's boulder, and dpr × MSAA cost is multiplicative. So
+  // the intro runs at dpr 1 (driven through the host's per-plane dpr override,
+  // below) with MSAA off. On the shared context MSAA is now a PLANE-level flag
+  // (components/canvas/plane-config.ts front.antialias:false) — not per view.
   //
   // Dev A/B hooks (same query-param pattern as ?intropos):
-  //   ?introaa=1  — force MSAA back on (compare against the old look)
-  //   ?introdpr=N — override the INTRO-phase dpr (e.g. 1.5 = old behaviour)
+  //   ?introaa=1  — was: force MSAA on. Now a no-op + warning (plane-level flag).
+  //   ?introdpr=N — override the INTRO-phase dpr (clamped by the plane's ≤1.5 cap).
   //   ?noglass    — mount the scene WITHOUT the MTM glass (rocks/tiles/ready
-  //                 gate untouched), pricing the transmission pass wholesale
-  // Read once per mount — aa gates a canvas-creation prop, which doesn't
-  // apply live anyway.
+  //                 gate untouched), pricing the transmission pass wholesale.
+  //   ?intropos=P — <Intro> freezes the timeline at P; the scene is static, so
+  //                 it must burst-paint the frozen pose then idle (never paint
+  //                 continuously). `frozen` forces demand mode below.
   const dev = useMemo(() => {
     if (typeof window === "undefined")
-      return { aa: false, introDpr: 1, glass: true };
+      return { aa: false, introDpr: 1, glass: true, frozen: false };
     const q = new URLSearchParams(window.location.search);
     const dpr = Number(q.get("introdpr"));
     return {
       aa: q.get("introaa") === "1",
       introDpr: dpr > 0 ? Math.min(dpr, 2) : 1,
       glass: !q.has("noglass"),
+      frozen: q.has("intropos"),
     };
   }, []);
 
-  return (
-    <Canvas
-      // pointer-events:none — the necklace is a PASSIVE visual (no picking, no
-      // drag), but this persistent canvas is fixed inset-0 at z-[60], so by
-      // default R3F's container (pointerEvents:'auto') would sit over the whole
-      // hero and swallow every hover/click meant for the content beneath it (the
-      // CTA buttons, etc.). The wrapper is already pointer-events-none; this makes
-      // the R3F subtree match so events fall through.
-      style={{ pointerEvents: "none" }}
-      // Always "demand": the persistent canvas is pumped by whoever needs frames
-      // — the tile conveyor/scroll rigs post-intro, and <IntroFrameCap> during
-      // the welcome. Demand (vs the old "always" during intro) lets us CAP the
-      // intro's paint rate: heavyEffectFpsCap holds it to 60 on a 120Hz panel,
-      // halving the MTM's frame cost through the compile window (audit R4 item 3).
-      frameloop="demand"
-      // Two-phase dpr (see the measurement note above): 1 while the glass is
-      // mounted (its main-pass fragments were the intro's dominant cost; the
-      // moving refractive glass hides the softness), then [1, 1.5] once the
-      // intro hands off so the persistent tile conveyor is crisp on retina.
-      // R3F applies dpr changes live (setDpr), so the swap is seamless — it
-      // lands after the glass has fully faded. Never raw devicePixelRatio
-      // (site-wide dpr ≤ 1.5 cap, docs/performance-audit.md §6).
-      dpr={introActive ? dev.introDpr : [1, 1.5]}
-      // high-performance: ask for the discrete GPU on dual-GPU machines for the
-      // intro's MTM burst. Intro-canvas ONLY — the always-mounted cloud canvases
-      // stay on the default so laptops aren't pinned to the dGPU for ambience.
-      // antialias:false — see the measurement note above: MSAA × dpr cost is
-      // multiplicative on the glass's main pass, and post-intro the scene is
-      // alpha-mapped quads MSAA can't help. (?introaa=1 forces it back on.)
-      gl={{
-        antialias: dev.aa,
-        alpha: true,
-        powerPreference: "high-performance",
-      }}
-      // Telephoto: far back + narrow FOV → the glyphs are viewed almost head-on
-      // so the thin extrusion shows no side faces (flat glass text, not a 3D
-      // block). fov 11.82° at z=40 keeps the visible height at the z=0 plane at
-      // 8.284 units — the SAME mapping <Intro> assumes (wpp = 8.284/innerHeight),
-      // so positions/sizes are unchanged.
-      camera={{ position: [0, 0, CAMERA_Z], fov: 11.82, near: 0.1, far: 100 }}
-      onCreated={({ gl }) => {
-        gl.toneMapping = THREE.NoToneMapping;
-      }}
-    >
-      {/* Ready-gate boundary: ONLY what the entrance needs on frame 0 — the rock
-          textures, the Text3D font, the (network-free) env. SceneReady lives here
-          so onReady fires the instant THOSE resolve. The shot tiles are NOT in
-          here: they're 7 extra textures that aren't visible until the dock ~2s in,
-          and bundling them onto this gate delayed the whole welcome. */}
-      <Suspense fallback={null}>
-        {/* Glass + rocks are intro-phase guests: mounted only while welcoming,
-            then unmounted so the steady scene is just the tile planes. They need
-            only LOCAL assets (preloaded), so SceneReady fires fast. */}
-        {introActive && (
-          <>
-            <Rocks rocks={rocks} rockEntry={rockEntry} />
-            {/* ?noglass (dev A/B) skips ONLY the glass — the rocks, lights and
-                ready gate still run so the intro flows normally around it. */}
-            {dev.glass && (
-              <Glass
-                anim={anim}
-                glassSize={glassSize}
-                glassGeomScale={glassGeomScale}
-                restY={restY}
-                font={font}
-              />
-            )}
-            <directionalLight position={[3, 5, 6]} intensity={1.2} />
-            <ambientLight intensity={0.4} />
-            <IntroFrameCap />
-            <SceneReady onReady={onReady} />
-          </>
-        )}
-      </Suspense>
-
-      {/* Tiles stream in on their OWN boundary so their shot textures never hold
-          up the ready gate above. They live here for the whole session (intro
-          fly-in → steady conveyor); the conveyor + scroll rig ride with them
-          (ScrollRig translates the tile field, so it belongs here). They bloom in
-          ~0.1s into the timeline and aren't prominent at the reveal, so a few
-          frames of late arrival is invisible — but it no longer blocks the start. */}
-      <Suspense fallback={null}>
-        <Tiles tiles={tiles} tileEntry={tileEntry} fieldRef={fieldRef} />
-        <ConveyorRig
-          tiles={tiles}
-          arc={arc}
-          running={conveyor}
-          tileEntry={tileEntry}
-        />
-        <ScrollRig fieldRef={fieldRef} />
-      </Suspense>
-      {/* Local studio shine (see GlassEnvironment) — no network, so the glints
-          are present on frame 1 instead of popping in late. Glass-only, so it
-          rides the intro phase and unmounts with the glass. */}
-      {introActive && dev.glass && (
-        <GlassEnvironment
-          environmentIntensity={1.85}
-          frontFill={0.5}
-          leftFill={2.15}
-          rightFill={2.6}
-          bottomFill={3.6}
-          keyGlint={5.2}
-          topRim={1.1}
-        />
-      )}
-    </Canvas>
+  // Stable paint-control wrappers. useSharedView RETURNS the controls, but the
+  // scene `children` are an ARGUMENT to that same call, so they can't close over
+  // the returned object. Route through a ref pointed at the (stable) controls
+  // right after the hook returns — child effects run after this render commits,
+  // so they always see a populated ref.
+  const controlsRef = useRef<SharedViewControls | null>(null);
+  const markDirty = useCallback(() => controlsRef.current?.markDirty(), []);
+  const requestBurst = useCallback(
+    (n: number) => controlsRef.current?.requestBurst(n),
+    [],
   );
+
+  // Stable onReady wrapper so a fresh onReady identity from <Intro> never churns
+  // the memoised children (a re-upsert) — SceneReady reads the latest.
+  const onReadyRef = useRef(onReady);
+  useEffect(() => {
+    onReadyRef.current = onReady;
+  }, [onReady]);
+  const stableOnReady = useCallback(() => onReadyRef.current?.(), []);
+
+  // Hero-visibility gate (KNOWN TRAP #1). The View placeholder is fixed inset-0
+  // → it ALWAYS intersects the viewport, so the host's IntersectionObserver alone
+  // can never idle a continuous view. The intro's real idle signal is the hero
+  // scrolling away: gate paints feature-side off "[data-hero] bottom top" (the
+  // same threshold the conveyor/scroll rigs use). When the hero is gone we flip
+  // the registration continuous→demand (see `active` below) so the pump idles to
+  // zero; on return we resume + burst a repaint.
+  const [heroGone, setHeroGone] = useState(false);
+  useEffect(() => {
+    gsap.registerPlugin(ScrollTrigger);
+    const heroEl = document.querySelector<HTMLElement>("[data-hero]");
+    if (!heroEl) return;
+    const st = ScrollTrigger.create({
+      trigger: heroEl,
+      start: "bottom top", // hero's bottom passes the viewport top → fully gone
+      end: "max",
+      onEnter: () => setHeroGone(true),
+      onLeaveBack: () => {
+        setHeroGone(false);
+        requestBurst(2);
+      },
+    });
+    return () => st.kill();
+  }, [requestBurst]);
+
+  // dpr welcome window (KNOWN TRAP #3): the intro ran dpr 1 while the MTM glass
+  // was on screen (its main-pass fragments were the boulder; the moving
+  // refractive glass hides the softness), then [1,1.5] for the crisp steady
+  // conveyor. On the shared context dpr is a plane-level ceiling — drive it
+  // through the host's per-plane override exactly where the standalone canvas
+  // flipped its own dpr. Released (null) at handoff and on unmount.
+  useEffect(() => {
+    setPlaneDprOverride("front", introActive ? dev.introDpr : null);
+  }, [introActive, dev.introDpr]);
+  useEffect(() => () => setPlaneDprOverride("front", null), []);
+
+  // ?introaa (KNOWN TRAP #3): antialias is a CONTEXT-creation flag — one value
+  // for the whole shared FRONT context, not switchable per view. The dev A/B
+  // hook degrades to a warning that points at where the real knob now lives.
+  useEffect(() => {
+    if (dev.aa)
+      console.warn(
+        "[intro] ?introaa now gates the FRONT plane context; edit components/canvas/plane-config.ts (front.antialias). No-op here.",
+      );
+  }, [dev.aa]);
+
+  // ?intropos freeze (KNOWN TRAP #7): the timeline is paused at a fixed progress
+  // and the scene never changes again. Force demand mode (below) and burst-paint
+  // across a window that outlasts the compile→ready→seek chain, so the frozen
+  // pose lands and then the view IDLES (no continuous painting). Dev-only.
+  useEffect(() => {
+    if (!dev.frozen) return;
+    requestBurst(8);
+    const timers = [200, 600, 1200, 2000, 3200].map((ms) =>
+      window.setTimeout(() => requestBurst(4), ms),
+    );
+    // The authoritative repaint: intro.tsx dispatches this right after the
+    // tl.progress(P).pause() seek, so the frozen pose paints even when a slow
+    // compile→ready→seek chain outlives every mount-timed burst above.
+    const onSeek = () => requestBurst(4);
+    window.addEventListener("intro:frozen-seek", onSeek);
+    return () => {
+      timers.forEach((t) => window.clearTimeout(t));
+      window.removeEventListener("intro:frozen-seek", onSeek);
+    };
+  }, [dev.frozen, requestBurst]);
+
+  // Paint policy (KNOWN TRAP #4). Continuous "heavy" while the welcome or the
+  // conveyor is actively animating AND the hero is on screen — the host pump
+  // paces it (60 on a fast panel, display-rate ≤60Hz), and scroll repaints ride
+  // along for free. Demand "scroll" otherwise, so a scrolled-away hero idles to
+  // zero and a scroll re-entry rides the display. Frozen inspection is always
+  // demand (bursts only). Registration is upsert-able, so flipping these on a
+  // React state change just updates the descriptor — no remount, no lost burst.
+  const active = !dev.frozen && (introActive || conveyor) && !heroGone;
+  const mode = active ? "continuous" : "demand";
+  const fpsCap = active ? "heavy" : "scroll";
+
+  const children: ReactNode = useMemo(
+    () => (
+      <>
+        {/* Per-view telephoto camera (KNOWN TRAP #2). The host canvas has a
+            neutral default camera; drei's <View> renders each portal with its
+            portal-scoped default camera, and <PerspectiveCamera makeDefault>
+            inside the view children swaps THAT one (not the root's) — verified in
+            node_modules/@react-three/drei/core/PerspectiveCamera.js (set() runs on
+            the portal store) + web/View.js (Container renders with state.camera).
+            fov 11.82° at z=40 keeps the z=0 plane height at 8.284 — the exact
+            mapping intro.tsx assumes (wpp = 8.284/innerHeight); it holds ONLY
+            because the placeholder is full-viewport (fixed inset-0). <View>
+            overwrites camera.aspect to the (full-viewport) track rect each frame,
+            so vertical framing stays fixed. */}
+        <PerspectiveCamera
+          makeDefault
+          position={[0, 0, CAMERA_Z]}
+          fov={11.82}
+          near={0.1}
+          far={100}
+        />
+
+        {/* Ready-gate boundary: ONLY what the entrance needs on frame 0 — the
+            rock textures, the Text3D font, the (network-free) env. SceneReady
+            lives here so onReady fires the instant THOSE resolve. The shot tiles
+            are NOT in here: they're 7 extra textures that aren't visible until the
+            dock ~2s in, and bundling them onto this gate delayed the whole
+            welcome. KNOWN TRAP #6: the host wraps this whole view in ONE Suspense;
+            these TWO nested boundaries are preserved so tile textures never block
+            the ready gate. */}
+        <Suspense fallback={null}>
+          {/* Glass + rocks are intro-phase guests: mounted only while welcoming,
+              then unmounted so the steady scene is just the tile planes. */}
+          {introActive && (
+            <>
+              <Rocks rocks={rocks} rockEntry={rockEntry} />
+              {/* ?noglass (dev A/B) skips ONLY the glass — the rocks, lights and
+                  ready gate still run so the intro flows normally around it. */}
+              {dev.glass && (
+                <Glass
+                  anim={anim}
+                  glassSize={glassSize}
+                  glassGeomScale={glassGeomScale}
+                  restY={restY}
+                  font={font}
+                  markDirty={markDirty}
+                />
+              )}
+              <directionalLight position={[3, 5, 6]} intensity={1.2} />
+              <ambientLight intensity={0.4} />
+              <SceneReady onReady={stableOnReady} />
+            </>
+          )}
+        </Suspense>
+
+        {/* Tiles stream in on their OWN boundary so their shot textures never hold
+            up the ready gate above. They live here for the whole session (intro
+            fly-in → steady conveyor). ConveyorRig is placed BEFORE Tiles so its
+            per-paint pose write (useFrame) lands before Tiles reads tileEntry —
+            no 1-frame lag (the old rig wrote poses on the gsap ticker, ahead of
+            the render). */}
+        <Suspense fallback={null}>
+          <ConveyorRig
+            tiles={tiles}
+            arc={arc}
+            running={conveyor}
+            heroGone={heroGone}
+            tileEntry={tileEntry}
+          />
+          <Tiles tiles={tiles} tileEntry={tileEntry} fieldRef={fieldRef} />
+          <ScrollRig
+            fieldRef={fieldRef}
+            heroGone={heroGone}
+            markDirty={markDirty}
+          />
+        </Suspense>
+
+        {/* Local studio shine (see GlassEnvironment) — no network, so the glints
+            are present on frame 1 instead of popping in late. Glass-only, so it
+            rides the intro phase and unmounts with the glass. */}
+        {introActive && dev.glass && (
+          <GlassEnvironment
+            environmentIntensity={1.85}
+            frontFill={0.5}
+            leftFill={2.15}
+            rightFill={2.6}
+            bottomFill={3.6}
+            keyGlint={5.2}
+            topRim={1.1}
+          />
+        )}
+      </>
+    ),
+    [
+      introActive,
+      conveyor,
+      heroGone,
+      rocks,
+      rockEntry,
+      tiles,
+      tileEntry,
+      arc,
+      glassSize,
+      glassGeomScale,
+      restY,
+      font,
+      dev,
+      anim,
+      markDirty,
+      stableOnReady,
+    ],
+  );
+
+  const controls = useSharedView({
+    plane: "front",
+    index: FRONT_INDEX.INTRO_TILES,
+    track,
+    // NoToneMapping (KNOWN TRAP #5): the glass must clip, not roll off. The host
+    // sets it for this view at priority index-1 (replaces the old onCreated).
+    toneMapping: THREE.NoToneMapping,
+    mode,
+    fpsCap,
+    children,
+  });
+  // Point the wrapper ref at the (stable) controls. A LAYOUT effect, so it lands
+  // in the commit's layout phase — BEFORE any child's passive mount effect (e.g.
+  // ScrollRig's seed markDirty), so those wrappers are never a null no-op. No
+  // child LAYOUT effect touches the controls, so this ordering is sufficient.
+  useLayoutEffect(() => {
+    controlsRef.current = controls;
+  }, [controls]);
+
+  return null;
 }
