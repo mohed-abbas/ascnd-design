@@ -54,6 +54,14 @@ export interface PlaneConfig {
    * per plane (last-mounted-wins events.connected — Phase-1 known limitation).
    */
   readonly interactive?: boolean;
+  /**
+   * Optional plane dpr ceiling BELOW the site cap (1.5). Measured 2026-07-19:
+   * the sky clouds' fill-rate (dozens of overlapping alpha sprites, repainted
+   * per morph tick) was the dominant dropped-frame source — REAR at dpr 1.0 is
+   * visually indistinguishable (soft billows have no pixel-scale detail) and
+   * returned the sections to display rate. Leave unset for sharp content.
+   */
+  readonly dprMax?: number;
 }
 
 export const PLANE_CONFIG = {
@@ -99,6 +107,9 @@ export const PLANE_CONFIG = {
     antialias: false,
     powerPreference: "default",
     interactive: false,
+    // Sky clouds only — soft alpha billows; dpr 1 invisible, halves the
+    // dominant morph-paint fill cost (see dprMax doc above).
+    dprMax: 1.0,
   },
 } as const satisfies Record<string, PlaneConfig>;
 

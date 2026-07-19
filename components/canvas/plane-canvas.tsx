@@ -4,7 +4,11 @@ import { Canvas, useThree } from "@react-three/fiber";
 import { View } from "@react-three/drei";
 import { Suspense, useEffect, useSyncExternalStore } from "react";
 import { useQuality } from "@/lib/perf/use-quality";
-import { PLANE_CONFIG, type PlaneName } from "./plane-config";
+import {
+  PLANE_CONFIG,
+  type PlaneConfig,
+  type PlaneName,
+} from "./plane-config";
 import {
   burstAll,
   bumpRemountKey,
@@ -93,7 +97,9 @@ function ContextWatchdog({ plane }: { plane: PlaneName }) {
  * priority index-1 and the caller's r3f children.
  */
 export default function PlaneCanvas({ plane }: { plane: PlaneName }) {
-  const cfg = PLANE_CONFIG[plane];
+  // Widened to the interface so optional fields (dprMax) type-check — the
+  // as-const table narrows each entry to only the keys it declares.
+  const cfg: PlaneConfig = PLANE_CONFIG[plane];
 
   const entries = useSyncExternalStore(
     (cb) => subscribePlane(plane, cb),
@@ -115,7 +121,12 @@ export default function PlaneCanvas({ plane }: { plane: PlaneName }) {
   // override (Phase 2's welcome dpr-1). Kept LIVE (re-applying dpr is cheap and
   // invisible — the mount-snapshot discipline is per-feature, e.g. cloudSegments).
   const { cloudDprMax } = useQuality();
-  const dprMax = Math.min(DPR_CAP, cloudDprMax, dprOverride ?? Infinity);
+  const dprMax = Math.min(
+    DPR_CAP,
+    cloudDprMax,
+    cfg.dprMax ?? Infinity,
+    dprOverride ?? Infinity,
+  );
 
   // Visibility gate: one IntersectionObserver per plane, owned by the host. Marks
   // each view visible/invisible from its placeholder rect so the pump idles to

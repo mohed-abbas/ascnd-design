@@ -7,6 +7,7 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
   type ReactNode,
   type RefObject,
 } from "react";
@@ -25,12 +26,38 @@ import {
   useSharedView,
   type SharedViewControls,
 } from "@/components/canvas/use-shared-view";
+import type { FpsCap } from "@/components/canvas/view-registry";
 import { TESTIMONIAL_ROCKS_INDEX } from "@/components/canvas/indices";
 
 // AgX slightly darkens; this exposure lifts it back (the old canvas set it at
 // context creation). Shared by the per-view setter AND the warm precompile —
 // they must agree or the warm compiles the wrong program variant.
 const ROCKS_EXPOSURE = 1.15;
+
+// Steady-state paint cap (retuned 2026-07-19): the orbit/tumble is slow enough
+// that 30 reads identical to the old heavy-60, and it halves the paints that
+// were colliding with the testimonials section-cloud's morph ticks (every
+// 30fps cloud paint landed on a 60fps rock tick — the coinciding GPU work was
+// the section's dropped-frame source; measured 80→119.7 rAF with this + the
+// cloud retune). Hover uncaps to "heavy" so the dodge spring stays glassy.
+const ROCKS_STEADY_FPS = 30;
+
+// Rock-level hover → view-level fpsCap bridge. The hover lives per <Rock> deep
+// in the scene; the cap lives on the view registration. Module-scope counter +
+// useSyncExternalStore (same idiom as the reveal events file).
+const rockHover = {
+  count: 0,
+  listeners: new Set<() => void>(),
+  set(on: boolean) {
+    this.count += on ? 1 : -1;
+    for (const l of this.listeners) l();
+  },
+  subscribe(l: () => void) {
+    rockHover.listeners.add(l);
+    return () => rockHover.listeners.delete(l);
+  },
+  any: () => rockHover.count > 0,
+};
 
 /**
  * The four testimonials rocks as REAL 3D meshes — the "floating 3D rock" the
@@ -246,6 +273,7 @@ function Rock({
   useCursor(hovered);
   const setHover = useCallback((on: boolean) => {
     setHovered(on);
+    rockHover.set(on); // lifts the view's cap to "heavy" while any rock is hot
     hoverTween.current?.kill();
     hoverTween.current = gsap.to(hover.current, on ? HOVER_IN : HOVER_OUT);
     if (on) requestQuoteAdvance();
@@ -567,10 +595,20 @@ export default function TestimonialRocksView({
 
   const active = inView || revealing;
   const mode = active ? "continuous" : "demand";
-  // "heavy" → the host resolves heavyEffectFpsCap() each tick (60 on fast panels).
-  // The orbit/tumble/dodge self-animates with no on-screen reference, so painting
-  // past 60 was invisible GPU waste (the standalone measured ~110/s uncapped).
-  const fpsCap = "heavy";
+  // Dev A/B hook (2026-07-19 morph-cost tuning): ?rocksfps=N overrides the
+  // steady cap so the rocks-vs-cloud paint interplay can be measured live.
+  const devFps = useMemo(() => {
+    if (typeof window === "undefined") return null;
+    const n = Number(new URLSearchParams(window.location.search).get("rocksfps"));
+    return n > 0 ? Math.min(n, 60) : null;
+  }, []);
+  // Steady 30 (ROCKS_STEADY_FPS — the slow orbit reads the same and stops
+  // colliding with the section-cloud morph ticks); "heavy" (≤60) while any rock
+  // is hovered so the dodge spring rides the fast cadence. The reveal fly-in
+  // also runs at "heavy" (revealing) so the entrance stays crisp.
+  const anyHovered = useSyncExternalStore(rockHover.subscribe, rockHover.any, () => false);
+  const fpsCap: FpsCap =
+    devFps ?? (anyHovered || revealing ? "heavy" : ROCKS_STEADY_FPS);
 
   const children: ReactNode = useMemo(() => <Scene />, []);
 

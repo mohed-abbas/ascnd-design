@@ -30,7 +30,10 @@ import {
   useSharedView,
   type SharedViewControls,
 } from "@/components/canvas/use-shared-view";
-import type { PlaneName } from "@/components/canvas/view-registry";
+import {
+  setPlaneDprOverride,
+  type PlaneName,
+} from "@/components/canvas/view-registry";
 
 /**
  * Volumetric cloud field (Three.js / R3F + drei <Clouds>).
@@ -135,7 +138,11 @@ const DEFAULT_SCROLL_FACTOR = 1;
 // While on screen the view paints continuously at this cadence to advance the
 // slow billow — the old MorphRig's fixed 30 fps, now expressed as the view's
 // fpsCap (the host pump paces it, no private ticker).
-const MORPH_FPS = 30;
+// 20 (was 30, retuned 2026-07-19): the billow is slow enough that 20 reads
+// identical, and each dropped tick is one fewer near-budget full-plane paint —
+// measured +5 rAF at the hero and +13 at testimonials on the drop-prone dev
+// profile. Below 20 measured no further gain (variance-dominated).
+const MORPH_FPS = 20;
 
 // How long after the last scroll update to treat the field as "scrolling" — the
 // window over which the view holds fpsCap "scroll" (display rate) so the weld
@@ -767,8 +774,27 @@ export default function CloudView({
     if (onScreen) requestBurst(2);
   }, [onScreen, requestBurst]);
 
+  // Dev A/B hooks (2026-07-19 morph-cost tuning): ?morphfps=N overrides the
+  // still-billow cadence; ?reardpr=N pins the REAR plane's dpr. Client-only
+  // module (dynamic ssr:false), so reading location here is safe.
+  const dev = useMemo(() => {
+    if (typeof window === "undefined") return { morphFps: null as number | null, rearDpr: null as number | null };
+    const q = new URLSearchParams(window.location.search);
+    const m = Number(q.get("morphfps"));
+    const d = Number(q.get("reardpr"));
+    return {
+      morphFps: m > 0 ? Math.min(m, 60) : null,
+      rearDpr: d > 0 ? Math.min(d, 1.5) : null,
+    };
+  }, []);
+  useEffect(() => {
+    if (plane !== "rear" || dev.rearDpr === null) return;
+    setPlaneDprOverride("rear", dev.rearDpr);
+    return () => setPlaneDprOverride("rear", null);
+  }, [plane, dev.rearDpr]);
+
   const mode = onScreen ? "continuous" : "demand";
-  const fpsCap = scrolling ? "scroll" : MORPH_FPS;
+  const fpsCap = scrolling ? "scroll" : (dev.morphFps ?? MORPH_FPS);
 
   // The two theme lights — <ThemeRig> tweens their colour/intensity on a mode
   // change. Initialised to the CURRENT mode's palette so the first paint is
