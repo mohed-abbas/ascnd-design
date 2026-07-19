@@ -90,11 +90,22 @@ import {
 // the puffs slowly morph (lively, not churning); the CONTINUOUS-30 paint policy
 // (default export) advances that morph at ~30 fps. `segments` (the fill-rate
 // knob) is tiered — see cloudSegments in lib/perf/tiers.ts, snapshotted at mount.
+// Master switch for the living billow. false = fully STATIC cloud shapes:
+// drei scales BOTH the morph phase (sin(t·density·speed)) and each segment's
+// rotationFactor by `speed` (node_modules/@react-three/drei/core/Cloud.js:185),
+// so speed 0 freezes shape and rotation alike — the site's original static
+// look. The paint policy below follows it: with the morph off the view never
+// runs continuous, so still clouds cost ZERO paints (scroll/theme/reveal
+// repaints still work via markDirty — weld, parallax and retint unaffected).
+// Flip to true to bring the billow back at MORPH_FPS.
+const MORPH_CLOUDS = false;
+
+// (speed lives on the <Cloud> prop, derived from the toggle + ?morphfps hook
+// inside CloudView — see cloudSpeed there.)
 const CLOUD = {
   opacity: 0.8,
   fade: 10,
   growth: 2,
-  speed: 0.1,
   color: "white",
 } as const;
 // Max cloud SEGMENTS rendered per <Clouds> batch. drei draws
@@ -135,14 +146,12 @@ const REF_DIST = 22;
 // background drift. cloud-layer.tsx sets each layer's value.
 const DEFAULT_SCROLL_FACTOR = 1;
 
-// While on screen the view paints continuously at this cadence to advance the
-// slow billow — the old MorphRig's fixed 30 fps, now expressed as the view's
-// fpsCap (the host pump paces it, no private ticker).
-// 20 (was 30, retuned 2026-07-19): the billow is slow enough that 20 reads
-// identical, and each dropped tick is one fewer near-budget full-plane paint —
-// measured +5 rAF at the hero and +13 at testimonials on the drop-prone dev
-// profile. Below 20 measured no further gain (variance-dominated).
-const MORPH_FPS = 20;
+// Billow cadence WHEN MORPH_CLOUDS IS ON — dormant while the morph is off.
+// Perf reference (measured 2026-07-19 on the drop-prone dev profile): 30 was
+// the original MorphRig cadence and dropped sections to ~97-110 rAF; 20 read
+// visually identical and recovered most of it. Values above 20 spend frame
+// budget fast — at 120 every tick is a full-plane cloud repaint.
+const MORPH_FPS = 120;
 
 // How long after the last scroll update to treat the field as "scrolling" — the
 // window over which the view holds fpsCap "scroll" (display rate) so the weld
@@ -793,8 +802,14 @@ export default function CloudView({
     return () => setPlaneDprOverride("rear", null);
   }, [plane, dev.rearDpr]);
 
-  const mode = onScreen ? "continuous" : "demand";
-  const fpsCap = scrolling ? "scroll" : (dev.morphFps ?? MORPH_FPS);
+  // With the morph off (MORPH_CLOUDS false) the shapes are frozen, so there is
+  // nothing to paint while still: the view stays DEMAND everywhere and repaints
+  // ride markDirty alone (scroll rigs at the "scroll" cap, theme tween, reveal,
+  // placement). Still clouds = zero paints. ?morphfps=N re-enables the billow
+  // for A/B without flipping the constant.
+  const morphOn = MORPH_CLOUDS || dev.morphFps !== null;
+  const mode = morphOn && onScreen ? "continuous" : "demand";
+  const fpsCap = scrolling || !morphOn ? "scroll" : (dev.morphFps ?? MORPH_FPS);
 
   // The two theme lights — <ThemeRig> tweens their colour/intensity on a mode
   // change. Initialised to the CURRENT mode's palette so the first paint is
@@ -819,17 +834,21 @@ export default function CloudView({
   const flatRefs = useRef<(Group | null)[]>([]);
   const sectionRefs = useRef<(Group | null)[]>([]);
 
+  // speed follows the morph toggle (drei scales morph phase AND rotation by it,
+  // so 0 = fully frozen shapes); the ?morphfps hook re-enables it for A/B.
+  const cloudSpeed = morphOn ? 0.1 : 0;
   const cloudBody = useCallback(
     (c: CloudSpec) => (
       <Cloud
         {...CLOUD}
+        speed={cloudSpeed}
         segments={cloudSegments}
         seed={c.seed}
         bounds={c.bounds}
         volume={c.volume}
       />
     ),
-    [cloudSegments],
+    [cloudSegments, cloudSpeed],
   );
 
   const children: ReactNode = useMemo(
