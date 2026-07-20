@@ -321,9 +321,9 @@ function Rock({
   // Parked at base × (flyFactor − 1) — so the rock sits at base × flyFactor,
   // well outside the viewport, along its own outward radial (the four thus
   // arrive from four directions) — and each PLAY eases it to 0, landing on the
-  // ring; each RESET re-parks it so the entrance replays on the next pass. If
-  // the reveal already played (context-loss plane remount mid-view), start at
-  // rest — the rock reappears in place, it doesn't re-fly.
+  // ring. If the reveal already played — a later pass through the section, or a
+  // context-loss plane remount mid-view — start at rest: the rock is simply
+  // there, it doesn't re-fly (the gate is one-shot, testimonials-reveal.ts).
   const parkedX = baseX * (REVEAL.flyFactor - 1);
   const parkedY = baseY * (REVEAL.flyFactor - 1);
   const offset = useRef(
@@ -365,10 +365,10 @@ function Rock({
     mesh.current?.scale.setScalar((unit.size / 2) * (1 + hover.current.k * HOVER_GROW));
   });
 
-  // PLAY: re-park off-screen, then ease the offset → 0 (the fly-in). The host
-  // pump (painting whenever the section is visible) renders every frame of it.
-  // RESET (section fully left): kill any live tween and re-park, ready for the
-  // next pass. Replays every time the section is passed through.
+  // PLAY (once per page load): re-park off-screen, then ease the offset → 0 (the
+  // fly-in). The host pump (painting whenever the section is visible) renders
+  // every frame of it. RESET only reaches here before the entrance has played —
+  // afterwards the gate swallows it and the rock stays home.
   useEffect(() => {
     let tween: gsap.core.Tween | undefined;
     const unPlay = onTestimonialsRevealPlay(() => {
@@ -468,8 +468,9 @@ function Scene() {
   // Reveal fade on the shared material (all four rocks at once). The rocks are
   // off-screen at the PLAY instant, so this quick fade is essentially unseen — it
   // only softens the edge as each rock crosses into view. The per-rock fly-in
-  // lives in Rock; the rings draw in after (testimonials-drift.tsx). RESET parks
-  // it invisible for the next pass.
+  // lives in Rock; the rings draw in after (testimonials-drift.tsx). It fades up
+  // once and stays up — if the asset resolves late, the opacity seed above
+  // (isTestimonialsRevealPlayed()) already puts it at 1.
   useEffect(() => {
     if (!asset) return;
     const mat = asset.material;

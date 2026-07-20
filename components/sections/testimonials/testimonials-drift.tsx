@@ -89,8 +89,9 @@ export default function TestimonialsDrift() {
       : [];
 
     // Park the rings hidden up front (the section is off-screen on load, so no
-    // flash); every PLAY draws them in, every RESET re-parks them. If the reveal
-    // already played (this driver remounted mid-view), start them shown.
+    // flash); the one PLAY draws them in and they stay. If the reveal already
+    // played (a later pass, or this driver remounting mid-view), start them
+    // shown — the entrance is one-shot (testimonials-reveal.ts).
     const HIDDEN = { opacity: 0, scale: 0.6 };
     gsap.set(rings, isTestimonialsRevealPlayed() ? { opacity: 1, scale: 1 } : HIDDEN);
     // Same for the rocks: parked off-screen until the entrance plays.

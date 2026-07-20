@@ -105,17 +105,18 @@ export default function TestimonialRocks() {
 
     // TWO independent gates on the SECTION — DON'T fold them into one:
     //
-    //  • VISIBILITY (pause/resume + reset) — WIDE. The render pump drives the
-    //    rocks' orbit + tumble, and it runs the whole time ANY part of the
-    //    section is on screen; it only idles once the FULL section has left, and
-    //    resumes as it comes back. Leaving completely (either direction) also
-    //    RESETS the reveal — rocks re-park off-screen, rings hide — so the
-    //    entrance replays on the next pass.
+    //  • VISIBILITY (pause/resume) — WIDE. The render pump drives the rocks'
+    //    orbit + tumble, and it runs the whole time ANY part of the section is
+    //    on screen; it only idles once the FULL section has left, and resumes as
+    //    it comes back. Leaving completely also calls RESET, which only re-parks
+    //    things if the entrance hasn't played yet — the gate is latched (see
+    //    testimonials-reveal.ts), so after the first pass this is a no-op.
     //
-    //  • REVEAL (plays EVERY pass) — fires when the section is ~half in the
+    //  • REVEAL (ONCE per page load) — fires when the section is ~half in the
     //    viewport, from either direction: "top 50%" going down (section top
-    //    crosses the viewport's midline), "bottom 50%" coming back up. The rocks
-    //    fly in from beyond the screen edges each time.
+    //    crosses the viewport's midline), "bottom 50%" coming back up. Whichever
+    //    edge gets there first plays the entrance; the gate swallows every later
+    //    call, so scrolling back through shows the rocks already home.
     const visibility = ScrollTrigger.create({
       trigger: section,
       start: "top bottom",
