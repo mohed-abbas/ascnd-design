@@ -8,7 +8,6 @@ import { CROSSFADE, PALETTES } from "@/lib/theme/palette";
 import {
   DEFAULT_FLOW,
   DEFAULT_TRAVEL,
-  STATIC_CLOUDS,
   type StaticCloudSpec,
 } from "./static-cloud-specs";
 
@@ -85,9 +84,9 @@ const timelineName = (selector: string) =>
  * every animation is a plain literal transform tween the compositor is
  * guaranteed to run off-main-thread.
  */
-function buildScrollTimelineCss(): string {
+function buildScrollTimelineCss(clouds: StaticCloudSpec[]): string {
   const rules: string[] = [];
-  for (const c of STATIC_CLOUDS) {
+  for (const c of clouds) {
     if (c.pin) continue;
     if (!c.trigger) {
       const shift = (-FIELD_RANGE_PX * (c.speed ?? 1)).toFixed(0);
@@ -117,8 +116,11 @@ function buildScrollTimelineCss(): string {
 }
 
 export default function StaticCloudLayer({
+  clouds,
   reveal,
 }: {
+  /** The route's static-cloud set (static-cloud-specs.ts staticCloudsForPath). */
+  clouds: StaticCloudSpec[];
   /** Intro fade/settle style from cloud-layer.tsx — applied per layer. */
   reveal: React.CSSProperties;
 }) {
@@ -129,8 +131,8 @@ export default function StaticCloudLayer({
   // pass to keep consistent with.
   const [compositor] = useState(canUseScrollTimeline);
   const css = useMemo(
-    () => (compositor ? buildScrollTimelineCss() : ""),
-    [compositor],
+    () => (compositor ? buildScrollTimelineCss(clouds) : ""),
+    [compositor, clouds],
   );
 
   // ——— Compositor wiring: name each section's view timeline and hoist the
@@ -141,7 +143,7 @@ export default function StaticCloudLayer({
     const tagged: HTMLElement[] = [];
     const names: string[] = [];
     const selectors = new Set(
-      STATIC_CLOUDS.filter((c) => c.trigger && !c.pin).map((c) => c.trigger!),
+      clouds.filter((c) => c.trigger && !c.pin).map((c) => c.trigger!),
     );
     for (const sel of selectors) {
       const section = document.querySelector<HTMLElement>(sel);
@@ -156,7 +158,7 @@ export default function StaticCloudLayer({
       tagged.forEach((s) => s.style.removeProperty("view-timeline-name"));
       document.body.style.removeProperty("timeline-scope");
     };
-  }, [compositor]);
+  }, [compositor, clouds]);
 
   // ——— GSAP path: everything on fallback browsers; pin clouds always. ———
   useEffect(() => {
@@ -166,7 +168,7 @@ export default function StaticCloudLayer({
 
     if (!compositor) {
       // FIELD clouds: one trigger, per-cloud damped page tracking.
-      const setters = STATIC_CLOUDS.filter((c) => !c.trigger)
+      const setters = clouds.filter((c) => !c.trigger)
         .map((c) => {
           const el = imgRefs.current.get(c.key);
           return el ? { speed: c.speed ?? 1, set: gsap.quickSetter(el, "y", "px") } : null;
@@ -193,7 +195,7 @@ export default function StaticCloudLayer({
     }
 
     // SECTION clouds (fallback only) + PIN clouds (always).
-    for (const c of STATIC_CLOUDS) {
+    for (const c of clouds) {
       if (!c.trigger) continue;
       if (compositor && !c.pin) continue; // compositor owns section clouds
       const section = document.querySelector<HTMLElement>(c.trigger);
@@ -268,7 +270,7 @@ export default function StaticCloudLayer({
       if (onRefresh) ScrollTrigger.removeEventListener("refresh", onRefresh);
       triggers.forEach((t) => t.kill());
     };
-  }, [compositor]);
+  }, [compositor, clouds]);
 
   // Mode retint — on the <img>s themselves (a filter on the fixed layer would
   // be an ancestor filter). Transition mirrors the live clouds' CROSSFADE.
@@ -279,7 +281,7 @@ export default function StaticCloudLayer({
   };
 
   const renderClouds = (layer: StaticCloudSpec["layer"]) =>
-    STATIC_CLOUDS.filter((c) => c.layer === layer).map((c) => (
+    clouds.filter((c) => c.layer === layer).map((c) => (
       <div
         key={c.key}
         className="absolute -translate-x-1/2 -translate-y-1/2"

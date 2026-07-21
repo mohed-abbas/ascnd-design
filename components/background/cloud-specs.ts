@@ -202,3 +202,39 @@ export const ROCK_CLOUDS: CloudSpec[] = [
   { key: "rock-left", ndc: [-0.88, -1.02], dist: 22, seed: 7, bounds: [6.5, 0.45, 1], volume: 8, anchorVh: 0, perspectiveScroll: false },
   { key: "rock-right", ndc: [0.88, -1.02], dist: 22, seed: 3, bounds: [6.5, 0.45, 1], volume: 8, anchorVh: 0, perspectiveScroll: false },
 ];
+
+// ── Pricing route (/pricing) ───────────────────────────────────────────────
+// The pricing page reuses the homepage Pricing section as its hero but has its
+// OWN cloud arrangement — the homepage's specs are calibrated to the homepage's
+// sections (anchorVh counts + [data-cards]/[data-testimonials]/[data-final-cta]
+// section binds), which don't map onto this route, so sharing them would scatter
+// clouds at the wrong scroll spots. A starter set for now: two banks framing the
+// hero cards, anchored to the hero (anchorVh 0). Extend this as the page's lower
+// sections land — bind them with `section` selectors (this page's own) or
+// `anchorVh`, exactly like SKY_CLOUDS. No rock-base band: this route has no hero
+// cliffs (the footer's rocks sit far down the page, not at the hero foot).
+export const PRICING_SKY_CLOUDS: CloudSpec[] = [
+  { key: "pricing-hero-tl", ndc: [-0.82, 0.7], dist: 22, seed: 4, bounds: [4, 1.2, 1], volume: 4, anchorVh: 0, perspectiveScroll: false },
+  { key: "pricing-hero-br", ndc: [0.86, -0.86], dist: 26, seed: 11, bounds: [6, 1.4, 1], volume: 5, anchorVh: 0, perspectiveScroll: false },
+];
+
+export const PRICING_ROCK_CLOUDS: CloudSpec[] = [];
+
+// ── Per-route scene registry ────────────────────────────────────────────────
+// The clouds mount ONCE at the root (cloud-layer.tsx) so the shared WebGL context
+// survives client-side navigation; only the registered specs swap per route. Each
+// route names its own `sky` (REAR plane, behind content) and `rock` (FRONT plane,
+// over the cliffs) sets. Unmapped routes fall back to the home scene — the site's
+// pre-existing "clouds everywhere" behaviour — so adding a page is opt-in: give it
+// an entry here to break away from the homepage arrangement.
+export type CloudScene = { sky: CloudSpec[]; rock: CloudSpec[] };
+
+export const CLOUD_SCENES: Record<string, CloudScene> = {
+  "/": { sky: SKY_CLOUDS, rock: ROCK_CLOUDS },
+  "/pricing": { sky: PRICING_SKY_CLOUDS, rock: PRICING_ROCK_CLOUDS },
+};
+
+/** The cloud scene for a route, falling back to the home scene when unmapped. */
+export function cloudSceneForPath(pathname: string): CloudScene {
+  return CLOUD_SCENES[pathname] ?? CLOUD_SCENES["/"];
+}

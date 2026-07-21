@@ -578,39 +578,50 @@ function ThemeRig({
 }
 
 /**
- * Intro reveal — the fade + downward settle the clouds do WITH the rock entrance.
- * The old CSS fade lived on the DOM wrapper; under the host the clouds render on
- * the shared plane, so the reveal is in-scene: material.opacity 0→1 (the drei
- * cloud fragment is diffuseColor.a * vOpacity, so material opacity scales every
- * cloud) + a small world-Y drift of the whole field. Seeded hidden only when the
- * intro will play; shown immediately otherwise (returning mid-page, skipped
- * intro). markDirty()s each tick. Reduced-motion devices never mount the WebGL
+ * Cloud reveal — the fade + downward settle (material.opacity 0→1, the drei cloud
+ * fragment is diffuseColor.a * vOpacity so material opacity scales every cloud, +
+ * a small world-Y drift of the whole field). markDirty()s each tick. Two drivers,
+ * same tween:
+ *  - HOMEPAGE welcome: the clouds settle in WITH the rock entrance, fired by
+ *    INTRO_START/REVEAL (introWillPlay). Unchanged.
+ *  - OTHER ROUTES (revealOnLoad, e.g. /pricing): no welcome exists there, so the
+ *    clouds ease themselves in on load instead of popping — seeded hidden, then
+ *    the same tween as soon as drei has built the material.
+ * When NEITHER applies (homepage returning-visitor / skipped intro), the clouds
+ * show at rest immediately, as before. Reduced-motion never mounts the WebGL
  * clouds (cloud-layer eligibility), so no snap branch is needed here.
  */
 function RevealRig({
   cloudsRef,
   fieldRef,
   markDirty,
+  revealOnLoad,
 }: {
   cloudsRef: RefObject<Group | null>;
   fieldRef: RefObject<Group | null>;
   markDirty: () => void;
+  /** Ease the clouds in on mount when no welcome intro drives this route. */
+  revealOnLoad: boolean;
 }) {
   const camera = useThree((s) => s.camera);
 
-  // Seed hidden BEFORE the first paint if the intro will play, so the clouds
-  // never flash in at full opacity under the welcome loader.
+  // Seed hidden BEFORE the first paint whenever something WILL fade the clouds in
+  // (the welcome, or the on-load self-reveal), so they never flash at full opacity
+  // first. If drei hasn't built the material yet, the effect below re-seals it 0
+  // before starting the tween.
   useLayoutEffect(() => {
-    if (!introWillPlay()) return;
+    if (!introWillPlay() && !revealOnLoad) return;
     const mat = findCloudMaterial(cloudsRef.current);
     if (mat) {
       mat.transparent = true;
       mat.opacity = 0;
     }
-  }, [cloudsRef]);
+  }, [cloudsRef, revealOnLoad]);
 
   useEffect(() => {
-    if (!introWillPlay()) return;
+    const playsIntro = introWillPlay();
+    if (!playsIntro && !revealOnLoad) return;
+
     let tween: gsap.core.Tween | undefined;
     // Idempotency latch: START, REVEAL, and the failsafe ALL route here, and a
     // normal welcome fires the first two seconds apart — an unguarded reveal
@@ -627,6 +638,10 @@ function RevealRig({
       const drift =
         (REVEAL_DRIFT_PX * viewportWorldHeight(camera)) / window.innerHeight;
       if (g) g.position.y = drift;
+      if (mat) {
+        mat.transparent = true;
+        mat.opacity = 0;
+      }
       const proxy = { p: 0 };
       tween?.kill();
       tween = gsap.to(proxy, {
@@ -640,16 +655,37 @@ function RevealRig({
         },
       });
     };
-    window.addEventListener(INTRO_START_EVENT, reveal, { once: true });
-    window.addEventListener(INTRO_REVEAL_EVENT, reveal, { once: true });
-    const failsafe = window.setTimeout(reveal, 7000);
+
+    if (playsIntro) {
+      // Homepage: fade in WITH the welcome. Unchanged.
+      window.addEventListener(INTRO_START_EVENT, reveal, { once: true });
+      window.addEventListener(INTRO_REVEAL_EVENT, reveal, { once: true });
+      const failsafe = window.setTimeout(reveal, 7000);
+      return () => {
+        window.removeEventListener(INTRO_START_EVENT, reveal);
+        window.removeEventListener(INTRO_REVEAL_EVENT, reveal);
+        window.clearTimeout(failsafe);
+        tween?.kill();
+      };
+    }
+
+    // Other routes: ease in on load. drei builds the instanced geometry/material
+    // over the first few frames, so wait (a bounded rAF poll) for the material to
+    // exist before starting — otherwise the tween has nothing to fade and the
+    // clouds still pop when it appears. Seeded hidden in the layout effect above,
+    // so nothing shows while we wait.
+    let raf = 0;
+    let tries = 0;
+    const kick = () => {
+      if (findCloudMaterial(cloudsRef.current) || tries++ > 90) reveal();
+      else raf = requestAnimationFrame(kick);
+    };
+    raf = requestAnimationFrame(kick);
     return () => {
-      window.removeEventListener(INTRO_START_EVENT, reveal);
-      window.removeEventListener(INTRO_REVEAL_EVENT, reveal);
-      window.clearTimeout(failsafe);
+      cancelAnimationFrame(raf);
       tween?.kill();
     };
-  }, [cloudsRef, fieldRef, camera, markDirty]);
+  }, [cloudsRef, fieldRef, camera, markDirty, revealOnLoad]);
 
   return null;
 }
@@ -677,6 +713,7 @@ export default function CloudView({
   track,
   clouds,
   scrollFactor = DEFAULT_SCROLL_FACTOR,
+  revealOnLoad = false,
 }: {
   plane: PlaneName;
   index: number;
@@ -684,6 +721,9 @@ export default function CloudView({
   clouds: CloudSpec[];
   /** Per-layer scroll damping (1 = welded to page; < 1 = slower parallax). */
   scrollFactor?: number;
+  /** Ease the clouds in on mount when no welcome intro drives the route (e.g.
+   *  /pricing). The homepage leaves this false — its welcome owns the reveal. */
+  revealOnLoad?: boolean;
 }) {
   // Stable paint-control wrappers. useSharedView RETURNS the controls, but the
   // scene `children` are an ARGUMENT to that same call, so they can't close over
@@ -983,7 +1023,12 @@ export default function CloudView({
         {RETINT_CLOUDS && (
           <ThemeRig ambientRef={ambientRef} keyRef={keyRef} markDirty={markDirty} />
         )}
-        <RevealRig cloudsRef={cloudsRef} fieldRef={fieldRootRef} markDirty={markDirty} />
+        <RevealRig
+          cloudsRef={cloudsRef}
+          fieldRef={fieldRootRef}
+          markDirty={markDirty}
+          revealOnLoad={revealOnLoad}
+        />
       </>
     ),
     [
@@ -996,6 +1041,7 @@ export default function CloudView({
       markDirty,
       requestBurst,
       onActiveChange,
+      revealOnLoad,
     ],
   );
 

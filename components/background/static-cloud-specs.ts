@@ -167,3 +167,21 @@ export const STATIC_CLOUDS: StaticCloudSpec[] = [
   // section, nothing floating in the middle.
   { key: "finalcta-br", sprite: "cta-bank.webp", layer: "sky", trigger: "[data-final-cta]", x: 85, y: 90, width: 56 },
 ];
+
+// ── Per-route static scenes ─────────────────────────────────────────────────
+// The mobile / reduced-motion / no-WebGL fallback (static-cloud-layer.tsx) is the
+// DOM-sprite mirror of the WebGL scenes (cloud-specs.ts CLOUD_SCENES) — same
+// per-route split, so the fallback never bleeds one page's clouds onto another.
+// /pricing starts EMPTY (the fallback renders nothing there) rather than borrowing
+// the homepage arrangement; bake its own sprites at /lab/cloud-sprites and list
+// them here when the page's clouds are designed. Unmapped routes fall back to the
+// home set, matching the WebGL selector.
+export const STATIC_CLOUD_SCENES: Record<string, StaticCloudSpec[]> = {
+  "/": STATIC_CLOUDS,
+  "/pricing": [],
+};
+
+/** The static-cloud set for a route, falling back to the home set when unmapped. */
+export function staticCloudsForPath(pathname: string): StaticCloudSpec[] {
+  return STATIC_CLOUD_SCENES[pathname] ?? STATIC_CLOUDS;
+}

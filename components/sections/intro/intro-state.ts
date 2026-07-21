@@ -115,6 +115,15 @@ function atHeroTop(): boolean {
 function computeShouldPlay(): boolean {
   if (typeof window === "undefined") return false;
 
+  // The welcome is a HOMEPAGE-only feature: <Intro> and <IntroLoader> are
+  // composed in app/page.tsx and mount nowhere else. On any other route
+  // (e.g. /pricing) no intro exists, so INTRO_START/REVEAL never fire — anything
+  // that waits on the welcome (the cloud RevealRig, the static useIntroReveal)
+  // must take its IMMEDIATE path there, or it hangs until the last-resort
+  // failsafe (the "clouds appear seconds late on /pricing" bug). Checked before
+  // the ?intro override since forcing an intro that never mounts is meaningless.
+  if (window.location.pathname !== "/") return false;
+
   // Dev/QA overrides: ?intro=force always plays (even mid-page), ?intro=skip never.
   const q = new URLSearchParams(window.location.search).get("intro");
   if (q === "force") return true;

@@ -1,14 +1,16 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import {
   INTRO_REVEAL_EVENT,
   INTRO_START_EVENT,
   introWillPlay,
 } from "@/components/sections/intro/intro-state";
-import { SKY_CLOUDS, ROCK_CLOUDS } from "./cloud-specs";
+import { cloudSceneForPath } from "./cloud-specs";
 import StaticCloudLayer from "./static-cloud-layer";
+import { staticCloudsForPath } from "./static-cloud-specs";
 import { FRONT_INDEX, REAR_INDEX } from "@/components/canvas/indices";
 // The shared, module-cached WebGL probe (one context ever, released on probe) —
 // see lib/webgl-support.ts. Only called from the client snapshot below; the
@@ -101,6 +103,16 @@ export default function CloudLayer() {
   const revealed = useIntroReveal();
   const skyTrackRef = useRef<HTMLDivElement>(null);
   const rockTrackRef = useRef<HTMLDivElement>(null);
+  // Per-route cloud arrangement. This layer is mounted ONCE at the root, so a
+  // client-side navigation keeps the shared WebGL context alive and only swaps
+  // the registered specs (cloud-specs.ts CLOUD_SCENES). usePathname re-renders
+  // this on route change; the CloudView children re-register with the new specs.
+  const pathname = usePathname();
+  const scene = cloudSceneForPath(pathname);
+  const staticClouds = staticCloudsForPath(pathname);
+  // The welcome intro (and its cloud reveal) is homepage-only; on any other route
+  // the clouds must ease themselves in on load rather than pop. See RevealRig.
+  const revealOnLoad = pathname !== "/";
   // False for SSR + the hydration render, true right after. The static fallback
   // must NOT be decided server-side: `eligible` is unknowable there (its server
   // snapshot is always false) and `introWillPlay()` returns false on the server,
@@ -131,44 +143,56 @@ export default function CloudLayer() {
   // no-WebGL): individual baked cloud sprites distributed across every section
   // and scroll-driven in DOM (GSAP transforms) — see static-cloud-layer.tsx.
   if (!eligible) {
-    return <StaticCloudLayer reveal={reveal} />;
+    // Nothing to render for a route whose static scene is empty (e.g. /pricing
+    // today) — skip the empty strata entirely.
+    if (staticClouds.length === 0) return null;
+    return <StaticCloudLayer clouds={staticClouds} reveal={reveal} />;
   }
 
   return (
     <>
       {/* Distant sky clouds — REAR plane (z -10), behind page content. Welded 1:1
-          to the page (scrollFactor 1), matching the pre-bench behaviour. */}
-      <div
-        ref={skyTrackRef}
-        aria-hidden
-        className="pointer-events-none fixed inset-0"
-      >
-        <CloudView
-          plane="rear"
-          index={REAR_INDEX.SKY_CLOUDS}
-          track={skyTrackRef}
-          clouds={SKY_CLOUDS}
-          scrollFactor={1}
-        />
-      </div>
+          to the page (scrollFactor 1), matching the pre-bench behaviour. Skipped
+          when the route's scene declares no sky clouds. */}
+      {scene.sky.length > 0 && (
+        <div
+          ref={skyTrackRef}
+          aria-hidden
+          className="pointer-events-none fixed inset-0"
+        >
+          <CloudView
+            plane="rear"
+            index={REAR_INDEX.SKY_CLOUDS}
+            track={skyTrackRef}
+            clouds={scene.sky}
+            scrollFactor={1}
+            revealOnLoad={revealOnLoad}
+          />
+        </div>
+      )}
       {/* Foreground clouds — FRONT plane (z 61), above the cliffs so the rock-base
-          skirt overlaps them. A thin band pinned to the very bottom (ROCK_CLOUDS
+          skirt overlaps them. A thin band pinned to the very bottom (rock clouds
           ndc y ≈ -1.02), so leapfrogging the top-anchored wordmark (z-10)/content
           is spatially harmless. scrollFactor MUST stay 1: these are welded to the
-          cliff feet (page content scrolling 1:1); any damping slides them off. */}
-      <div
-        ref={rockTrackRef}
-        aria-hidden
-        className="pointer-events-none fixed inset-0"
-      >
-        <CloudView
-          plane="front"
-          index={FRONT_INDEX.ROCK_CLOUDS}
-          track={rockTrackRef}
-          clouds={ROCK_CLOUDS}
-          scrollFactor={1}
-        />
-      </div>
+          cliff feet (page content scrolling 1:1); any damping slides them off.
+          Skipped when the route's scene declares no rock clouds (e.g. /pricing,
+          which has no hero cliffs). */}
+      {scene.rock.length > 0 && (
+        <div
+          ref={rockTrackRef}
+          aria-hidden
+          className="pointer-events-none fixed inset-0"
+        >
+          <CloudView
+            plane="front"
+            index={FRONT_INDEX.ROCK_CLOUDS}
+            track={rockTrackRef}
+            clouds={scene.rock}
+            scrollFactor={1}
+            revealOnLoad={revealOnLoad}
+          />
+        </div>
+      )}
     </>
   );
 }
