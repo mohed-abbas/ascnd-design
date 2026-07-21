@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useId, useRef, useState } from "react";
 import gsap from "gsap";
 import { setMode } from "@/lib/theme/mode-store";
@@ -10,9 +11,12 @@ import { MODE_ITEMS } from "./mode-switcher";
 
 type NavLink = { label: string; href: string };
 
+// `href` starting with "/" is a real ROUTE (rendered as a next/link for
+// client-side navigation — the shared sky/cloud canvas persists across it);
+// "#…" entries stay in-page anchors. "pricing" now points at the /pricing route.
 const LINKS: NavLink[] = [
   { label: "work", href: "#work" },
-  { label: "pricing", href: "#pricing" },
+  { label: "pricing", href: "/pricing" },
   { label: "about", href: "#about" },
   { label: "book a call", href: "#book" },
 ];
@@ -211,18 +215,27 @@ export default function Navbar() {
             md they sit top-left, leaving room to the right for the theme column
             and below for the bottom toggle bar. */}
         <ul className="absolute left-[26px] top-1/2 flex -translate-y-1/2 flex-col gap-[10px] text-[25px] font-light leading-[1.1] tracking-[-0.03em] max-md:top-[84px] max-md:translate-y-0">
-          {LINKS.map((link) => (
-            <li key={link.label} data-menu-item className="opacity-0">
-              <a
-                href={link.href}
-                tabIndex={open ? 0 : -1}
-                onClick={() => setOpen(false)}
-                className="inline-block transition-opacity hover:opacity-70"
-              >
-                {link.label}
-              </a>
-            </li>
-          ))}
+          {LINKS.map((link) => {
+            const isRoute = link.href.startsWith("/");
+            const shared = {
+              tabIndex: open ? 0 : -1,
+              onClick: () => setOpen(false),
+              className: "inline-block transition-opacity hover:opacity-70",
+            };
+            return (
+              <li key={link.label} data-menu-item className="opacity-0">
+                {isRoute ? (
+                  <Link href={link.href} {...shared}>
+                    {link.label}
+                  </Link>
+                ) : (
+                  <a href={link.href} {...shared}>
+                    {link.label}
+                  </a>
+                )}
+              </li>
+            );
+          })}
         </ul>
 
         {/* Theme column (MOBILE ONLY) — the sky-mode picker folded into the menu

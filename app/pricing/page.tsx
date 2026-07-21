@@ -1,0 +1,68 @@
+import type { Metadata } from "next";
+import ChromeReveal from "@/components/ui/chrome-reveal";
+import Footer from "@/components/sections/footer/footer";
+import Navbar from "@/components/ui/navbar";
+import Pricing from "@/components/sections/pricing/pricing";
+import Wordmark from "@/components/ui/wordmark";
+
+export const metadata: Metadata = {
+  title: "pricing — ascnd",
+  description:
+    "Two ways to work with us, same senior team either way. Subscribe and pause anytime, or scope a fixed sprint.",
+};
+
+/**
+ * /pricing — the standalone pricing route.
+ *
+ * Reuses the site's shared chrome and the homepage Pricing section as its hero:
+ *   • Sky, grain, volumetric clouds, custom cursor and the sky-mode switcher all
+ *     come from the global fixed layers in layout.tsx — this route inherits them
+ *     with no extra wiring (like every other page, it renders transparent over
+ *     the shared <Background/>).
+ *   • <Navbar> — the same floating glass nav (fixed, shared across routes).
+ *   • The top-center <Wordmark> — the hero's brand mark, lifted out to the page
+ *     top here (there's no hero on this route). NB: no `data-wordmark-slot` — the
+ *     WebGL welcome intro only ever docks on the homepage hero.
+ *   • <Pricing> — the homepage pricing section verbatim, standing in as this
+ *     page's hero. It carries its own <PricingReveal> (a ScrollTrigger `once`
+ *     timeline that fires immediately when it's the in-view first section).
+ *   • <Footer> — the shared closing footer (with its own <FooterReveal>).
+ *
+ * <ChromeReveal> plays the wordmark + navbar on-load entrance: the shared layout
+ * arms `.reveal-armed` on <html> for EVERY route, and globals.css then hides the
+ * armed chrome — on the homepage HeroReveal clears it, so interior pages need
+ * this counterpart or the navbar never fades in (see chrome-reveal.tsx).
+ *
+ * The next sections (below the Pricing hero, above the footer) land here as their
+ * Figma frames are provided.
+ */
+export default function PricingPage() {
+  return (
+    <>
+      {/* Fades the navbar in + slides the wordmark up on load. Renders nothing. */}
+      <ChromeReveal />
+
+      <Navbar />
+
+      {/* ascnd wordmark — top-center brand mark over the plain sky, matching the
+          hero's placement (glyph top ~40px, ~38px Product Sans Medium). Absolute
+          to the page top (scrolls away with content). Masked slide-up reveal via
+          [data-reveal], driven by ChromeReveal. */}
+      <div className="absolute left-1/2 top-[40px] z-10 -translate-x-1/2 text-[38px] max-md:top-[24px]">
+        <span className="block overflow-hidden">
+          <span className="block" data-reveal>
+            <Wordmark />
+          </span>
+        </span>
+      </div>
+
+      {/* Hero — the homepage pricing section, reused verbatim. */}
+      <Pricing />
+
+      {/* ── Future sections land here (Figma frames pending) ─────────────── */}
+
+      {/* Closing footer — shared across routes. */}
+      <Footer />
+    </>
+  );
+}
