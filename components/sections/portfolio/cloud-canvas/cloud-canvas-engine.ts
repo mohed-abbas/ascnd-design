@@ -406,39 +406,74 @@ export class CloudCanvasEngine {
     return this.lite;
   }
 
-  /** Load + downscale every image, build the globe, then self-benchmark. */
+  /**
+   * Load + downscale every image, build the globe, then self-benchmark.
+   *
+   * The tail (rebuild → resize → benchmark) runs in separately-scheduled tasks
+   * with a yieldToMain() between each, NOT as one synchronous block: on software
+   * raster each step is multi-ms and the benchmark's renders are ~35ms apiece, so
+   * as one block this froze the shared ticker (and Lenis) for 100ms+ exactly at
+   * the comparison→testimonials boundary where the near-view observer fires it.
+   * Split, the worst single task is ~one render. `disposed` is re-checked after
+   * every yield — the user can scroll away or unmount mid-init.
+   */
   async init(): Promise<void> {
     this.loaded = await Promise.all(this.images.map((img) => loadFastImage(img.src)));
     if (this.disposed) return;
     this.rebuildCards();
+    await yieldToMain();
+    if (this.disposed) return;
     this.resize();
-    this.benchmarkAtInit();
+    await yieldToMain();
+    if (this.disposed) return;
+    await this.benchmarkAtInit();
   }
 
   /**
    * Self-measured canvas speed probe — THE lite-mode decision. Renders two
-   * representative full-recipe frames back-to-back through the real render()
-   * with performance.now() timing (init is fired by the view's near-view
-   * observer ~1000px before the section scrolls in, so nothing here is ever
-   * user-visible) and takes the average. Above LITE_RENDER_BUDGET_MS we're on
-   * a CPU-rasterized canvas2d — Firefox/Linux, or any Chromium whose GPU is
-   * blocklisted into software raster — where this exact recipe measured
-   * ~35ms/frame and stalled the shared gsap ticker (and Lenis) page-wide.
-   * The decision is LOCKED here at init and never re-evaluated mid-view
+   * representative full-recipe frames through the real render() with
+   * performance.now() timing (init is fired by the view's near-view observer
+   * ~1000px before the section scrolls in, so nothing here is ever user-visible)
+   * and takes the average. Above LITE_RENDER_BUDGET_MS we're on a CPU-rasterized
+   * canvas2d — Firefox/Linux, or any Chromium whose GPU is blocklisted into
+   * software raster — where this exact recipe measured ~35ms/frame and stalled
+   * the shared gsap ticker (and Lenis) page-wide.
+   *
+   * The two renders are each their own task with a yield between (see the body):
+   * the measurement stays pure render time, but they no longer form one ~70ms
+   * block. The decision is LOCKED here at init and never re-evaluated mid-view
    * (CLAUDE.md: tier decisions for mounted features are locked at mount — our
    * decision point is init, which completes before the globe can be seen).
    */
-  private benchmarkAtInit(): void {
-    const start = performance.now();
+  private async benchmarkAtInit(): Promise<void> {
+    // Two representative frames, but timed and scheduled as SEPARATE tasks: yield
+    // BEFORE each render and wrap performance.now() around only the render call,
+    // so the yield's wall-time never counts toward the measurement (the average
+    // is pure render cost, as before) and the two ~35ms software-raster renders
+    // no longer form one ~70ms block — the scroll can paint in the gap between
+    // them.
+    await yieldToMain();
+    if (this.disposed) return;
+    let t = performance.now();
     this.render();
+    const d0 = performance.now() - t;
+    await yieldToMain();
+    if (this.disposed) return;
+    t = performance.now();
     this.render();
-    const avg = (performance.now() - start) / 2;
+    const d1 = performance.now() - t;
+    const avg = (d0 + d1) / 2;
     if (avg > LITE_RENDER_BUDGET_MS) {
       this.lite = true;
-      this.buildTileSprites();
-      // The initial resize() ran pre-benchmark at the full DPR cap; re-run it
-      // now so the backing store shrinks to lite's 1.0 ratio (2.25× fewer
-      // pixels at DPR≥1.5) before the first visible frame.
+      // Chunked bake + the re-resize in their own tasks (both multi-ms on the
+      // raster where lite just tripped). The initial resize() ran pre-benchmark
+      // at the full DPR cap; re-run it now so the backing store shrinks to
+      // lite's 1.0 ratio (2.25× fewer pixels at DPR≥1.5) before the first
+      // visible frame.
+      await this.buildTileSpritesChunked();
+      if (this.disposed) return;
+      await yieldToMain();
+      if (this.disposed) return;
       this.resize();
     }
     this.ctx.clearRect(0, 0, this.cssW, this.cssH); // leave the canvas blank
@@ -951,42 +986,66 @@ export class CloudCanvasEngine {
    * cleared by dispose.
    */
   private buildTileSprites(): void {
-    this.tileSprites = this.cards.map((card) => {
-      const w = card.w * TILE_SPRITE_SCALE;
-      const h = card.h * TILE_SPRITE_SCALE;
-      const base = Math.min(w, h);
-      const r = base * (14 / 261);
-      const mat = base * (6.39 / 261);
-      const edge = Math.max(0.5, base / 261);
-      const fw = w + mat * 2;
-      const fh = h + mat * 2;
-      const pad = Math.ceil(edge); // bleed for the stroke's outer half
-      const off = document.createElement("canvas");
-      off.width = Math.ceil(fw + pad * 2);
-      off.height = Math.ceil(fh + pad * 2);
-      const octx = off.getContext("2d");
-      if (!octx) return null;
-      octx.imageSmoothingEnabled = true;
-      octx.imageSmoothingQuality = "medium";
-      octx.translate(pad, pad);
-      // 1+2. Mat fill + inset sheen — the shared per-slot glass-frame sprite.
-      octx.drawImage(this.frameSprite(card.slot), 0, 0, fw, fh);
-      // 3. Hairline edge — white/40, same recipe as drawCard's live stroke.
-      octx.beginPath();
-      octx.roundRect(0, 0, fw, fh, r);
-      octx.strokeStyle = "rgba(255,255,255,0.4)";
-      octx.lineWidth = edge;
-      octx.stroke();
-      // 4. The shot ON TOP — rounded (same radius), centred in the mat ring so
-      // only the ring shows the glass, exactly like the live path.
-      octx.save();
-      octx.beginPath();
-      octx.roundRect(mat, mat, w, h, r);
-      octx.clip();
-      drawImageCover(octx, card.image, mat, mat, w, h);
-      octx.restore();
-      return { canvas: off, fw, fh, pad };
-    });
+    this.tileSprites = this.cards.map((card) => this.bakeTileSprite(card));
+  }
+
+  /**
+   * Init-path variant of buildTileSprites that bakes in batches with a
+   * yieldToMain() between them, so ~29 offscreen composites don't land as one
+   * synchronous block on software raster (the init tail runs at the
+   * comparison→testimonials boundary — see init()). Identical output to
+   * buildTileSprites; only the scheduling differs. `disposed` is re-checked
+   * after each yield.
+   */
+  private async buildTileSpritesChunked(): Promise<void> {
+    const BATCH = 6;
+    const sprites: (TileSprite | null)[] = [];
+    for (let i = 0; i < this.cards.length; i++) {
+      sprites.push(this.bakeTileSprite(this.cards[i]));
+      if ((i + 1) % BATCH === 0 && i + 1 < this.cards.length) {
+        await yieldToMain();
+        if (this.disposed) return;
+      }
+    }
+    this.tileSprites = sprites;
+  }
+
+  /** Bake one card's pre-composited whole-tile sprite (frame + hairline + shot). */
+  private bakeTileSprite(card: Card): TileSprite | null {
+    const w = card.w * TILE_SPRITE_SCALE;
+    const h = card.h * TILE_SPRITE_SCALE;
+    const base = Math.min(w, h);
+    const r = base * (14 / 261);
+    const mat = base * (6.39 / 261);
+    const edge = Math.max(0.5, base / 261);
+    const fw = w + mat * 2;
+    const fh = h + mat * 2;
+    const pad = Math.ceil(edge); // bleed for the stroke's outer half
+    const off = document.createElement("canvas");
+    off.width = Math.ceil(fw + pad * 2);
+    off.height = Math.ceil(fh + pad * 2);
+    const octx = off.getContext("2d");
+    if (!octx) return null;
+    octx.imageSmoothingEnabled = true;
+    octx.imageSmoothingQuality = "medium";
+    octx.translate(pad, pad);
+    // 1+2. Mat fill + inset sheen — the shared per-slot glass-frame sprite.
+    octx.drawImage(this.frameSprite(card.slot), 0, 0, fw, fh);
+    // 3. Hairline edge — white/40, same recipe as drawCard's live stroke.
+    octx.beginPath();
+    octx.roundRect(0, 0, fw, fh, r);
+    octx.strokeStyle = "rgba(255,255,255,0.4)";
+    octx.lineWidth = edge;
+    octx.stroke();
+    // 4. The shot ON TOP — rounded (same radius), centred in the mat ring so
+    // only the ring shows the glass, exactly like the live path.
+    octx.save();
+    octx.beginPath();
+    octx.roundRect(mat, mat, w, h, r);
+    octx.clip();
+    drawImageCover(octx, card.image, mat, mat, w, h);
+    octx.restore();
+    return { canvas: off, fw, fh, pad };
   }
 
   // ── Pointer ──────────────────────────────────────────────────────────────────
@@ -1093,6 +1152,32 @@ export class CloudCanvasEngine {
     this.tileSprites = [];
     this.fadeGradient = null;
   }
+}
+
+// ── Scheduling helpers ────────────────────────────────────────────────────────
+
+/**
+ * Yield the main thread so the browser can service a scroll frame (the shared
+ * Lenis→GSAP ticker) between chunks of a long synchronous job. Used to break up
+ * the init tail — see init() / benchmarkAtInit(). Prefers `scheduler.yield()`
+ * (yields but keeps priority so the continuation runs before unrelated work);
+ * falls back to a MessageChannel macrotask, which still lets a paint land in the
+ * gap and dodges setTimeout's ≥4ms clamp. The whole reason this exists: on
+ * software-raster canvas2d (Firefox/Linux) each render() in the benchmark costs
+ * ~35ms, and running the tail as one block froze the ticker — and Lenis, and the
+ * page's scroll — for 100ms+ right as the portfolio init fired (which lands at
+ * the comparison→testimonials boundary). Yielding turns that one freeze into a
+ * few short tasks the scroll can paint between.
+ */
+function yieldToMain(): Promise<void> {
+  const s = (globalThis as { scheduler?: { yield?: () => Promise<void> } })
+    .scheduler;
+  if (s && typeof s.yield === "function") return s.yield();
+  return new Promise((resolve) => {
+    const ch = new MessageChannel();
+    ch.port1.onmessage = () => resolve();
+    ch.port2.postMessage(undefined);
+  });
 }
 
 // ── Image helpers ─────────────────────────────────────────────────────────────
