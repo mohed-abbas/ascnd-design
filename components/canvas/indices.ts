@@ -17,15 +17,12 @@
  */
 
 /** FRONT plane (fixed inset-0, z-[61], pointer-events-none) — effects that sit
- *  ABOVE page content: intro tiles, rock-base clouds, testimonial rocks, footer
- *  glass. */
+ *  ABOVE page content: intro tiles, rock-base clouds, testimonial rocks. */
 export const FRONT_INDEX = {
   /** Phase 2 — intro/conveyor tile field. */
   INTRO_TILES: 10,
   /** Phase 4 — rock-base (ROCK_SPECS) clouds welded to the cliff feet. */
   ROCK_CLOUDS: 20,
-  /** Phase 5 — footer liquid-glass wordmark. */
-  FOOTER_GLASS: 40,
 } as const;
 
 /**

@@ -10,7 +10,7 @@
  * felt when scrolling out of the hero). `scrollRepaintFpsCap()` returns 0
  * (uncapped) on high, 60 on stepped-down tiers (the cap is re-read per call,
  * so a mid-session step-down takes effect immediately). Self-animating pumps
- * (glass, conveyor, footer) still use heavyEffectFpsCap() directly — no
+ * (glass, conveyor) still use heavyEffectFpsCap() directly — no
  * reference frame, so 60 is genuinely invisible there.
  *
  * Skipping is done with a TRAILING paint: a call inside the throttle window

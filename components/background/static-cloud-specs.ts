@@ -10,7 +10,7 @@ import { WHYSTAY_PIN_EXTRA } from "@/components/sections/why-stay/why-stay-data"
 // Coordinates are viewport percentages of the CLOUD'S CENTRE — x in vw from
 // the left edge, y in vh from the top — so a cloud lands at the same screen
 // spot on any phone. Values may run past 0/100 to bleed off-screen (the rock
-// skirts and footer banks do).
+// skirts do).
 //
 // Anchoring modes, mirroring the WebGL layer:
 //  - FIELD clouds (no `trigger`): rest at (x, y) when the page is at scroll 0
@@ -52,7 +52,7 @@ export type StaticCloudSpec = {
    * rest spot across the crossing. Bigger = longer, faster-moving drift.
    * Default 100 — one full viewport each side, matching the desktop
    * SectionRig's `travel: 1` default. ⚠️ Parking constraint (same as the
-   * desktop footer clouds): while its section is far below, the cloud parks
+   * desktop section clouds): while its section is far below, the cloud parks
    * `travel` vh BELOW its rest spot — `y + travel` must clear ~100vh plus
    * half the cloud's rendered height, or it pokes into view on every earlier
    * section (the layer is fixed). Keep travel large, or rest the cloud low.
@@ -113,7 +113,7 @@ export const DEFAULT_FLOW = 500;
 
 /**
  * The mobile cloud set — mirrors the desktop distribution (hero, cards,
- * why-stay, working-with, testimonials, final CTA, footer) with one or two
+ * why-stay, working-with, testimonials, final CTA) with one or two
  * clouds per section, placed for a phone-portrait frame. Starting values —
  * tune by eye.
  */
@@ -162,21 +162,8 @@ export const STATIC_CLOUDS: StaticCloudSpec[] = [
   { key: "pricing-tr", sprite: "puff-small.webp", layer: "sky", trigger: "[data-pricing]", x: 86, y: 30, width: 46, at: 0.35, travel: 130 },
   { key: "pricing-bl", sprite: "cards-bank.webp", layer: "sky", trigger: "[data-pricing]", x: 12, y: 66, width: 58, at: 0.7, travel: 130 },
 
-  // ——— Final CTA → footer transition ———
-  // Kept DELIBERATELY sparse: the CTA and footer are adjacent and the sky band
-  // between the buttons and the mountains is short, so extra clouds there read
-  // as clutter. One low CTA cloud hugging the fold into the footer, plus the
-  // footer's own two mountain clouds — nothing floating in the middle.
+  // ——— Final CTA ———
+  // Kept DELIBERATELY sparse — one low cloud hugging the bottom fold of the last
+  // section, nothing floating in the middle.
   { key: "finalcta-br", sprite: "cta-bank.webp", layer: "sky", trigger: "[data-final-cta]", x: 85, y: 90, width: 56 },
-
-  // ——— Footer (mountain range) ———
-  // The footer is the LAST section and never scroll-centres — the page ends at
-  // ~0.2 crossing progress (d ≈ -0.6), so the cloud only ever climbs ~0.6 ×
-  // travel of its way back up to rest. Rest `y` is set so the page-end resting
-  // spot (≈ y + 0.6 × travel vh) sits low, near the ridgeline, rather than
-  // floating mid-gap; travel stays big enough to satisfy the parking constraint.
-  // Bank BEHIND the peaks (sky layer) — only its top wisps crest the ridge.
-  { key: "footer-behind", sprite: "footer-bank.webp", layer: "sky", trigger: "[data-footer]", x: 22, y: 12, width: 82, travel: 125 },
-  // Thin wisp IN FRONT of the peaks (front layer), low on the right.
-  { key: "footer-wisp", sprite: "footer-wisp.webp", layer: "front", trigger: "[data-footer]", x: 82, y: 30, width: 54, travel: 95 },
 ];

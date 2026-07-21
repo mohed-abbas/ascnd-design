@@ -19,9 +19,4 @@ export const FLAGS = {
    * docs/canvas-consolidation-plan.md).
    */
   clouds: true,
-  /**
-   * The footer (mountain range + liquid-glass wordmark). Benched pending a
-   * different approach.
-   */
-  footer: false,
 } as const;

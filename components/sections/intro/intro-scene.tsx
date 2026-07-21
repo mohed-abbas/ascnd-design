@@ -60,8 +60,8 @@ for (const n of [2, 3, 4, 5, 6, 7, 8, 9]) useTexture.preload(`/shots/shot${n}.av
  * the hero. The canvas is TRANSPARENT — the DOM sky + clouds show through; only
  * the two rock planes (refraction source under 'a'/'d', pixel-matched over the
  * DOM rocks) and the glass live in the scene. The material's `background` — a
- * gradient texture of the real sky stops (lib/theme/sky-backdrop, shared with the
- * footer glass) — fills the transmission where the scene is empty (open sky).
+ * gradient texture of the real sky stops (lib/theme/sky-backdrop) — fills the
+ * transmission where the scene is empty (open sky).
  *
  * Transforms are driven imperatively from <Intro>'s GSAP timeline via the shared
  * `anim` ref.
@@ -885,7 +885,7 @@ function Glass({
   // Refraction fill where the scene is empty (open sky) — without it the
   // transmission samples the transparent FBO (black) and the glass goes dark.
   // A GRADIENT texture of the current mode's real sky stops (lib/theme/
-  // sky-backdrop, shared with the footer glass) — a flat mid colour read wrong
+  // sky-backdrop) — a flat mid colour read wrong
   // against the graded DOM sky, especially two-tone sunrise/sunset. On a mode
   // switch the stops tween in lockstep with the site-wide sky CROSSFADE, each
   // step redrawing the tiny gradient + markDirty()-ing the shared view (during

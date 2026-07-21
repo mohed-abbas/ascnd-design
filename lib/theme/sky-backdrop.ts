@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { PALETTES, type ThemeMode } from "./palette";
 
 /**
- * Sky-gradient backdrop for the liquid-glass wordmarks (intro + footer).
+ * Sky-gradient backdrop for the intro liquid-glass wordmark.
  *
  * MeshTransmissionMaterial's `background` fills the refraction where its scene is
  * empty (open sky). A flat colour there reads wrong the moment the DOM sky is a

@@ -65,7 +65,7 @@ export interface PlaneConfig {
 }
 
 export const PLANE_CONFIG = {
-  /** FRONT — above page content: intro tiles, rock-base clouds, footer glass
+  /** FRONT — above page content: intro tiles, rock-base clouds
    *  (testimonial rocks likely move to a future MID plane, not here). z 61
    *  matches today's rock-cloud layer; pointer-events none in Phase 1 (drei View
    *  picking for the rocks' hover-dodge is enabled per-plane when Phase 3 lands). */

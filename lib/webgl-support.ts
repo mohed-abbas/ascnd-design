@@ -1,10 +1,10 @@
 /**
- * The ONE WebGL support probe for the whole app. CloudLayer, TestimonialRocks,
- * and the footer glass each used to spin up their own probe context to answer
- * "does this device do WebGL?" — three transient contexts, and (because each is
- * correctly released via WEBGL_lose_context) three benign but scary-looking
- * "WebGL context was lost." lines in Firefox's console on load. One shared,
- * module-cached probe → one teardown line, two fewer transient contexts.
+ * The ONE WebGL support probe for the whole app. CloudLayer and TestimonialRocks
+ * each used to spin up their own probe context to answer "does this device do
+ * WebGL?" — transient contexts, and (because each is correctly released via
+ * WEBGL_lose_context) benign but scary-looking "WebGL context was lost." lines in
+ * Firefox's console on load. One shared, module-cached probe → one teardown line,
+ * fewer transient contexts.
  *
  * Support is static per device: the probe runs once on first call, the boolean
  * is cached at module level, and every later call (from any importer) is a pure

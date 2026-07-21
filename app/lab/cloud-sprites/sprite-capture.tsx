@@ -47,10 +47,8 @@ const RECIPES: Recipe[] = [
   { file: "puff-small.webp", seed: 11, bounds: [4, 1, 1], volume: 3, usedBy: "workingwith-right-bottom" },
   { file: "puff-soft.webp", seed: 11, bounds: [4, 1.4, 1], volume: 4, usedBy: "testimonials-right-top" },
   { file: "cta-bank.webp", seed: 11, bounds: [5, 1.3, 1], volume: 5, usedBy: "finalcta-br" },
-  { file: "footer-bank.webp", seed: 11, bounds: [5, 1.6, 1], volume: 6, usedBy: "footer-bl-behind" },
   { file: "rock-skirt-left.webp", seed: 7, bounds: [6.5, 0.45, 1], volume: 8, usedBy: "rock-left" },
   { file: "rock-skirt-right.webp", seed: 3, bounds: [6.5, 0.45, 1], volume: 8, usedBy: "rock-right" },
-  { file: "footer-wisp.webp", seed: 7, bounds: [3.5, 0.4, 1], volume: 4, usedBy: "footer-br-front" },
 ];
 
 // Production look constants (cloud-canvas.tsx CLOUD/CAMERA/day palette), except

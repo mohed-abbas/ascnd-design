@@ -84,8 +84,8 @@ export function getRefreshHz(): number {
 
 /**
  * The fps cap for the *heavy, SELF-ANIMATING* effects — the intro liquid
- * glass's paint pump, the tile conveyor's drift, the footer glass, the
- * portfolio globe's ticker. These have no on-screen reference frame, so they
+ * glass's paint pump, the tile conveyor's drift, the portfolio globe's ticker.
+ * These have no on-screen reference frame, so they
  * really are visually identical above 60 fps but cost ~2× on a 120 Hz panel —
  * cap them to 60 on any fast panel OR any stepped-down tier (audit item 9).
  * Returns 0 = uncapped (ride the display) on a 60 Hz high tier. The clouds'

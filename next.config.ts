@@ -51,7 +51,6 @@ const nextConfig: NextConfig = {
       "brand",
       "cards",
       "clouds",
-      "footer",
       "fonts",
       "portfolio",
       "rocks",

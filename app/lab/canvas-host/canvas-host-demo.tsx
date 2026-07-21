@@ -49,7 +49,9 @@ export default function CanvasHostDemo() {
 
   const box = useSharedView({
     plane: "front",
-    index: FRONT_INDEX.FOOTER_GLASS,
+    // Dev-only demo slot — any index unique to this plane and spaced ≥2 from the
+    // two above (INTRO_TILES 10, ROCK_CLOUDS 20) works; 40 leaves generous room.
+    index: 40,
     track: boxRef,
     toneMapping: THREE.NoToneMapping,
     mode: "demand",

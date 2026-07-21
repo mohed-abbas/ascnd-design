@@ -2,9 +2,7 @@ import Cards from "@/components/sections/cards/cards";
 import Comparison from "@/components/sections/comparison/comparison";
 import Faq from "@/components/sections/faq/faq";
 import FinalCta from "@/components/sections/final-cta/final-cta";
-import Footer from "@/components/sections/footer/footer";
 import Hero from "@/components/sections/hero/hero";
-import { FLAGS } from "@/lib/flags";
 import IntroLoader from "@/components/sections/intro/intro-loader";
 import Pills from "@/components/sections/pills/pills";
 import Portfolio from "@/components/sections/portfolio/portfolio";
@@ -65,11 +63,6 @@ export default function Home() {
             {/* Closing call-to-action ("let's get you off the ground"): a mixed-font
           heading over the two shared CTA buttons, over the shared sky. */}
             <FinalCta />
-            {/* Footer brand payoff: a full-bleed mountain range with a giant glassy
-          "ascnd" wordmark laid across the peaks (one baked composite over the
-          shared sky). Last section — the mountains meet the bottom of the page.
-          Flag-benched (lib/flags.ts) pending a different footer approach. */}
-            {FLAGS.footer && <Footer />}
         </>
     );
 }
