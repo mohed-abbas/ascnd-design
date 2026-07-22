@@ -3,6 +3,7 @@ import ChromeReveal from "@/components/ui/chrome-reveal";
 import Costs from "@/components/sections/costs/costs";
 import Footer from "@/components/sections/footer/footer";
 import Navbar from "@/components/ui/navbar";
+import PlanCompare from "@/components/sections/plan-compare/plan-compare";
 import Pricing from "@/components/sections/pricing/pricing";
 import Wordmark from "@/components/ui/wordmark";
 
@@ -63,6 +64,9 @@ export default function PricingPage() {
       {/* Supersize statement ("looking cheap costs more.") — same format and
           reveal as the hero tagline, different copy (Figma 792:438). */}
       <Costs />
+
+      {/* Accordion plan comparison ("compare plan details") — Figma 678:2856. */}
+      <PlanCompare />
 
       {/* ── Future sections land here (Figma frames pending) ─────────────── */}
 
