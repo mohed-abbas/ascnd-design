@@ -73,6 +73,16 @@ export default function TimelineReveal() {
     );
     if (!maskPath || !pen || !dotEls.length) return;
 
+    // In-card micro-animation targets (any may be absent).
+    const countEl = stage.querySelector<HTMLElement>("[data-tl-count]");
+    const stampEl = stage.querySelector<HTMLElement>("[data-tl-stamp]");
+    const cellEls = gsap.utils.toArray<HTMLElement>(
+      stage.querySelectorAll("[data-tl-cell]"),
+    );
+    const refreshSpin = stage.querySelector<SVGElement>("[data-tl-refresh-spin]");
+    const refreshCheck = stage.querySelector<SVGElement>("[data-tl-refresh-check]");
+    const refreshAura = stage.querySelector<HTMLElement>("[data-tl-refresh-aura]");
+
     const L = maskPath.getTotalLength();
     const toPct = (fx: number, fy: number) => ({
       x: (fx / FRAME_W) * 100,
@@ -144,6 +154,11 @@ export default function TimelineReveal() {
       }
       return DRAW_AT + ((lo + hi) / 2) * DRAW_DURATION;
     };
+    // When a beat's day reveals (its dot's progress → timeline time).
+    const beatTime = (key: string) => {
+      const p = pByBeat.get(key);
+      return p == null ? DRAW_AT : timeForP(p);
+    };
 
     // ── Park everything empty synchronously (before fonts resolve), so nothing
     //    flashes finished if the page loads already scrolled here. ──
@@ -158,6 +173,11 @@ export default function TimelineReveal() {
     const startPct = toPct(startPt.x + TX, startPt.y + TY);
     pen.style.left = `${startPct.x + footOffX}%`;
     pen.style.top = `${startPct.y + footOffY}%`;
+    // Micro-animation resets (reduced-motion returned above, so finished-state
+    // markup stays put there). The refresh tick + aura are hidden via class.
+    if (countEl) countEl.textContent = "0";
+    if (cellEls.length) gsap.set(cellEls, { autoAlpha: 0 });
+    if (stampEl) gsap.set(stampEl, { autoAlpha: 0, scale: 0.6 });
 
     let ctx: gsap.Context | undefined;
     let split: SplitText | undefined;
@@ -249,6 +269,63 @@ export default function TimelineReveal() {
           );
         }
 
+        // ── In-card micro-animations, each keyed to its day's reveal moment. ──
+
+        // day-2: the "70% completed" chip counts up 0→70.
+        if (countEl) {
+          const target = Number(countEl.dataset.countTo ?? 70);
+          const n = { v: 0 };
+          tl.to(
+            n,
+            {
+              v: target,
+              duration: 1.1,
+              ease: "power1.out",
+              onUpdate: () => {
+                countEl.textContent = String(Math.round(n.v));
+              },
+            },
+            beatTime("first-request") + 0.1,
+          );
+        }
+
+        // day-5: the delivery ✓ badge stamps onto the design.
+        if (stampEl) {
+          tl.fromTo(
+            stampEl,
+            { autoAlpha: 0, scale: 0.6 },
+            { autoAlpha: 1, scale: 1, duration: 0.4, ease: "back.out(1.8)" },
+            beatTime("delivery") + 0.3,
+          );
+        }
+
+        // day-12: the refresh spins "in progress" ~2s, then cross-fades to a green
+        // tick as the rainbow aura ignites — the work landing "done".
+        if (refreshSpin && refreshCheck) {
+          const spinAt = beatTime("revised");
+          const swapAt = spinAt + 2.0;
+          tl.to(refreshSpin, { rotation: "+=720", duration: 2.0, ease: "none" }, spinAt);
+          tl.to(refreshSpin, { autoAlpha: 0, duration: 0.2 }, swapAt);
+          tl.fromTo(
+            refreshCheck,
+            { autoAlpha: 0, scale: 0.5 },
+            { autoAlpha: 1, scale: 1, duration: 0.4, ease: "back.out(2)" },
+            swapAt,
+          );
+          if (refreshAura) {
+            tl.to(refreshAura, { autoAlpha: 1, duration: 0.4 }, swapAt);
+          }
+        }
+
+        // day-23: the banked-calendar cells fill in with a staggered fade (no move).
+        if (cellEls.length) {
+          tl.to(
+            cellEls,
+            { autoAlpha: 1, duration: 0.35, ease: "power1.out", stagger: 0.025 },
+            beatTime("pause") + 0.15,
+          );
+        }
+
         // Endnote settles as the pen lands.
         if (endnote) {
           tl.fromTo(
@@ -276,6 +353,13 @@ export default function TimelineReveal() {
       gsap.set(pen, { clearProps: "opacity,visibility" });
       gsap.set(dots.map((d) => d.el), { clearProps: "transform,opacity,visibility" });
       gsap.set(hidden, { clearProps: "opacity,visibility,transform,filter" });
+      // Restore the micro-animation targets (opacity clears revert the tick/aura
+      // to their class-hidden state; count returns to its final value).
+      if (countEl) countEl.textContent = countEl.dataset.countTo ?? "70";
+      const micro = [stampEl, refreshSpin, refreshCheck, refreshAura, ...cellEls].filter(
+        (el): el is HTMLElement | SVGElement => el != null,
+      );
+      if (micro.length) gsap.set(micro, { clearProps: "opacity,visibility,transform" });
     };
   }, []);
 

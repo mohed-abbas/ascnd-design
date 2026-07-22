@@ -201,7 +201,13 @@ export default function Timeline() {
                 <Chip>UI/UX</Chip>
               </TaskPill>
               <TaskPill label="request anything">
-                <Chip>70% completed</Chip>
+                <Chip>
+                  {/* counts up 0→70 when this day reveals (SSR shows 70). */}
+                  <span data-tl-count data-count-to="70">
+                    70
+                  </span>
+                  % completed
+                </Chip>
               </TaskPill>
             </div>
           </div>
@@ -219,8 +225,12 @@ export default function Timeline() {
                 sizes="13vw"
                 className="rounded-[0.9cqw] object-cover"
               />
-              {/* ✓ delivery badge — frost-glass circle + two-tone check (746:4419). */}
-              <span className="absolute -right-[0.4cqw] -top-[0.4cqw] flex size-[1.19cqw] items-center justify-center rounded-full border-[0.03cqw] border-white/50 bg-gradient-to-b from-black/10 to-black/5 text-white shadow-[inset_0_0_0_999px_rgba(255,255,255,0.12)]">
+              {/* ✓ delivery badge — frost-glass circle + two-tone check (746:4419).
+                  Stamps onto the design once this day reveals. */}
+              <span
+                data-tl-stamp
+                className="absolute -right-[0.4cqw] -top-[0.4cqw] flex size-[1.19cqw] items-center justify-center rounded-full border-[0.03cqw] border-white/50 bg-gradient-to-b from-black/10 to-black/5 text-white shadow-[inset_0_0_0_999px_rgba(255,255,255,0.12)]"
+              >
                 <Check className="size-[0.85cqw]" />
               </span>
             </div>
@@ -242,12 +252,33 @@ export default function Timeline() {
           >
             <CardText k="revised" />
             <TaskPill label="landing page refresh" padLeft="0.761cqw">
-              {/* In-review refresh chip (Phase 3: spins → tick + aura). */}
+              {/* In-review chip: the refresh spins while "in progress", then
+                  cross-fades to a green tick as the rainbow aura ignites — the
+                  work landing "done". SSR / reduced-motion rest on the refresh
+                  (the static in-review state); the tick + aura start hidden. */}
               <span
                 data-tl-refresh
-                className="flex size-[1.588cqw] items-center justify-center rounded-full border-[0.079cqw] border-[#ffe8b7] bg-white text-[#737373]"
+                className="relative grid size-[1.588cqw] place-items-center rounded-full border-[0.079cqw] border-[#ffe8b7] bg-white text-[#737373]"
               >
-                <Refresh className="size-[1.058cqw]" />
+                <span
+                  data-tl-refresh-aura
+                  className="pointer-events-none absolute inset-0 opacity-0"
+                >
+                  <TimelineAura
+                    radius="9999px"
+                    ring="0.11cqw"
+                    spread="0.24cqw"
+                    blur="0.34cqw"
+                  />
+                </span>
+                <Refresh
+                  data-tl-refresh-spin
+                  className="col-start-1 row-start-1 size-[1.058cqw]"
+                />
+                <Check
+                  data-tl-refresh-check
+                  className="col-start-1 row-start-1 size-[1.058cqw] text-[#34c759] opacity-0"
+                />
               </span>
             </TaskPill>
           </div>
@@ -347,6 +378,7 @@ function BankedCalendar() {
 function DayCell({ state }: { state: Cell }) {
   return (
     <div
+      data-tl-cell
       className={`flex size-[1.129cqw] items-center justify-center rounded-full ${
         state === "solid" ? "bg-white" : state === "muted" ? "bg-white/35" : "bg-white/30"
       }`}
