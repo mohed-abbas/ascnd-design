@@ -3,7 +3,7 @@
 import { useState } from "react";
 import FaqReveal from "./faq-reveal";
 import { PlusIcon } from "./faq-icons";
-import { FAQS } from "./faq-data";
+import { FAQS, type Faq as FaqItem } from "./faq-data";
 
 /**
  * "questions, answered straight" — Figma frame 498:412 (1512×982).
@@ -38,8 +38,12 @@ import { FAQS } from "./faq-data";
  * word-by-word blur-rise; markup renders FINISHED (SSR / no-JS / reduced-motion
  * show the full heading), the driver only hides + plays once it knows it'll
  * animate.
+ *
+ * The question set is a prop (defaulting to the homepage FAQS) so the same
+ * section serves the /pricing page with its own subscription-focused list
+ * (PRICING_FAQS) — identical design, different copy, one component.
  */
-export default function Faq() {
+export default function Faq({ faqs = FAQS }: { faqs?: readonly FaqItem[] }) {
   // Single-open accordion: index of the expanded pill, or null when all closed.
   const [open, setOpen] = useState<number | null>(null);
 
@@ -71,7 +75,7 @@ export default function Faq() {
 
         {/* Pill stack (526:414). */}
         <div className="flex w-full flex-col gap-[15px]">
-          {FAQS.map((faq, i) => {
+          {faqs.map((faq, i) => {
             const isOpen = open === i;
             const panelId = `faq-panel-${i}`;
             const buttonId = `faq-button-${i}`;

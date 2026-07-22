@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import ChromeReveal from "@/components/ui/chrome-reveal";
 import Costs from "@/components/sections/costs/costs";
+import Faq from "@/components/sections/faq/faq";
+import { PRICING_FAQS } from "@/components/sections/faq/faq-data";
 import Footer from "@/components/sections/footer/footer";
 import Navbar from "@/components/ui/navbar";
 import PlanCompare from "@/components/sections/plan-compare/plan-compare";
@@ -67,6 +69,10 @@ export default function PricingPage() {
 
       {/* Accordion plan comparison ("compare plan details") — Figma 678:2856. */}
       <PlanCompare />
+
+      {/* FAQ ("questions, answered straight") — the shared glass-pill accordion
+          with the pricing-specific question set (Figma 746:4593). */}
+      <Faq faqs={PRICING_FAQS} />
 
       {/* ── Future sections land here (Figma frames pending) ─────────────── */}
 
