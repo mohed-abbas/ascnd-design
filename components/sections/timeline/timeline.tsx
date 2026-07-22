@@ -1,7 +1,6 @@
 import Image from "next/image";
 import type { ReactNode } from "react";
-import Logo from "@/components/ui/logo";
-import { Check, Spinner } from "./timeline-icons";
+import { AscndMark, Check, Spinner } from "./timeline-icons";
 import {
   AND_UP_WE_GO,
   BANKED_GRID,
@@ -105,7 +104,11 @@ export default function Timeline() {
           <p className="absolute left-[91.8%] top-[1.06%] w-[5.6cqw] text-[0.926cqw] leading-[1.2] text-white/90">
             {AND_UP_WE_GO}
           </p>
-          <Logo className="absolute left-[92.6%] top-[4.24%] w-[2.58cqw] text-white" />
+          {/* The block mark IS the pen — in Phase 2 it rides the spine drawing
+              the line, so at rest its bottom-left foot must sit exactly on the
+              line's terminus (frame ≈1398.5,71). Positioned so the foot lands
+              there rather than at the mark's Figma box origin (746:4538). */}
+          <AscndMark className="absolute left-[91.8%] top-[4.45%] w-[2.595cqw] text-white" />
 
           {/* ── day 1 — "you subscribe" (746:4160). ── */}
           <div
