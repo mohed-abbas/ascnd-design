@@ -20,6 +20,28 @@ export function Refresh(props: SVGProps<SVGSVGElement>) {
   );
 }
 
+/**
+ * Dotted loading spinner for the day-1 "creating your board" button. A ring of
+ * round dots (echoing the timeline's dotted spine); TimelineReveal spins it while
+ * the board is being created, then cross-fades it to the ✓ ("board created").
+ * Only ever shown while spinning, so it never reads as a stuck/static spinner.
+ */
+export function Spinner(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden {...props}>
+      <circle
+        cx="12"
+        cy="12"
+        r="9"
+        stroke="currentColor"
+        strokeWidth="2.6"
+        strokeLinecap="round"
+        strokeDasharray="0.2 6.1"
+      />
+    </svg>
+  );
+}
+
 /** Two-tone check (day-5 delivery badge 746:4419 / "11 days banked" 746:4448). */
 export function Check(props: SVGProps<SVGSVGElement>) {
   return (

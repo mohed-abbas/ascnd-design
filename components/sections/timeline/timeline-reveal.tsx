@@ -82,6 +82,9 @@ export default function TimelineReveal() {
     const refreshSpin = stage.querySelector<SVGElement>("[data-tl-refresh-spin]");
     const refreshCheck = stage.querySelector<SVGElement>("[data-tl-refresh-check]");
     const refreshAura = stage.querySelector<HTMLElement>("[data-tl-refresh-aura]");
+    const boardLoading = stage.querySelector<HTMLElement>("[data-tl-board-loading]");
+    const boardDone = stage.querySelector<HTMLElement>("[data-tl-board-done]");
+    const boardSpinner = stage.querySelector<SVGElement>("[data-tl-board-spinner]");
 
     const L = maskPath.getTotalLength();
     const toPct = (fx: number, fy: number) => ({
@@ -162,7 +165,7 @@ export default function TimelineReveal() {
 
     // ── Park everything empty synchronously (before fonts resolve), so nothing
     //    flashes finished if the page loads already scrolled here. ──
-    const hidden = [sub, endnote, ...cardReveals.map((r) => r.el)].filter(
+    const hidden = [heading, sub, endnote, ...cardReveals.map((r) => r.el)].filter(
       (el): el is HTMLElement => el != null,
     );
     gsap.set(hidden, { autoAlpha: 0 });
@@ -178,9 +181,14 @@ export default function TimelineReveal() {
     if (countEl) countEl.textContent = "0";
     if (cellEls.length) gsap.set(cellEls, { autoAlpha: 0 });
     if (stampEl) gsap.set(stampEl, { autoAlpha: 0, scale: 0.6 });
+    // day-1 board starts on the loading state (spinner + "creating your board");
+    // the done row is the resting default, so flip them for the animation.
+    if (boardLoading) gsap.set(boardLoading, { autoAlpha: 1 });
+    if (boardDone) gsap.set(boardDone, { autoAlpha: 0 });
 
     let ctx: gsap.Context | undefined;
     let split: SplitText | undefined;
+    let boardIO: IntersectionObserver | undefined;
     let cancelled = false;
 
     const build = () => {
@@ -193,6 +201,7 @@ export default function TimelineReveal() {
         // Heading words blur-rise (SplitText), sub a beat later.
         if (heading) {
           split = new SplitText(heading, { type: "words" });
+          gsap.set(heading, { autoAlpha: 1 }); // container shown; words parked below
           tl.fromTo(
             split.words,
             { yPercent: 40, autoAlpha: 0, filter: "blur(8px)" },
@@ -335,6 +344,85 @@ export default function TimelineReveal() {
             DRAW_AT + DRAW_DURATION - 0.35,
           );
         }
+
+        // day-1 button: an INFINITE loop, separate from the once main timeline.
+        // The text change is the subscribe card's PER-CHARACTER roll — the
+        // outgoing row fades out and the incoming row's letters roll up one by one
+        // (yPercent 110→0, staggered), the ✓ springing in. A dotted spinner spins
+        // continuously (own tween, smooth). An IntersectionObserver pauses it all
+        // off-screen (idle to zero).
+        if (boardSpinner && boardLoading && boardDone) {
+          const chars1 = gsap.utils.toArray<HTMLElement>(
+            boardLoading.querySelectorAll("[data-char]"),
+          );
+          const chars2 = gsap.utils.toArray<HTMLElement>(
+            boardDone.querySelectorAll("[data-char]"),
+          );
+          const boardCheck = boardDone.querySelector<SVGElement>("[data-tl-board-check]");
+
+          const STAGGER = 0.03;
+          const ROLL = 0.5;
+          const FADE = 0.3;
+          const CREATING = 2.0; // "creating" dwell
+          const DONE_HOLD = 1.6; // "board created" dwell
+          const tail = (n: number) => ROLL + Math.max(0, n - 1) * STAGGER;
+          const tA = CREATING; // swap → created
+          const tB = tA + 0.2 + tail(chars2.length) + DONE_HOLD; // swap → creating
+
+          // Continuous spinner — its own smooth tween (repeats 0→360 seamlessly),
+          // so it never stalls between cycles. ~0.9 rev/s.
+          const spin = gsap.to(boardSpinner, {
+            rotation: 360,
+            duration: 1.15,
+            ease: "none",
+            repeat: -1,
+            paused: true,
+          });
+
+          const loop = gsap.timeline({ repeat: -1, paused: true });
+          loop
+            .set(boardLoading, { autoAlpha: 1 }, 0)
+            .set(boardDone, { autoAlpha: 0 }, 0)
+            .set(chars1, { yPercent: 0 }, 0)
+            .set(chars2, { yPercent: 110 }, 0)
+            .set(boardCheck, { scale: 0 }, 0)
+            // creating dwell (0 → tA), then swap to "board created":
+            .to(boardLoading, { autoAlpha: 0, duration: FADE, ease: "power2.in" }, tA)
+            .set(boardDone, { autoAlpha: 1 }, tA + 0.18)
+            .to(
+              chars2,
+              { yPercent: 0, duration: ROLL, ease: "power3.out", stagger: STAGGER },
+              tA + 0.2,
+            )
+            .fromTo(
+              boardCheck,
+              { scale: 0 },
+              { scale: 1, duration: 0.34, ease: "back.out(3)" },
+              tA + 0.22,
+            )
+            // created dwell, then swap back to "creating your board":
+            .to(boardDone, { autoAlpha: 0, duration: FADE, ease: "power2.in" }, tB)
+            .set(chars1, { yPercent: 110 }, tB + 0.001)
+            .set(boardLoading, { autoAlpha: 1 }, tB + 0.18)
+            .to(
+              chars1,
+              { yPercent: 0, duration: ROLL, ease: "power3.out", stagger: STAGGER },
+              tB + 0.2,
+            );
+          boardIO = new IntersectionObserver(
+            ([entry]) => {
+              if (entry.isIntersecting) {
+                loop.play();
+                spin.play();
+              } else {
+                loop.pause();
+                spin.pause();
+              }
+            },
+            { threshold: 0 },
+          );
+          boardIO.observe(boardLoading);
+        }
       }, stage);
     };
 
@@ -344,6 +432,7 @@ export default function TimelineReveal() {
 
     return () => {
       cancelled = true;
+      boardIO?.disconnect();
       ctx?.revert();
       split?.revert();
       // Drop the synchronous parks so the finished layout shows if we never built.
@@ -356,9 +445,16 @@ export default function TimelineReveal() {
       // Restore the micro-animation targets (opacity clears revert the tick/aura
       // to their class-hidden state; count returns to its final value).
       if (countEl) countEl.textContent = countEl.dataset.countTo ?? "70";
-      const micro = [stampEl, refreshSpin, refreshCheck, refreshAura, ...cellEls].filter(
-        (el): el is HTMLElement | SVGElement => el != null,
-      );
+      const micro = [
+        stampEl,
+        refreshSpin,
+        refreshCheck,
+        refreshAura,
+        boardLoading,
+        boardDone,
+        boardSpinner,
+        ...cellEls,
+      ].filter((el): el is HTMLElement | SVGElement => el != null);
       if (micro.length) gsap.set(micro, { clearProps: "opacity,visibility,transform" });
     };
   }, []);

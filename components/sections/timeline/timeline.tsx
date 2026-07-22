@@ -2,7 +2,7 @@ import Image from "next/image";
 import type { ReactNode } from "react";
 import TimelineAura from "./timeline-aura";
 import TimelineReveal from "./timeline-reveal";
-import { AscndMark, Check, Pause, Refresh } from "./timeline-icons";
+import { AscndMark, Check, Pause, Refresh, Spinner } from "./timeline-icons";
 import {
   AND_UP_WE_GO,
   BANKED_GRID,
@@ -172,19 +172,56 @@ export default function Timeline() {
             data-tl-beat="subscribe"
             className="absolute left-[11.64%] top-[50.41%] flex w-[15.54cqw] flex-col gap-[0.794cqw]"
           >
-            {/* "creating your board" — the CTA pill (matches the site button)
-                wearing the always-on rainbow aura, the ring the aura itself
-                originated from. Rendered in cqw (not the fixed-px <Button>) so it
-                scales crisply with the composition on 2K+ screens. */}
-            <div className="relative flex w-full items-center justify-center rounded-[2.116cqw] bg-gradient-to-b from-white to-[#efefef] px-[1.323cqw] py-[0.463cqw] shadow-[inset_0px_-2px_1px_0px_#f2f2f2,inset_0px_-2px_2px_0px_rgba(0,0,0,0.5)]">
+            {/* "creating your board" — the site CTA button, 1:1 with the real
+                <Button> solid variant (rounded-32 / px-20 / py-7 / text-16, all in
+                cqw so it scales with the stage on 2K+), content-sized like the
+                real button (self-start, not stretched) and wearing the always-on
+                rainbow aura — no hover/cursor gating.
+
+                On reveal it plays a loading→done state: a dotted spinner spins
+                while "creating your board", then cross-fades to a ✓ + "board
+                created". The (wider) loading row reserves the width so the swap
+                doesn't jump; the done row is the resolved SSR / reduced-motion
+                state. */}
+            <div
+              data-tl-board
+              className="relative inline-flex items-center justify-center self-start rounded-[2.116cqw] bg-gradient-to-b from-white to-[#efefef] px-[1.323cqw] py-[0.463cqw] text-[1.058cqw] text-[#263138] shadow-[inset_0px_-2px_1px_0px_#f2f2f2,inset_0px_-2px_2px_0px_rgba(0,0,0,0.5)]"
+            >
               <TimelineAura
                 radius="2.116cqw"
                 ring="0.2cqw"
                 spread="0.44cqw"
                 blur="0.62cqw"
               />
-              <span className="relative text-[1.058cqw] text-[#263138]">
-                creating your board
+              {/* Two stacked rows; the text change rolls PER-CHARACTER (RollingText:
+                  each letter clips + rolls up, staggered) — the same roll the
+                  subscribe card uses (cards/subscribe-media.tsx). The wrapper is
+                  NOT clipped: the per-letter clips do the masking, so the aura
+                  still blooms outside. */}
+              <span className="relative flex">
+                {/* loading — in-flow, reserves the (wider) width */}
+                <span
+                  data-tl-board-loading
+                  className="pointer-events-none flex items-center gap-[0.5cqw] leading-[1.2] opacity-0"
+                >
+                  <Spinner data-tl-board-spinner className="size-[1.058cqw] shrink-0" />
+                  <span className="inline-block">
+                    <RollingText text="creating your board" />
+                  </span>
+                </span>
+                {/* done — absolute overlay; resting default (SSR / reduced-motion) */}
+                <span
+                  data-tl-board-done
+                  className="pointer-events-none absolute inset-0 flex items-center justify-center gap-[0.4cqw] leading-[1.2]"
+                >
+                  <Check
+                    data-tl-board-check
+                    className="size-[1.058cqw] shrink-0 text-[#34c759]"
+                  />
+                  <span className="inline-block">
+                    <RollingText text="board created" />
+                  </span>
+                </span>
               </span>
             </div>
             <CardText k="subscribe" />
@@ -297,6 +334,32 @@ export default function Timeline() {
         </div>
       </div>
     </section>
+  );
+}
+
+/**
+ * Per-character roll-up unit (mirrors the subscribe card, cards/subscribe-media.tsx):
+ * each letter sits in an overflow-clipped wrapper with a `[data-char]` mover that
+ * TimelineReveal slides up (yPercent 110→0, staggered). Spaces render as an inert
+ * spacer so word gaps survive the split; SSR renders the letters in place.
+ */
+function RollingText({ text }: { text: string }) {
+  return (
+    <>
+      {text.split("").map((c, i) =>
+        c === " " ? (
+          <span key={i} aria-hidden className="inline-block whitespace-pre">
+            {" "}
+          </span>
+        ) : (
+          <span key={i} className="inline-block overflow-hidden align-bottom">
+            <span data-char className="inline-block">
+              {c}
+            </span>
+          </span>
+        ),
+      )}
+    </>
   );
 }
 
