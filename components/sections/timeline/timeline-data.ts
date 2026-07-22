@@ -65,16 +65,16 @@ export const beat = (key: Beat["key"]): Beat =>
  * The "11 days banked" calendar (Figma 746:4444). A 7-wide grid of day cells:
  *   • solid — a full/available day (bright white)
  *   • muted — a spent day (dimmed)
- *   • check — a banked day (white cell with a tick)
+ *   • pause — a banked/paused day (dim cell with a pause glyph)
  * The last row is short (3 cells), as in the design.
  */
-export type Cell = "solid" | "muted" | "check";
+export type Cell = "solid" | "muted" | "pause";
 
 export const BANKED_GRID: readonly (readonly Cell[])[] = [
   ["solid", "solid", "solid", "solid", "solid", "solid", "muted"],
   ["muted", "muted", "muted", "muted", "muted", "muted", "muted"],
-  ["muted", "muted", "muted", "check", "check", "check", "check"],
-  ["check", "check", "check", "check", "check", "check", "check"],
+  ["muted", "muted", "muted", "pause", "pause", "pause", "pause"],
+  ["pause", "pause", "pause", "pause", "pause", "pause", "pause"],
   ["solid", "solid", "solid"],
 ];
 

@@ -1,22 +1,44 @@
 import type { SVGProps } from "react";
 
 /**
- * Inline icons for the timeline widgets, drawn on a 16×16 grid, `currentColor`
- * so they follow the chip's text colour. Kept as vectors (not Figma image
- * exports) because Phase 3 animates them — the spinner rotates, then swaps to the
- * check as the day-12 "in review → approved" beat resolves.
+ * Timeline icons, exported 1:1 from Figma (frame 746:4125) so they match the
+ * design exactly. All follow the site's TWO-TONE convention — a full-strength
+ * path plus a 0.4-opacity path — and use `currentColor`, so the consumer sets
+ * the colour (gray refresh on the day-12 chip, white check/pause on the glass).
  */
 
-/** Loading arc — a ~300° open ring. Rotated by GSAP for the day-12 spinner. */
-export function Spinner(props: SVGProps<SVGSVGElement>) {
+/** Refresh / reload (day-12 "in progress" chip, 746:4435). Spins in Phase 3. */
+export function Refresh(props: SVGProps<SVGSVGElement>) {
   return (
-    <svg viewBox="0 0 16 16" fill="none" aria-hidden {...props}>
+    <svg viewBox="0 0 16 15" fill="currentColor" aria-hidden {...props}>
+      <path d="M4.59024 2.78939C5.65202 1.99376 6.95296 1.5625 8.29127 1.5625C9.62964 1.5625 10.9306 1.99376 11.9923 2.78939C12.6638 3.29254 13.2159 3.92364 13.6186 4.63892L14.7522 4.32941C14.9392 4.27836 15.1393 4.34232 15.2591 4.49148C15.3789 4.64064 15.3949 4.84561 15.2997 5.01081L14.1896 6.93644C14.1271 7.04481 14.0232 7.12444 13.9005 7.15794C13.7779 7.19144 13.6467 7.17594 13.5358 7.11494L11.5642 6.03074C11.3949 5.93773 11.2998 5.75436 11.3231 5.56614C11.3464 5.37791 11.4835 5.22191 11.6704 5.17086L12.6641 4.89954C12.3375 4.37567 11.9128 3.91147 11.4079 3.53316C10.5138 2.86316 9.41831 2.5 8.29127 2.5C7.16429 2.5 6.06876 2.86316 5.17465 3.53316C4.28054 4.20315 3.6378 5.14254 3.34611 6.20563C3.27749 6.45569 3.01429 6.60406 2.75823 6.53706C2.50217 6.47006 2.3502 6.21305 2.41882 5.96299C2.76521 4.70056 3.52847 3.58502 4.59024 2.78939Z" />
       <path
-        d="M8 1.6a6.4 6.4 0 1 1-6.26 7.7"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
+        opacity="0.4"
+        d="M2.67968 7.84151C2.80229 7.80807 2.93349 7.82351 3.04442 7.88451L5.01608 8.96876C5.18524 9.06176 5.28037 9.24514 5.25711 9.43332C5.23384 9.62157 5.09678 9.77757 4.90981 9.82864L3.92158 10.0984C4.24831 10.6228 4.6733 11.0874 5.17855 11.4661C6.07267 12.1361 7.16816 12.4992 8.2952 12.4992C9.42218 12.4992 10.5177 12.1361 11.4118 11.4661C12.3059 10.7961 12.9486 9.8567 13.2404 8.79357C13.309 8.54351 13.5722 8.39514 13.8283 8.46214C14.0843 8.52914 14.2363 8.78614 14.1677 9.0362C13.8213 10.2986 13.058 11.4142 11.9962 12.2098C10.9344 13.0054 9.63351 13.4367 8.2952 13.4367C6.95683 13.4367 5.65592 13.0054 4.59415 12.2098C3.92229 11.7064 3.36995 11.0748 2.96713 10.3591L1.828 10.6701C1.64102 10.7211 1.44097 10.6571 1.32113 10.508C1.20128 10.3588 1.18524 10.1539 1.28049 9.98864L2.39064 8.06301C2.4531 7.9547 2.55707 7.87501 2.67968 7.84151Z"
       />
+    </svg>
+  );
+}
+
+/** Two-tone check (day-5 delivery badge 746:4419 / "11 days banked" 746:4448). */
+export function Check(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 18 18" fill="currentColor" aria-hidden {...props}>
+      <path d="M7.90835 12.2111L8.37239 11.7471L7.44434 10.819L5.52654 8.90122C5.27026 8.64491 4.85474 8.64491 4.59846 8.90122C4.34218 9.15748 4.34218 9.57299 4.59846 9.82931L6.9803 12.2111C7.23658 12.4674 7.65209 12.4674 7.90835 12.2111Z" />
+      <path
+        opacity="0.4"
+        d="M13.4025 6.71794C13.6588 6.46166 13.6588 6.04615 13.4025 5.78987C13.1462 5.53359 12.7307 5.53359 12.4744 5.78987L7.44531 10.819L8.37338 11.747L13.4025 6.71794Z"
+      />
+    </svg>
+  );
+}
+
+/** Two-tone pause (the banked/paused calendar cells, 746:4472). */
+export function Pause(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 18 18" fill="currentColor" aria-hidden {...props}>
+      <path d="M6.14017 4.60742C5.61402 4.60742 5.1875 5.05172 5.1875 5.59978V11.3334C5.1875 11.8815 5.61402 12.3258 6.14017 12.3258H6.88113C7.40727 12.3258 7.8338 11.8815 7.8338 11.3334V5.59978C7.8338 5.05172 7.40727 4.60742 6.88113 4.60742H6.14017Z" />
+      <path d="M10.0581 4.60742C9.53201 4.60742 9.10547 5.05172 9.10547 5.59978V11.3334C9.10547 11.8815 9.53201 12.3258 10.0581 12.3258H10.7991C11.3252 12.3258 11.7518 11.8815 11.7518 11.3334V5.59978C11.7518 5.05172 11.3252 4.60742 10.7991 4.60742H10.0581Z" />
     </svg>
   );
 }
@@ -31,21 +53,6 @@ export function AscndMark(props: SVGProps<SVGSVGElement>) {
     <svg viewBox="0 0 40 38" fill="currentColor" aria-hidden {...props}>
       <path d="M30.4157 29.2986L26.0746 30.2621C25.4211 30.4071 24.774 29.995 24.629 29.3415L21.8934 17.0128C21.7484 16.3593 21.1013 15.9472 20.4478 16.0922L8.11911 18.8277C7.46561 18.9727 6.81846 18.5606 6.67346 17.9071L5.70996 13.5656C5.56496 12.9121 5.97707 12.265 6.63057 12.12L25.6665 7.8962C26.32 7.75119 26.9671 8.16331 27.1121 8.81681L31.3363 27.853C31.4815 28.5063 31.0692 29.1536 30.4157 29.2986Z" />
       <path d="M21.3427 31.3134L17.0019 32.2763C16.3484 32.4213 15.7013 32.0092 15.5563 31.3557L14.8342 28.1017C14.6892 27.4482 14.0419 27.0359 13.3886 27.181L10.1336 27.9035C9.48009 28.0485 8.83294 27.6364 8.68794 26.9829L7.72429 22.6416C7.57929 21.9881 7.9914 21.341 8.6449 21.196L18.6073 18.9851C19.2608 18.8401 19.9079 19.2522 20.0529 19.9057L22.2633 29.8677C22.4085 30.521 21.9962 31.1684 21.3427 31.3134Z" />
-    </svg>
-  );
-}
-
-/** Checkmark — the "done" state (day-12 resolve, day-5 badge, banked days). */
-export function Check(props: SVGProps<SVGSVGElement>) {
-  return (
-    <svg viewBox="0 0 16 16" fill="none" aria-hidden {...props}>
-      <path
-        d="M3.4 8.5 6.3 11.4 12.6 4.7"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
     </svg>
   );
 }
