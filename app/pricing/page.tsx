@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import ChromeReveal from "@/components/ui/chrome-reveal";
+import Costs from "@/components/sections/costs/costs";
 import Footer from "@/components/sections/footer/footer";
 import Navbar from "@/components/ui/navbar";
 import Pricing from "@/components/sections/pricing/pricing";
@@ -58,6 +59,10 @@ export default function PricingPage() {
 
       {/* Hero — the homepage pricing section, reused verbatim. */}
       <Pricing />
+
+      {/* Supersize statement ("looking cheap costs more.") — same format and
+          reveal as the hero tagline, different copy (Figma 792:438). */}
+      <Costs />
 
       {/* ── Future sections land here (Figma frames pending) ─────────────── */}
 

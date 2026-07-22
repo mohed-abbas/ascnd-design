@@ -47,12 +47,22 @@ const CHAR_DUR = 0.85;
  * layout effect (before paint) and let the scrub take over. `gsap.matchMedia`
  * handles the reduced-motion branch and reverts everything on unmount.
  */
-export default function TaglineReveal() {
+export default function TaglineReveal({
+  section = "[data-tagline]",
+}: {
+  /** Selector for the section hosting the supersize headline. Defaults to the
+   *  tagline; a second statement (e.g. the pricing "looking cheap costs more.")
+   *  passes its own so it reuses this EXACT reveal. The [data-trise]/[data-tchar]
+   *  lookups are scoped to that element, so multiple supersize sections on one
+   *  page never cross-wire (each reveal drives only its own glyphs). */
+  section?: string;
+} = {}) {
   useIsomorphicLayoutEffect(() => {
-    const section = document.querySelector<HTMLElement>("[data-tagline]");
-    const lines = gsap.utils.toArray<HTMLElement>("[data-trise]");
-    const chars = gsap.utils.toArray<HTMLElement>("[data-tchar]");
-    if (!section || !lines.length) return;
+    const root = document.querySelector<HTMLElement>(section);
+    if (!root) return;
+    const lines = gsap.utils.toArray<HTMLElement>("[data-trise]", root);
+    const chars = gsap.utils.toArray<HTMLElement>("[data-tchar]", root);
+    if (!lines.length) return;
 
     const mm = gsap.matchMedia();
 
@@ -70,7 +80,7 @@ export default function TaglineReveal() {
 
       const tl = gsap.timeline({
         scrollTrigger: {
-          trigger: section,
+          trigger: root,
           start: "top 65%", // begins as the section top passes 65% of the vh
           end: "top -10%", // finishes just after the top clears the viewport
           scrub: 0.5, // light smoothing on top of Lenis
@@ -108,7 +118,7 @@ export default function TaglineReveal() {
     });
 
     return () => mm.revert();
-  }, []);
+  }, [section]);
 
   return null;
 }
