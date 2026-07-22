@@ -8,6 +8,7 @@ import Footer from "@/components/sections/footer/footer";
 import Navbar from "@/components/ui/navbar";
 import PlanCompare from "@/components/sections/plan-compare/plan-compare";
 import Pricing from "@/components/sections/pricing/pricing";
+import Timeline from "@/components/sections/timeline/timeline";
 import Wordmark from "@/components/ui/wordmark";
 
 export const metadata: Metadata = {
@@ -70,6 +71,10 @@ export default function PricingPage() {
 
       {/* Accordion plan comparison ("compare plan details") — Figma 678:2856. */}
       <PlanCompare />
+
+      {/* Timeline ("your first month, plotted") — the winding dotted journey of
+          the first month, day 1 → day 23 (Figma 746:4125). */}
+      <Timeline />
 
       {/* Booking ("not sure which fits? talk to us.") — heading + subhead over
           the Cal.com inline embed (Figma 746:4592). */}
