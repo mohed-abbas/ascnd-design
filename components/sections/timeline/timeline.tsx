@@ -1,6 +1,7 @@
 import Image from "next/image";
 import type { ReactNode } from "react";
 import TimelineAura from "./timeline-aura";
+import TimelineReveal from "./timeline-reveal";
 import { AscndMark, Check, Pause, Refresh } from "./timeline-icons";
 import {
   AND_UP_WE_GO,
@@ -36,9 +37,19 @@ import { DOTS, PATH_D, PATH_TRANSFORM } from "./timeline-path";
  * ICONS are exported 1:1 from Figma (timeline-icons.tsx): the day-12 refresh, the
  * day-5 delivery check, the banked-day pause glyphs.
  *
- * PHASE 1 — static, finished state (path fully drawn, all beats shown, day-12
- * chip resting on its refresh icon). The reveal hooks (data-tl-*) are present but
- * inert; the on-enter master timeline + micro-animations land in later phases.
+ * ANIMATION is on-enter, one-shot, eased (ScrollTrigger fires once; no scrub).
+ * <TimelineReveal/> (client, renders null) drives it off the data-tl-* hooks:
+ *   • PHASE 2 (this pass) — heading blur-rise, then the spine draws on via a
+ *     mask sweep (data-tl-mask) with the ascnd mark (data-tl-pen) riding the
+ *     draw-head as the "pen", and each dot (data-tl-dot) popping as the head
+ *     reaches it. The endnote ("and up we go") fades in as the pen lands.
+ *   • PHASE 3 (next) — per-beat card reveals + in-card micro-animations
+ *     (day-12 refresh spin→tick+aura, 70% count-up, calendar fill, …). The
+ *     cards render in their finished state here; they're untouched by Phase 2.
+ *
+ * Reduced motion / no-JS: every element renders in its finished state (spine
+ * fully drawn, dots full-size, heading shown), and TimelineReveal early-returns,
+ * so the static composition is the graceful fallback.
  */
 
 export default function Timeline() {
@@ -51,7 +62,7 @@ export default function Timeline() {
           the left edge; `cqw` sizing scales the whole composition with the
           viewport width rather than capping at the 1512 design size. */}
       <div className="@container w-full">
-        <div className="relative aspect-[1512/982] w-full">
+        <div data-tl-stage className="relative aspect-[1512/982] w-full">
           {/* ── The dotted spine + its dots (one shared 1512×982 grid). ── */}
           <svg
             viewBox="0 0 1512 982"
@@ -60,10 +71,48 @@ export default function Timeline() {
             className="pointer-events-none absolute inset-0 h-full w-full"
             aria-hidden
           >
+            {/* Draw-on mask: a fat solid brush of the same centreline. pathLength=1
+                + dasharray "1 1" normalise the wipe to a simple strokeDashoffset
+                1→0 draw — the exact mechanism the home pricing connector uses
+                (pricing-icons.tsx). Default offset 0 = fully drawn (SSR /
+                reduced-motion show the whole spine).
+
+                The mask is applied to the PATH (inside the translate group), and
+                the brush here is TRANSFORM-FREE: a mask referenced by an element
+                is evaluated in that element's own user space, which for the
+                visible path is the group's post-translate local space — the same
+                space PATH_D is authored in. So brush `d` and visible `d` line up
+                with no transform. (Wrapping the brush in the translate too — or
+                masking the <g> — double-shifts it and only fragments show.) The
+                region is huge so the mask never clips regardless of that space. */}
+            <defs>
+              <mask
+                id="tl-reveal"
+                maskUnits="userSpaceOnUse"
+                x="-2000"
+                y="-2000"
+                width="4000"
+                height="4000"
+              >
+                <path
+                  data-tl-mask
+                  d={PATH_D}
+                  stroke="white"
+                  strokeWidth="8"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  fill="none"
+                  pathLength={1}
+                  strokeDasharray="1 1"
+                  strokeDashoffset={0}
+                />
+              </mask>
+            </defs>
             <g transform={PATH_TRANSFORM}>
               <path
                 data-tl-path
                 d={PATH_D}
+                mask="url(#tl-reveal)"
                 stroke="white"
                 strokeOpacity="0.85"
                 strokeWidth="1.5"
@@ -80,6 +129,8 @@ export default function Timeline() {
                 cy={d.cy}
                 r={d.r}
                 fill="white"
+                // Revealed by a pure opacity fade as the draw-head passes (no
+                // scale/transform), so the dot stays put on the spine.
               />
             ))}
           </svg>
@@ -99,14 +150,22 @@ export default function Timeline() {
           </div>
 
           {/* ── "and up we go" + the ascend mark, top-right (746:4536 / 746:4538). ── */}
-          <p className="absolute left-[91.8%] top-[1.02%] w-[5.6cqw] text-[0.926cqw] leading-[1.2] text-white/90">
+          <p
+            data-tl-endnote
+            className="absolute left-[91.8%] top-[1.02%] w-[5.6cqw] text-[0.926cqw] leading-[1.2] text-white/90"
+          >
             {AND_UP_WE_GO}
           </p>
           {/* The block mark IS the pen — in Phase 2 it rides the spine drawing
               the line, so at rest its bottom-left foot must sit exactly on the
               line's terminus (frame ≈1398.5,71). Positioned so the foot lands
-              there rather than at the mark's Figma box origin (746:4538). */}
-          <AscndMark className="absolute left-[91.8%] top-[4.27%] w-[2.595cqw] text-white" />
+              there rather than at the mark's Figma box origin (746:4538).
+              TimelineReveal self-calibrates the travel off this resting spot, so
+              p=1 lands the foot back here exactly. */}
+          <AscndMark
+            data-tl-pen
+            className="absolute left-[91.8%] top-[4.27%] w-[2.595cqw] text-white"
+          />
 
           {/* ── day 1 — "you subscribe" (746:4160). ── */}
           <div
@@ -169,7 +228,10 @@ export default function Timeline() {
           </div>
 
           {/* ── Floating "Designs in review" label on the curve (746:4425). ── */}
-          <p className="absolute left-[58.73%] top-[16.09%] w-[4.7cqw] text-[1.058cqw] leading-[1.2] text-white/90">
+          <p
+            data-tl-float
+            className="absolute left-[58.73%] top-[16.09%] w-[4.7cqw] text-[1.058cqw] leading-[1.2] text-white/90"
+          >
             {DESIGNS_IN_REVIEW}
           </p>
 
@@ -198,6 +260,9 @@ export default function Timeline() {
             <CardText k="pause" />
             <BankedCalendar />
           </div>
+
+          {/* On-enter, one-shot spine draw + dot pops + pen travel (renders null). */}
+          <TimelineReveal />
         </div>
       </div>
     </section>
