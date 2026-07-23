@@ -235,16 +235,10 @@ export default function Timeline() {
             <CardText k="first-request" />
             <div className="flex flex-col gap-[0.331cqw]">
               <TaskPill label="landing page refresh">
-                <Chip>UI/UX</Chip>
+                <ProgressChip />
               </TaskPill>
               <TaskPill label="request anything">
-                <Chip>
-                  {/* counts up 0→70 when this day reveals (SSR shows 70). */}
-                  <span data-tl-count data-count-to="70">
-                    70
-                  </span>
-                  % completed
-                </Chip>
+                <Chip aura={false}>Brand</Chip>
               </TaskPill>
             </div>
           </div>
@@ -403,12 +397,59 @@ function TaskPill({
   );
 }
 
-/** White status chip (category tag / progress note) wearing the rainbow aura. */
-function Chip({ children }: { children: ReactNode }) {
+/**
+ * White status chip (category tag / progress note). Wears the rainbow aura by
+ * default; pass `aura={false}` for a plain white chip (the day-2 "Brand" tag).
+ */
+function Chip({ children, aura = true }: { children: ReactNode; aura?: boolean }) {
+  return (
+    <span className="relative flex items-center justify-center rounded-[2.05cqw] bg-white px-[0.633cqw] py-[0.317cqw] text-[0.661cqw] leading-[1.5] text-[#263138]">
+      {aura && (
+        <TimelineAura radius="2.05cqw" ring="0.11cqw" spread="0.26cqw" blur="0.36cqw" />
+      )}
+      <span className="relative">{children}</span>
+    </span>
+  );
+}
+
+/**
+ * The day-2 "landing page refresh" progress chip. Wears the rainbow aura and
+ * loops forever: the "UI/UX" category tag rolls PER-CHARACTER to "35% completed"
+ * two seconds in, then back — the same roll the board button / subscribe card
+ * use (TimelineReveal drives it, IntersectionObserver idles it off-screen). The
+ * wider "35% completed" row is in-flow and reserves the width so the swap never
+ * jumps; the "UI/UX" row overlays it and is the resting SSR / reduced-motion state.
+ */
+function ProgressChip() {
   return (
     <span className="relative flex items-center justify-center rounded-[2.05cqw] bg-white px-[0.633cqw] py-[0.317cqw] text-[0.661cqw] leading-[1.5] text-[#263138]">
       <TimelineAura radius="2.05cqw" ring="0.11cqw" spread="0.26cqw" blur="0.36cqw" />
-      <span className="relative">{children}</span>
+      {/* The box width animates to fit whichever label shows: TimelineReveal
+          measures both rows' natural widths (in cqw, so it stays responsive) and
+          tweens the box between them as the text rolls. The label row is in-flow
+          — it gives the box its height and its SSR / reduced-motion width; the
+          progress row overlays it. The per-letter clips do the masking, so the
+          aura still blooms outside. */}
+      <span data-tl-prog-box className="relative block">
+        {/* progress — absolute overlay, hidden until it rolls in */}
+        <span
+          data-tl-prog-full
+          className="pointer-events-none absolute inset-0 flex items-center justify-center opacity-0"
+        >
+          <span data-tl-prog-full-inner className="whitespace-nowrap">
+            <RollingText text="35% completed" />
+          </span>
+        </span>
+        {/* label — in-flow; resting default (SSR / reduced-motion) */}
+        <span
+          data-tl-prog-label
+          className="pointer-events-none flex items-center justify-center"
+        >
+          <span data-tl-prog-label-inner className="whitespace-nowrap">
+            <RollingText text="UI/UX" />
+          </span>
+        </span>
+      </span>
     </span>
   );
 }

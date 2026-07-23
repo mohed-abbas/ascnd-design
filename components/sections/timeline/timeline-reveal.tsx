@@ -74,7 +74,6 @@ export default function TimelineReveal() {
     if (!maskPath || !pen || !dotEls.length) return;
 
     // In-card micro-animation targets (any may be absent).
-    const countEl = stage.querySelector<HTMLElement>("[data-tl-count]");
     const stampEl = stage.querySelector<HTMLElement>("[data-tl-stamp]");
     const cellEls = gsap.utils.toArray<HTMLElement>(
       stage.querySelectorAll("[data-tl-cell]"),
@@ -85,6 +84,15 @@ export default function TimelineReveal() {
     const boardLoading = stage.querySelector<HTMLElement>("[data-tl-board-loading]");
     const boardDone = stage.querySelector<HTMLElement>("[data-tl-board-done]");
     const boardSpinner = stage.querySelector<SVGElement>("[data-tl-board-spinner]");
+    const progLabel = stage.querySelector<HTMLElement>("[data-tl-prog-label]");
+    const progFull = stage.querySelector<HTMLElement>("[data-tl-prog-full]");
+    const progBox = stage.querySelector<HTMLElement>("[data-tl-prog-box]");
+    const progLabelInner = stage.querySelector<HTMLElement>(
+      "[data-tl-prog-label-inner]",
+    );
+    const progFullInner = stage.querySelector<HTMLElement>(
+      "[data-tl-prog-full-inner]",
+    );
 
     const L = maskPath.getTotalLength();
     const toPct = (fx: number, fy: number) => ({
@@ -178,17 +186,20 @@ export default function TimelineReveal() {
     pen.style.top = `${startPct.y + footOffY}%`;
     // Micro-animation resets (reduced-motion returned above, so finished-state
     // markup stays put there). The refresh tick + aura are hidden via class.
-    if (countEl) countEl.textContent = "0";
     if (cellEls.length) gsap.set(cellEls, { autoAlpha: 0 });
     if (stampEl) gsap.set(stampEl, { autoAlpha: 0, scale: 0.6 });
     // day-1 board starts on the loading state (spinner + "creating your board");
     // the done row is the resting default, so flip them for the animation.
     if (boardLoading) gsap.set(boardLoading, { autoAlpha: 1 });
     if (boardDone) gsap.set(boardDone, { autoAlpha: 0 });
+    // day-2 first pill rests on the "UI/UX" label (progress row hidden).
+    if (progLabel) gsap.set(progLabel, { autoAlpha: 1 });
+    if (progFull) gsap.set(progFull, { autoAlpha: 0 });
 
     let ctx: gsap.Context | undefined;
     let split: SplitText | undefined;
     let boardIO: IntersectionObserver | undefined;
+    let progIO: IntersectionObserver | undefined;
     let cancelled = false;
 
     const build = () => {
@@ -279,24 +290,6 @@ export default function TimelineReveal() {
         }
 
         // ── In-card micro-animations, each keyed to its day's reveal moment. ──
-
-        // day-2: the "70% completed" chip counts up 0→70.
-        if (countEl) {
-          const target = Number(countEl.dataset.countTo ?? 70);
-          const n = { v: 0 };
-          tl.to(
-            n,
-            {
-              v: target,
-              duration: 1.1,
-              ease: "power1.out",
-              onUpdate: () => {
-                countEl.textContent = String(Math.round(n.v));
-              },
-            },
-            beatTime("first-request") + 0.1,
-          );
-        }
 
         // day-5: the delivery ✓ badge stamps onto the design.
         if (stampEl) {
@@ -423,6 +416,85 @@ export default function TimelineReveal() {
           );
           boardIO.observe(boardLoading);
         }
+
+        // day-2 first pill: an INFINITE loop, separate from the once main
+        // timeline. The "UI/UX" category tag holds for 2s, then the chip WIDENS
+        // to fit the longer copy and the text rolls PER-CHARACTER to "35%
+        // completed" (the same subscribe-card roll); it holds, then shrinks +
+        // rolls back — forever. An IntersectionObserver idles it off-screen.
+        if (progLabel && progFull && progBox && progLabelInner && progFullInner) {
+          const charsLabel = gsap.utils.toArray<HTMLElement>(
+            progLabel.querySelectorAll("[data-char]"),
+          );
+          const charsFull = gsap.utils.toArray<HTMLElement>(
+            progFull.querySelectorAll("[data-char]"),
+          );
+
+          // Measure both rows' natural widths and express them in cqw (px ÷ stage
+          // width × 100) so the chip stays correct when the composition rescales.
+          const stageW = stage.getBoundingClientRect().width || 1;
+          const toCqw = (px: number) => (px / stageW) * 100;
+          const labelW = toCqw(progLabelInner.getBoundingClientRect().width);
+          const fullW = toCqw(progFullInner.getBoundingClientRect().width);
+          const w = { v: labelW };
+          const setW = () => {
+            progBox.style.width = `${w.v}cqw`;
+          };
+          setW(); // pin the resting width so the box no longer auto-sizes
+
+          const STAGGER = 0.03;
+          const ROLL = 0.5;
+          const FADE = 0.3;
+          const GROW = 0.4; // width tween — runs BEFORE the text rolls, so it never overflows
+          const SWAP_GAP = 0.42; // fade-out/grow → roll-in offset
+          const LABEL_HOLD = 2.0; // "UI/UX" dwell before flipping
+          const FULL_HOLD = 1.6; // "35% completed" dwell
+          const tail = (n: number) => ROLL + Math.max(0, n - 1) * STAGGER;
+          const tA = LABEL_HOLD; // swap → 35% completed
+          const tB = tA + SWAP_GAP + tail(charsFull.length) + FULL_HOLD; // swap → UI/UX
+
+          const progLoop = gsap.timeline({ repeat: -1, paused: true });
+          progLoop
+            .set(w, { v: labelW }, 0)
+            .set(progLabel, { autoAlpha: 1 }, 0)
+            .set(progFull, { autoAlpha: 0 }, 0)
+            .set(charsLabel, { yPercent: 0 }, 0)
+            .set(charsFull, { yPercent: 110 }, 0)
+            // label dwell (0 → tA), then fade out + widen, then roll "35% completed" in:
+            .to(progLabel, { autoAlpha: 0, duration: FADE, ease: "power2.in" }, tA)
+            .to(w, { v: fullW, duration: GROW, ease: "power2.inOut", onUpdate: setW }, tA)
+            .set(progFull, { autoAlpha: 1 }, tA + SWAP_GAP - 0.02)
+            .to(
+              charsFull,
+              { yPercent: 0, duration: ROLL, ease: "power3.out", stagger: STAGGER },
+              tA + SWAP_GAP,
+            )
+            // progress dwell, then fade the wide text out FIRST, and only shrink
+            // once it's gone — otherwise the still-visible (fading) "35%
+            // completed" is wider than the narrowing box and its afterimage spills
+            // out of the pill. Roll "UI/UX" back in after the shrink.
+            .to(progFull, { autoAlpha: 0, duration: FADE, ease: "power2.in" }, tB)
+            .to(
+              w,
+              { v: labelW, duration: GROW, ease: "power2.inOut", onUpdate: setW },
+              tB + FADE,
+            )
+            .set(charsLabel, { yPercent: 110 }, tB + FADE)
+            .set(progLabel, { autoAlpha: 1 }, tB + FADE + SWAP_GAP - 0.02)
+            .to(
+              charsLabel,
+              { yPercent: 0, duration: ROLL, ease: "power3.out", stagger: STAGGER },
+              tB + FADE + SWAP_GAP,
+            );
+          progIO = new IntersectionObserver(
+            ([entry]) => {
+              if (entry.isIntersecting) progLoop.play();
+              else progLoop.pause();
+            },
+            { threshold: 0 },
+          );
+          progIO.observe(progLabel);
+        }
       }, stage);
     };
 
@@ -433,6 +505,8 @@ export default function TimelineReveal() {
     return () => {
       cancelled = true;
       boardIO?.disconnect();
+      progIO?.disconnect();
+      progBox?.style.removeProperty("width");
       ctx?.revert();
       split?.revert();
       // Drop the synchronous parks so the finished layout shows if we never built.
@@ -443,8 +517,7 @@ export default function TimelineReveal() {
       gsap.set(dots.map((d) => d.el), { clearProps: "transform,opacity,visibility" });
       gsap.set(hidden, { clearProps: "opacity,visibility,transform,filter" });
       // Restore the micro-animation targets (opacity clears revert the tick/aura
-      // to their class-hidden state; count returns to its final value).
-      if (countEl) countEl.textContent = countEl.dataset.countTo ?? "70";
+      // to their class-hidden state).
       const micro = [
         stampEl,
         refreshSpin,
@@ -453,6 +526,8 @@ export default function TimelineReveal() {
         boardLoading,
         boardDone,
         boardSpinner,
+        progLabel,
+        progFull,
         ...cellEls,
       ].filter((el): el is HTMLElement | SVGElement => el != null);
       if (micro.length) gsap.set(micro, { clearProps: "opacity,visibility,transform" });
