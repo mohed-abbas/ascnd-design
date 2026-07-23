@@ -467,10 +467,10 @@ function BankedCalendar() {
       <div data-tl-grid className="relative flex flex-col items-center gap-[0.322cqw]">
         {/* The "banked run" connector line (746:4444). It sits behind the cells
             — showing through the gaps like linked nodes — and TimelineReveal
-            draws it in sync with the fill, snaking from the last banked day
-            through each day as it fills (row 1 →, row 2 ←, row 3 →). Coordinates
-            are the grid's design px (cell 17.065, gap 4.876), so the viewBox
-            aspect matches the box and scales 1:1 with the cqw grid. */}
+            draws it in sync with the fill, snaking from day 1 (top-left) through
+            each day as it fills (row 1 →, row 2 ←, row 3 →). Coordinates are the
+            grid's design px (cell 17.065, gap 4.876), so the viewBox aspect
+            matches the box and scales 1:1 with the cqw grid. */}
         <svg
           viewBox="0 0 148.71 104.83"
           preserveAspectRatio="none"
@@ -480,7 +480,7 @@ function BankedCalendar() {
         >
           <path
             data-tl-bank-trail
-            d="M118.24 8.53 L140.18 8.53 L140.18 30.47 L8.53 30.47 L8.53 52.41 L52.41 52.41"
+            d="M8.53 8.53 L140.18 8.53 L140.18 30.47 L8.53 30.47 L8.53 52.41 L52.41 52.41"
             stroke="white"
             strokeWidth="1.2"
             strokeLinecap="round"
@@ -493,7 +493,11 @@ function BankedCalendar() {
         {BANKED_GRID.map((row, r) => (
           <div key={r} className="flex gap-[0.322cqw]">
             {row.map((cell, c) => (
-              <DayCell key={c} state={cell} />
+              // The banking run is days 1–17: every non-pause cell in the first
+              // three rows. Marking days 1–6 bankable too (not just the muted
+              // days 7–17) is what lets the fill sweep BEGIN at day 1, top-left,
+              // rather than at the lone muted day-7 cell in the top-right corner.
+              <DayCell key={c} state={cell} bankable={r < 3 && cell !== "pause"} />
             ))}
           </div>
         ))}
@@ -502,11 +506,11 @@ function BankedCalendar() {
   );
 }
 
-function DayCell({ state }: { state: Cell }) {
+function DayCell({ state, bankable = false }: { state: Cell; bankable?: boolean }) {
   return (
     <div
       data-tl-cell
-      data-tl-bankable={state === "muted" ? "" : undefined}
+      data-tl-bankable={bankable ? "" : undefined}
       className={`flex size-[1.129cqw] items-center justify-center rounded-full ${
         state === "solid" ? "bg-white" : state === "muted" ? "bg-white/50" : "bg-white/30"
       }`}

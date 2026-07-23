@@ -543,13 +543,14 @@ export default function TimelineReveal() {
           refreshIO.observe(refreshSpin);
         }
 
-        // day-23: an INFINITE loop, separate from the once main timeline. Each
-        // upcoming (muted) day "banks" in turn — smoothly brightening from
-        // white/50 to solid white and STAYING solid, so the fill accumulates as
-        // a continuation of the already-banked first days along the spine — while
-        // a connector line draws through the cells in lockstep. It flows through
-        // all 11 muted cells (→ "11 days banked"), holds on the full board, then
-        // gently resets and replays. An IntersectionObserver idles it off-screen.
+        // day-23: an INFINITE loop, separate from the once main timeline. The
+        // whole banking run resets to empty and each day "banks" in turn from
+        // day 1 (top-left) — smoothly brightening from white/50 to solid white
+        // and STAYING solid — so the fill sweeps the grid in a boustrophedon
+        // snake (row 1 →, row 2 ←, row 3 →) while a connector line draws through
+        // the cells in lockstep. It flows through all 17 days (1 → 17), holds on
+        // the full board, then gently resets and replays. An IntersectionObserver
+        // idles it off-screen.
         const bankDom = gsap.utils.toArray<HTMLElement>(
           stage.querySelectorAll("[data-tl-bankable]"),
         );
