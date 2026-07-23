@@ -464,10 +464,32 @@ function BankedCalendar() {
         <span className="text-[0.661cqw]">{BANKED_LABEL}</span>
         <Check className="size-[0.926cqw]" />
       </div>
-      <div
-        data-tl-grid
-        className="flex flex-col items-center gap-[0.322cqw]"
-      >
+      <div data-tl-grid className="relative flex flex-col items-center gap-[0.322cqw]">
+        {/* The "banked run" connector line (746:4444). It sits behind the cells
+            — showing through the gaps like linked nodes — and TimelineReveal
+            draws it in sync with the fill, snaking from the last banked day
+            through each day as it fills (row 1 →, row 2 ←, row 3 →). Coordinates
+            are the grid's design px (cell 17.065, gap 4.876), so the viewBox
+            aspect matches the box and scales 1:1 with the cqw grid. */}
+        <svg
+          viewBox="0 0 148.71 104.83"
+          preserveAspectRatio="none"
+          fill="none"
+          aria-hidden
+          className="pointer-events-none absolute inset-0 -z-10 h-full w-full"
+        >
+          <path
+            data-tl-bank-trail
+            d="M118.24 8.53 L140.18 8.53 L140.18 30.47 L8.53 30.47 L8.53 52.41 L52.41 52.41"
+            stroke="white"
+            strokeWidth="1.2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            pathLength={1}
+            strokeDasharray="1 1"
+            strokeDashoffset={1}
+          />
+        </svg>
         {BANKED_GRID.map((row, r) => (
           <div key={r} className="flex gap-[0.322cqw]">
             {row.map((cell, c) => (

@@ -546,13 +546,32 @@ export default function TimelineReveal() {
         // day-23: an INFINITE loop, separate from the once main timeline. Each
         // upcoming (muted) day "banks" in turn — smoothly brightening from
         // white/50 to solid white and STAYING solid, so the fill accumulates as
-        // a continuation of the already-banked first days along the spine. The
-        // highlight flows through all 11 muted cells (→ "11 days banked"), holds
-        // on the full board, then gently resets and replays. An
-        // IntersectionObserver idles it off-screen.
-        const bankCells = gsap.utils.toArray<HTMLElement>(
+        // a continuation of the already-banked first days along the spine — while
+        // a connector line draws through the cells in lockstep. It flows through
+        // all 11 muted cells (→ "11 days banked"), holds on the full board, then
+        // gently resets and replays. An IntersectionObserver idles it off-screen.
+        const bankDom = gsap.utils.toArray<HTMLElement>(
           stage.querySelectorAll("[data-tl-bankable]"),
         );
+        const bankTrail = stage.querySelector<SVGPathElement>("[data-tl-bank-trail]");
+        // Snake order (boustrophedon): group the muted cells into rows by their
+        // vertical position, then reverse every other row so the fill — and the
+        // trail line — flow row-to-row without diagonal jump-backs.
+        const bankRects = bankDom.map((el) => ({ el, r: el.getBoundingClientRect() }));
+        bankRects.sort((a, b) => a.r.top - b.r.top);
+        const bankRows: { el: HTMLElement; r: DOMRect }[][] = [];
+        for (const it of bankRects) {
+          const row = bankRows[bankRows.length - 1];
+          if (row && Math.abs(row[0].r.top - it.r.top) < it.r.height * 0.5) row.push(it);
+          else bankRows.push([it]);
+        }
+        const bankCells: HTMLElement[] = [];
+        bankRows.forEach((row, ri) => {
+          row.sort((a, b) => a.r.left - b.r.left);
+          if (ri % 2 === 1) row.reverse();
+          bankCells.push(...row.map((o) => o.el));
+        });
+
         if (bankCells.length) {
           const MUTED = "rgba(255,255,255,0.5)";
           const SOLID = "rgba(255,255,255,1)";
@@ -574,6 +593,20 @@ export default function TimelineReveal() {
             repeatDelay: 0.6, // beat between passes
             paused: true,
           });
+          // The connector line draws in step with the fill (proxy → dashoffset,
+          // the same technique as the spine, so pathLength math stays reliable).
+          if (bankTrail) {
+            const td = { o: 1 };
+            const setTrail = () => {
+              bankTrail.style.strokeDashoffset = String(td.o);
+            };
+            bankLoop
+              .set(bankTrail, { autoAlpha: 1 }, 0)
+              .set(td, { o: 1 }, 0)
+              .add(setTrail, 0)
+              .to(td, { o: 0, duration: lastFillEnd, ease: "none", onUpdate: setTrail }, 0)
+              .to(bankTrail, { autoAlpha: 0, duration: RESET, ease: "power2.inOut" }, lastFillEnd + HOLD_FULL);
+          }
           // Fill each cell in turn; they persist solid (no settle-back).
           bankCells.forEach((cell, i) => {
             bankLoop.to(
@@ -612,6 +645,9 @@ export default function TimelineReveal() {
       refreshIO?.disconnect();
       cellIO?.disconnect();
       progBox?.style.removeProperty("width");
+      stage
+        .querySelector<SVGPathElement>("[data-tl-bank-trail]")
+        ?.style.removeProperty("stroke-dashoffset");
       ctx?.revert();
       split?.revert();
       // Drop the synchronous parks so the finished layout shows if we never built.
