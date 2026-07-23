@@ -200,6 +200,7 @@ export default function TimelineReveal() {
     let split: SplitText | undefined;
     let boardIO: IntersectionObserver | undefined;
     let progIO: IntersectionObserver | undefined;
+    let refreshIO: IntersectionObserver | undefined;
     let cancelled = false;
 
     const build = () => {
@@ -301,23 +302,9 @@ export default function TimelineReveal() {
           );
         }
 
-        // day-12: the refresh spins "in progress" ~2s, then cross-fades to a green
-        // tick as the rainbow aura ignites — the work landing "done".
-        if (refreshSpin && refreshCheck) {
-          const spinAt = beatTime("revised");
-          const swapAt = spinAt + 2.0;
-          tl.to(refreshSpin, { rotation: "+=720", duration: 2.0, ease: "none" }, spinAt);
-          tl.to(refreshSpin, { autoAlpha: 0, duration: 0.2 }, swapAt);
-          tl.fromTo(
-            refreshCheck,
-            { autoAlpha: 0, scale: 0.5 },
-            { autoAlpha: 1, scale: 1, duration: 0.4, ease: "back.out(2)" },
-            swapAt,
-          );
-          if (refreshAura) {
-            tl.to(refreshAura, { autoAlpha: 1, duration: 0.4 }, swapAt);
-          }
-        }
+        // day-12: the refresh spin → tick + aura runs as its own INFINITE loop
+        // (built below with the board/prog loops), so it repeats forever rather
+        // than resting on the tick after one pass.
 
         // day-23: the banked-calendar cells fill in with a staggered fade (no move).
         if (cellEls.length) {
@@ -495,6 +482,69 @@ export default function TimelineReveal() {
           );
           progIO.observe(progLabel);
         }
+
+        // day-12: an INFINITE loop, separate from the once main timeline. The
+        // refresh icon spins "in progress" ~2s, then cross-fades to a green tick
+        // as the rainbow aura ignites ("done"), holds, then resets to the spinner
+        // and repeats — forever. A continuous spin tween keeps the icon turning
+        // smoothly; an IntersectionObserver idles it all off-screen.
+        if (refreshSpin && refreshCheck) {
+          const SPIN_HOLD = 2.0; // "in progress" dwell
+          const POP = 0.4; // tick spring-in
+          const FADE = 0.25;
+          const DONE_HOLD = 1.6; // "done" dwell on the tick + aura
+          const tA = SPIN_HOLD; // swap → tick
+          const tB = tA + POP + DONE_HOLD; // swap → spinner
+
+          // Continuous spin — its own smooth tween (0→360 repeats seamlessly), so
+          // the icon never stalls between cycles. ~1 rev/s (matches the old spin).
+          const spin = gsap.to(refreshSpin, {
+            rotation: 360,
+            duration: 1.0,
+            ease: "none",
+            repeat: -1,
+            paused: true,
+          });
+
+          const refreshLoop = gsap.timeline({ repeat: -1, paused: true });
+          refreshLoop
+            .set(refreshSpin, { autoAlpha: 1 }, 0)
+            .set(refreshCheck, { autoAlpha: 0, scale: 0.5 }, 0);
+          if (refreshAura) refreshLoop.set(refreshAura, { autoAlpha: 0 }, 0);
+          // in-progress dwell (0 → tA), then swap to the tick + aura:
+          refreshLoop
+            .to(refreshSpin, { autoAlpha: 0, duration: 0.2 }, tA)
+            .fromTo(
+              refreshCheck,
+              { autoAlpha: 0, scale: 0.5 },
+              { autoAlpha: 1, scale: 1, duration: POP, ease: "back.out(2)" },
+              tA,
+            );
+          if (refreshAura) refreshLoop.to(refreshAura, { autoAlpha: 1, duration: 0.4 }, tA);
+          // done dwell, then swap back to the spinner:
+          refreshLoop.to(
+            refreshCheck,
+            { autoAlpha: 0, duration: FADE, ease: "power2.in" },
+            tB,
+          );
+          if (refreshAura)
+            refreshLoop.to(refreshAura, { autoAlpha: 0, duration: FADE, ease: "power2.in" }, tB);
+          refreshLoop.set(refreshSpin, { autoAlpha: 1 }, tB + 0.18);
+
+          refreshIO = new IntersectionObserver(
+            ([entry]) => {
+              if (entry.isIntersecting) {
+                refreshLoop.play();
+                spin.play();
+              } else {
+                refreshLoop.pause();
+                spin.pause();
+              }
+            },
+            { threshold: 0 },
+          );
+          refreshIO.observe(refreshSpin);
+        }
       }, stage);
     };
 
@@ -506,6 +556,7 @@ export default function TimelineReveal() {
       cancelled = true;
       boardIO?.disconnect();
       progIO?.disconnect();
+      refreshIO?.disconnect();
       progBox?.style.removeProperty("width");
       ctx?.revert();
       split?.revert();
