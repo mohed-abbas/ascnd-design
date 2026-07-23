@@ -186,7 +186,8 @@ export default function TimelineReveal() {
     pen.style.top = `${startPct.y + footOffY}%`;
     // Micro-animation resets (reduced-motion returned above, so finished-state
     // markup stays put there). The refresh tick + aura are hidden via class.
-    if (cellEls.length) gsap.set(cellEls, { autoAlpha: 0 });
+    // The banked-calendar cells rest at their design states (the bank pulse is
+    // a transient highlight, so nothing is parked hidden).
     if (stampEl) gsap.set(stampEl, { autoAlpha: 0, scale: 0.6 });
     // day-1 board starts on the loading state (spinner + "creating your board");
     // the done row is the resting default, so flip them for the animation.
@@ -201,6 +202,7 @@ export default function TimelineReveal() {
     let boardIO: IntersectionObserver | undefined;
     let progIO: IntersectionObserver | undefined;
     let refreshIO: IntersectionObserver | undefined;
+    let cellIO: IntersectionObserver | undefined;
     let cancelled = false;
 
     const build = () => {
@@ -306,14 +308,9 @@ export default function TimelineReveal() {
         // (built below with the board/prog loops), so it repeats forever rather
         // than resting on the tick after one pass.
 
-        // day-23: the banked-calendar cells fill in with a staggered fade (no move).
-        if (cellEls.length) {
-          tl.to(
-            cellEls,
-            { autoAlpha: 1, duration: 0.35, ease: "power1.out", stagger: 0.025 },
-            beatTime("pause") + 0.15,
-          );
-        }
+        // day-23: the banked-calendar "days accumulating" fill runs as its own
+        // INFINITE loop (built below with the other beat loops), so the grid
+        // banks up, holds, clears, and re-banks forever.
 
         // Endnote settles as the pen lands.
         if (endnote) {
@@ -545,6 +542,62 @@ export default function TimelineReveal() {
           );
           refreshIO.observe(refreshSpin);
         }
+
+        // day-23: an INFINITE loop, separate from the once main timeline. Each
+        // upcoming (muted) day "banks" in turn — smoothly brightening from
+        // white/50 to solid white and STAYING solid, so the fill accumulates as
+        // a continuation of the already-banked first days along the spine. The
+        // highlight flows through all 11 muted cells (→ "11 days banked"), holds
+        // on the full board, then gently resets and replays. An
+        // IntersectionObserver idles it off-screen.
+        const bankCells = gsap.utils.toArray<HTMLElement>(
+          stage.querySelectorAll("[data-tl-bankable]"),
+        );
+        if (bankCells.length) {
+          const MUTED = "rgba(255,255,255,0.5)";
+          const SOLID = "rgba(255,255,255,1)";
+          const FILL = 0.5; // per-cell brighten
+          const STEP = 0.3; // gap between successive fills (overlaps → a flowing wave)
+          const HOLD_FULL = 1.5; // dwell on the fully banked board
+          const RESET = 0.5; // gentle dim back to muted before replaying
+          const lastFillEnd = (bankCells.length - 1) * STEP + FILL;
+
+          // Pin an explicit rgba resting colour so GSAP tweens rgba→rgba. The
+          // Tailwind `bg-white/50` class computes to an oklab/color-mix value
+          // GSAP can't parse, which made each cell blink transparent (the muted
+          // day "disappearing" and leaving a gap in the row) when its tween
+          // began. With a clean rgba start the fill just fades in place.
+          gsap.set(bankCells, { backgroundColor: MUTED });
+
+          const bankLoop = gsap.timeline({
+            repeat: -1,
+            repeatDelay: 0.6, // beat between passes
+            paused: true,
+          });
+          // Fill each cell in turn; they persist solid (no settle-back).
+          bankCells.forEach((cell, i) => {
+            bankLoop.to(
+              cell,
+              { backgroundColor: SOLID, duration: FILL, ease: "power2.out" },
+              i * STEP,
+            );
+          });
+          // Hold the full grid, then ease the whole run back to muted to replay.
+          bankLoop.to(
+            bankCells,
+            { backgroundColor: MUTED, duration: RESET, ease: "power2.inOut" },
+            lastFillEnd + HOLD_FULL,
+          );
+
+          cellIO = new IntersectionObserver(
+            ([entry]) => {
+              if (entry.isIntersecting) bankLoop.play();
+              else bankLoop.pause();
+            },
+            { threshold: 0 },
+          );
+          cellIO.observe(bankCells[0]);
+        }
       }, stage);
     };
 
@@ -557,6 +610,7 @@ export default function TimelineReveal() {
       boardIO?.disconnect();
       progIO?.disconnect();
       refreshIO?.disconnect();
+      cellIO?.disconnect();
       progBox?.style.removeProperty("width");
       ctx?.revert();
       split?.revert();
@@ -581,7 +635,8 @@ export default function TimelineReveal() {
         progFull,
         ...cellEls,
       ].filter((el): el is HTMLElement | SVGElement => el != null);
-      if (micro.length) gsap.set(micro, { clearProps: "opacity,visibility,transform" });
+      if (micro.length)
+        gsap.set(micro, { clearProps: "opacity,visibility,transform,backgroundColor" });
     };
   }, []);
 

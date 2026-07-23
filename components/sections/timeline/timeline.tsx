@@ -457,15 +457,16 @@ function ProgressChip() {
 /** The "11 days banked" calendar (746:4444) — a 7-wide grid of day cells. */
 function BankedCalendar() {
   return (
-    <div className="flex w-full flex-col items-center gap-[0.463cqw] overflow-hidden rounded-[0.7cqw] border-[0.048cqw] border-white/60 bg-gradient-to-b from-black/10 to-black/5 px-[0.7cqw] py-[0.661cqw] shadow-[inset_0_0_0_999px_rgba(255,255,255,0.06)]">
+    <div className="relative flex w-full flex-col items-center gap-[0.463cqw] overflow-hidden rounded-[0.7cqw] border-[0.048cqw] border-white bg-gradient-to-b from-black/10 to-black/5 px-[0.7cqw] py-[0.661cqw] backdrop-blur-[0.193cqw]">
+      {/* Subtle divider behind the grid (746:4445). */}
+      <span className="pointer-events-none absolute left-[1.671cqw] top-[2.663cqw] h-[0.033cqw] w-[7.341cqw] bg-white" />
       <div className="flex items-center gap-[0.3cqw] text-white">
         <span className="text-[0.661cqw]">{BANKED_LABEL}</span>
         <Check className="size-[0.926cqw]" />
       </div>
-      {/* The grid carries the design's faint blur — a soft "stack of days". */}
       <div
         data-tl-grid
-        className="flex flex-col items-center gap-[0.322cqw] [filter:blur(0.1cqw)]"
+        className="flex flex-col items-center gap-[0.322cqw]"
       >
         {BANKED_GRID.map((row, r) => (
           <div key={r} className="flex gap-[0.322cqw]">
@@ -483,11 +484,12 @@ function DayCell({ state }: { state: Cell }) {
   return (
     <div
       data-tl-cell
+      data-tl-bankable={state === "muted" ? "" : undefined}
       className={`flex size-[1.129cqw] items-center justify-center rounded-full ${
-        state === "solid" ? "bg-white" : state === "muted" ? "bg-white/35" : "bg-white/30"
+        state === "solid" ? "bg-white" : state === "muted" ? "bg-white/50" : "bg-white/30"
       }`}
     >
-      {state === "pause" && <Pause className="size-[0.85cqw] text-white/60" />}
+      {state === "pause" && <Pause className="size-[1.129cqw] text-white" />}
     </div>
   );
 }

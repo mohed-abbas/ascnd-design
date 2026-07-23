@@ -55,12 +55,19 @@ export function Check(props: SVGProps<SVGSVGElement>) {
   );
 }
 
-/** Two-tone pause (the banked/paused calendar cells, 746:4472). */
+/**
+ * Two-tone pause (the banked/paused calendar cells, 746:4472). ViewBox matches
+ * the Figma cell (17.0653) so it overlays the cell 1:1; the second bar carries
+ * the design's 0.5 opacity.
+ */
 export function Pause(props: SVGProps<SVGSVGElement>) {
   return (
-    <svg viewBox="0 0 18 18" fill="currentColor" aria-hidden {...props}>
+    <svg viewBox="0 0 17.0653 17.0653" fill="currentColor" aria-hidden {...props}>
       <path d="M6.14017 4.60742C5.61402 4.60742 5.1875 5.05172 5.1875 5.59978V11.3334C5.1875 11.8815 5.61402 12.3258 6.14017 12.3258H6.88113C7.40727 12.3258 7.8338 11.8815 7.8338 11.3334V5.59978C7.8338 5.05172 7.40727 4.60742 6.88113 4.60742H6.14017Z" />
-      <path d="M10.0581 4.60742C9.53201 4.60742 9.10547 5.05172 9.10547 5.59978V11.3334C9.10547 11.8815 9.53201 12.3258 10.0581 12.3258H10.7991C11.3252 12.3258 11.7518 11.8815 11.7518 11.3334V5.59978C11.7518 5.05172 11.3252 4.60742 10.7991 4.60742H10.0581Z" />
+      <path
+        opacity="0.5"
+        d="M10.0581 4.60742C9.53201 4.60742 9.10547 5.05172 9.10547 5.59978V11.3334C9.10547 11.8815 9.53201 12.3258 10.0581 12.3258H10.7991C11.3252 12.3258 11.7518 11.8815 11.7518 11.3334V5.59978C11.7518 5.05172 11.3252 4.60742 10.7991 4.60742H10.0581Z"
+      />
     </svg>
   );
 }
