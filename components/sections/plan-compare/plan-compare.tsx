@@ -220,8 +220,9 @@ function CategoryBody({ rows }: { rows: readonly CompareRow[] }) {
 
 /**
  * One comparison-cell value: an included tick (reusing the pricing <CheckMark>),
- * an excluded cross (the "what we don't do" <DontIcon>, dimmed), or plain text.
- * The marks come from the codebase's existing icon set — no literal ✓/✕ glyphs.
+ * an excluded cross (the "what we don't do" <DontIcon>, at full strength to match
+ * the section heading's X), or plain text. The marks come from the codebase's
+ * existing icon set — no literal ✓/✕ glyphs.
  */
 function CompareValue({
   value,
@@ -234,6 +235,8 @@ function CompareValue({
 }) {
   if (value === "check") return <CheckMark className={iconClass} />;
   if (value === "cross")
-    return <DontIcon className={`${iconClass} text-white/40`} />;
+    // The X glyph fills less of its 30×30 viewBox than the check does of its
+    // 20×20, so at the same box size it reads smaller — scale it up to match.
+    return <DontIcon className={`${iconClass} scale-[1.2] text-white`} />;
   return <span className={textClass}>{value}</span>;
 }
