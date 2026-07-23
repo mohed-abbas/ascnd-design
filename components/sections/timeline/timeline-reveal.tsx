@@ -555,6 +555,10 @@ export default function TimelineReveal() {
           stage.querySelectorAll("[data-tl-bankable]"),
         );
         const bankTrail = stage.querySelector<SVGPathElement>("[data-tl-bank-trail]");
+        // The paused-days signs (days 18-28) — hidden until the fill lands.
+        const pauseEls = gsap.utils.toArray<SVGElement>(
+          stage.querySelectorAll("[data-tl-pause]"),
+        );
         // Snake order (boustrophedon): group the muted cells into rows by their
         // vertical position, then reverse every other row so the fill — and the
         // trail line — flow row-to-row without diagonal jump-backs.
@@ -578,7 +582,7 @@ export default function TimelineReveal() {
           const SOLID = "rgba(255,255,255,1)";
           const FILL = 0.5; // per-cell brighten
           const STEP = 0.3; // gap between successive fills (overlaps → a flowing wave)
-          const HOLD_FULL = 1.5; // dwell on the fully banked board
+          const HOLD_FULL = 2.5; // dwell on the full board (banked days + paused-days signs)
           const RESET = 0.5; // gentle dim back to muted before replaying
           const lastFillEnd = (bankCells.length - 1) * STEP + FILL;
 
@@ -588,6 +592,8 @@ export default function TimelineReveal() {
           // day "disappearing" and leaving a gap in the row) when its tween
           // began. With a clean rgba start the fill just fades in place.
           gsap.set(bankCells, { backgroundColor: MUTED });
+          // The paused-days signs stay hidden until the fill completes.
+          if (pauseEls.length) gsap.set(pauseEls, { autoAlpha: 0 });
 
           const bankLoop = gsap.timeline({
             repeat: -1,
@@ -616,6 +622,23 @@ export default function TimelineReveal() {
               i * STEP,
             );
           });
+          // Once the fill lands on the last banked day, the paused-days signs
+          // (18-28) fade in in turn — the "…and then you pause" beat — and fade
+          // back out on reset so the next pass replays clean.
+          if (pauseEls.length) {
+            bankLoop
+              .set(pauseEls, { autoAlpha: 0 }, 0)
+              .to(
+                pauseEls,
+                { autoAlpha: 1, duration: 0.4, ease: "power2.out", stagger: 0.06 },
+                lastFillEnd,
+              )
+              .to(
+                pauseEls,
+                { autoAlpha: 0, duration: RESET, ease: "power2.inOut" },
+                lastFillEnd + HOLD_FULL,
+              );
+          }
           // Hold the full grid, then ease the whole run back to muted to replay.
           bankLoop.to(
             bankCells,

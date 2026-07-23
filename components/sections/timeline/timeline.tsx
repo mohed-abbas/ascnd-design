@@ -515,7 +515,9 @@ function DayCell({ state, bankable = false }: { state: Cell; bankable?: boolean 
         state === "solid" ? "bg-white" : state === "muted" ? "bg-white/50" : "bg-white/30"
       }`}
     >
-      {state === "pause" && <Pause className="size-[1.129cqw] text-white" />}
+      {state === "pause" && (
+        <Pause data-tl-pause className="size-[1.129cqw] text-white" />
+      )}
     </div>
   );
 }
