@@ -2,9 +2,15 @@
 
 import { Fragment, useState } from "react";
 import Button from "@/components/ui/button";
+import { CheckMark } from "@/components/sections/pricing/pricing-icons";
 import PlanCompareReveal from "./plan-compare-reveal";
-import { ChevronDown } from "./plan-compare-icons";
-import { CATEGORIES, PLAN_COLUMNS, type CompareRow } from "./plan-compare-data";
+import { ChevronDown, DontIcon } from "./plan-compare-icons";
+import {
+  CATEGORIES,
+  PLAN_COLUMNS,
+  type CompareRow,
+  type CompareValue,
+} from "./plan-compare-data";
 
 /**
  * "compare plan details" — Figma frame 678:2856.
@@ -144,18 +150,31 @@ function CategoryBody({ rows }: { rows: readonly CompareRow[] }) {
   return (
     <>
       {/* Desktop: the shared three-column grid, values centred in their tracks. */}
-      <div className={`grid ${COLS} gap-y-[18px] pb-[26px] max-md:hidden`}>
+      <div
+        className={`grid ${COLS} items-center gap-y-[18px] pb-[26px] max-md:hidden`}
+      >
         {rows.map((row) => (
           <Fragment key={row.label}>
-            <span className="pl-[9px] text-[16px] leading-normal tracking-[-0.01em] text-white">
-              {row.label}
+            <span className="flex flex-col gap-[2px] pl-[9px]">
+              <span className="text-[16px] leading-normal tracking-[-0.01em] text-white">
+                {row.label}
+              </span>
+              {row.note && (
+                <span className="text-[13px] leading-snug tracking-[-0.01em] text-white/50">
+                  {row.note}
+                </span>
+              )}
             </span>
-            <span className="text-center text-[16px] leading-normal tracking-[-0.01em] text-white/70">
-              {row.subscription}
-            </span>
-            <span className="text-center text-[16px] leading-normal tracking-[-0.01em] text-white/70">
-              {row.fixedSprint}
-            </span>
+            <CompareValue
+              value={row.subscription}
+              textClass="block text-center text-[16px] leading-normal tracking-[-0.01em] text-white/70"
+              iconClass="mx-auto block size-[20px]"
+            />
+            <CompareValue
+              value={row.fixedSprint}
+              textClass="block text-center text-[16px] leading-normal tracking-[-0.01em] text-white/70"
+              iconClass="mx-auto block size-[20px]"
+            />
           </Fragment>
         ))}
       </div>
@@ -164,25 +183,32 @@ function CategoryBody({ rows }: { rows: readonly CompareRow[] }) {
       <div className="hidden flex-col gap-[14px] pb-[20px] max-md:flex">
         {rows.map((row) => (
           <div key={row.label} className="border-t border-white/10 pt-[12px]">
-            <p className="mb-[8px] text-[15px] leading-snug text-white">
-              {row.label}
-            </p>
-            <div className="grid grid-cols-2 gap-[12px]">
+            <p className="text-[15px] leading-snug text-white">{row.label}</p>
+            {row.note && (
+              <p className="mt-[2px] text-[12px] leading-snug text-white/50">
+                {row.note}
+              </p>
+            )}
+            <div className="mt-[8px] grid grid-cols-2 gap-[12px]">
               <div>
                 <span className="block text-[11px] uppercase tracking-[0.08em] text-white/40">
                   subscription
                 </span>
-                <span className="text-[13px] leading-snug text-white/70">
-                  {row.subscription}
-                </span>
+                <CompareValue
+                  value={row.subscription}
+                  textClass="text-[13px] leading-snug text-white/70"
+                  iconClass="block size-[18px]"
+                />
               </div>
               <div>
                 <span className="block text-[11px] uppercase tracking-[0.08em] text-white/40">
                   fixed sprint
                 </span>
-                <span className="text-[13px] leading-snug text-white/70">
-                  {row.fixedSprint}
-                </span>
+                <CompareValue
+                  value={row.fixedSprint}
+                  textClass="text-[13px] leading-snug text-white/70"
+                  iconClass="block size-[18px]"
+                />
               </div>
             </div>
           </div>
@@ -190,4 +216,24 @@ function CategoryBody({ rows }: { rows: readonly CompareRow[] }) {
       </div>
     </>
   );
+}
+
+/**
+ * One comparison-cell value: an included tick (reusing the pricing <CheckMark>),
+ * an excluded cross (the "what we don't do" <DontIcon>, dimmed), or plain text.
+ * The marks come from the codebase's existing icon set — no literal ✓/✕ glyphs.
+ */
+function CompareValue({
+  value,
+  textClass,
+  iconClass,
+}: {
+  value: CompareValue;
+  textClass: string;
+  iconClass: string;
+}) {
+  if (value === "check") return <CheckMark className={iconClass} />;
+  if (value === "cross")
+    return <DontIcon className={`${iconClass} text-white/40`} />;
+  return <span className={textClass}>{value}</span>;
 }

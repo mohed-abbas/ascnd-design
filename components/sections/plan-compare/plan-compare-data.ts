@@ -5,9 +5,10 @@
  * expands to a set of three-column rows: a feature LABEL, its `subscription`
  * value and its `fixedSprint` value.
  *
- * ⚠️ The Figma frame only details the FIRST category ("how it works") — the other
- * five are shown collapsed with no row content in the design, so their `rows` are
- * empty here pending copy. Fill them in the same shape once provided.
+ * The Figma frame only details the FIRST category ("how it works"); the remaining
+ * five carry copy from the comparison-table content sheet (design / build /
+ * working together / ownership / what we don't do). ✓/✕ marks are rendered from
+ * codebase icons (see plan-compare.tsx), so cells use "check" / "cross" sentinels.
  */
 import type { ComponentType } from "react";
 import type { ButtonVariant } from "@/components/ui/button";
@@ -48,10 +49,17 @@ export const PLAN_COLUMNS: readonly PlanColumn[] = [
   },
 ];
 
+/** A comparison cell: an included tick ("check"), an excluded cross ("cross"), or
+ *  a free-text value. */
+export type CompareValue = "check" | "cross" | (string & {});
+
 export type CompareRow = {
   readonly label: string;
-  readonly subscription: string;
-  readonly fixedSprint: string;
+  readonly subscription: CompareValue;
+  readonly fixedSprint: CompareValue;
+  /** Optional clarifying line under the label — the "what we don't do" rows use
+   *  it to say what we do instead. */
+  readonly note?: string;
 };
 
 export type CompareCategory = {
@@ -95,19 +103,94 @@ export const CATEGORIES: readonly CompareCategory[] = [
       {
         label: "pausing",
         subscription: "anytime, days banked",
-        fixedSprint: "n/a - fixed window",
+        fixedSprint: "n/a — fixed window",
       },
     ],
   },
-  // The design leaves these five collapsed with no rows — awaiting copy.
-  { key: "design", name: "design", Icon: DesignIcon, rows: [] },
-  { key: "build", name: "build", Icon: BuildIcon, rows: [] },
+  {
+    key: "design",
+    name: "design",
+    Icon: DesignIcon,
+    rows: [
+      { label: "brand identity and logos", subscription: "check", fixedSprint: "check" },
+      { label: "web and marketing site design", subscription: "check", fixedSprint: "check" },
+      { label: "landing pages", subscription: "check", fixedSprint: "check" },
+      { label: "product ui and design systems", subscription: "check", fixedSprint: "check" },
+      { label: "pitch decks", subscription: "check", fixedSprint: "when scoped in" },
+      { label: "social and content creative", subscription: "check", fixedSprint: "when scoped in" },
+      { label: "email design", subscription: "check", fixedSprint: "when scoped in" },
+    ],
+  },
+  {
+    key: "build",
+    name: "build",
+    Icon: BuildIcon,
+    rows: [
+      { label: "hand-coded next.js front-end", subscription: "check", fixedSprint: "check" },
+      { label: "gsap motion and interactions", subscription: "check", fixedSprint: "check" },
+      { label: "framer or webflow when it fits", subscription: "check", fixedSprint: "check" },
+      { label: "responsive across devices", subscription: "check", fixedSprint: "check" },
+      { label: "deployment to vercel", subscription: "check", fixedSprint: "check" },
+      { label: "basic cms wiring", subscription: "check", fixedSprint: "check" },
+    ],
+  },
   {
     key: "working-together",
     name: "working together",
     Icon: TogetherIcon,
-    rows: [],
+    rows: [
+      { label: "your request board", subscription: "check", fixedSprint: "milestone tracker" },
+      { label: "brief in text, doc, or loom", subscription: "check", fixedSprint: "check" },
+      { label: "same senior team, every time", subscription: "check", fixedSprint: "check" },
+      { label: "meetings", subscription: "async-first, optional", fixedSprint: "kickoff + milestones" },
+    ],
   },
-  { key: "ownership", name: "ownership", Icon: OwnershipIcon, rows: [] },
-  { key: "what-we-dont-do", name: "what we don’t do", Icon: DontIcon, rows: [] },
+  {
+    key: "ownership",
+    name: "ownership",
+    Icon: OwnershipIcon,
+    rows: [
+      { label: "every design file is yours", subscription: "check", fixedSprint: "check" },
+      { label: "every line of code is yours", subscription: "check", fixedSprint: "check" },
+      { label: "source figma files included", subscription: "check", fixedSprint: "check" },
+      { label: "repo handed over", subscription: "check", fixedSprint: "check" },
+    ],
+  },
+  {
+    key: "what-we-dont-do",
+    name: "what we don’t do",
+    Icon: DontIcon,
+    rows: [
+      {
+        label: "backend development",
+        subscription: "cross",
+        fixedSprint: "cross",
+        note: "we build the front-end and integrate with your api",
+      },
+      {
+        label: "paid ads management",
+        subscription: "cross",
+        fixedSprint: "cross",
+        note: "we make the creative, you run the spend",
+      },
+      {
+        label: "long-form content writing",
+        subscription: "cross",
+        fixedSprint: "cross",
+        note: "we design around your words",
+      },
+      {
+        label: "seo campaigns",
+        subscription: "cross",
+        fixedSprint: "cross",
+        note: "technical seo hygiene is built in, campaigns aren’t",
+      },
+      {
+        label: "hourly billing",
+        subscription: "cross",
+        fixedSprint: "cross",
+        note: "never. that’s the point.",
+      },
+    ],
+  },
 ];
