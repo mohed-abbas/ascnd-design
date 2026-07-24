@@ -42,11 +42,15 @@ const REDUCE_MOTION = "(prefers-reduced-motion: reduce)";
  *   • the ascnd mark rides the draw-head as the "pen" (moved to
  *     getPointAtLength(p·L) each frame, self-calibrated so p=1 lands its foot
  *     back on the terminus), and
- *   • each day's content REVEALS as the head passes it — the beat cards, the
- *     floating "Designs in review" label, and the milestone dots are hidden,
- *     then fade / blur-rise in at the moment the head reaches their point on the
- *     path (placed on the timeline via the ease's inverse, so they stay locked
- *     to the visual head whatever power1.inOut does).
+ *   • each day's content REVEALS as the head passes it — the beat cards and
+ *     the floating "Designs in review" label are hidden, then fade / blur-rise
+ *     in at the moment the head reaches their point on the path (placed on the
+ *     timeline via the ease's inverse, so they stay locked to the visual head
+ *     whatever power1.inOut does), and
+ *   • the milestone dots are two-state CHECKPOINTS: they park as hollow rings
+ *     that soft-fade in as the section enters (a one-shot outside the scrub),
+ *     then each ring FILLS solid as the head passes it (inside the scrub, so
+ *     scrolling back un-fills).
  *
  * HEADING — the same word-by-word blur-rise the pricing/cards headings use
  * (SplitText by words), the sub a beat later.
@@ -269,7 +273,10 @@ export default function TimelineReveal() {
       (el): el is HTMLElement => el != null,
     );
     gsap.set(hidden, { autoAlpha: 0 });
-    gsap.set(dots.map((d) => d.el), { autoAlpha: 0 });
+    // Checkpoints park as HOLLOW RINGS: fully invisible until the on-enter
+    // ring fade, and unfilled until the draw-head passes (the fill tween
+    // lives in the scrubbed timeline).
+    gsap.set(dots.map((d) => d.el), { autoAlpha: 0, fillOpacity: 0 });
     maskPath.style.strokeDashoffset = "1"; // spine empty
     // Rotation pivots on the measured foot — the point that rides the line.
     gsap.set(pen, {
@@ -386,14 +393,30 @@ export default function TimelineReveal() {
           DRAW_AT,
         );
 
-        // Dots FADE in as the head passes them (placed via the ease inverse) — a
-        // pure opacity fade in place, no scale/movement: they just light up where
-        // the pen has travelled.
+        // The checkpoint RINGS soft-fade in as the section enters — a one-shot
+        // OUTSIDE the scrub (its own once-trigger), so the route's unfilled
+        // checkpoints are already visible before the pin engages and the draw
+        // begins. A gentle path-order stagger.
+        gsap.fromTo(
+          dots.map((d) => d.el),
+          { autoAlpha: 0 },
+          {
+            autoAlpha: 1,
+            duration: 0.8,
+            ease: "power2.out",
+            stagger: 0.06,
+            scrollTrigger: { trigger: stage, start: "top 80%", once: true },
+          },
+        );
+
+        // Each checkpoint FILLS as the head passes it (placed via the ease
+        // inverse): fill-opacity 0→1 in place — the hollow ring banks solid.
+        // Lives in the scrubbed timeline, so scrolling back un-fills it.
         for (const d of dots) {
           tl.fromTo(
             d.el,
-            { autoAlpha: 0 },
-            { autoAlpha: 1, duration: 0.45, ease: "power2.out" },
+            { fillOpacity: 0 },
+            { fillOpacity: 1, duration: 0.45, ease: "power2.out" },
             timeForP(d.p),
           );
         }
@@ -817,7 +840,9 @@ export default function TimelineReveal() {
       pen.style.removeProperty("left");
       pen.style.removeProperty("top");
       gsap.set(pen, { clearProps: "opacity,visibility,transform,transformOrigin" });
-      gsap.set(dots.map((d) => d.el), { clearProps: "transform,opacity,visibility" });
+      gsap.set(dots.map((d) => d.el), {
+        clearProps: "transform,opacity,visibility,fillOpacity",
+      });
       gsap.set(hidden, { clearProps: "opacity,visibility,transform,filter" });
       // Restore the micro-animation targets (opacity clears revert the tick/aura
       // to their class-hidden state).

@@ -147,8 +147,14 @@ export default function Timeline() {
                 cy={d.cy}
                 r={d.r}
                 fill="white"
-                // Revealed by a pure opacity fade as the draw-head passes (no
-                // scale/transform), so the dot stays put on the spine.
+                stroke="white"
+                strokeWidth="1.5"
+                // Two-state checkpoint: TimelineReveal parks it as a hollow
+                // RING (fill-opacity 0) that soft-fades in as the section
+                // enters, then the fill sweeps in as the draw-head passes —
+                // no scale/transform, the dot stays put on the spine. This
+                // resting markup (ring + fill both solid) is the finished
+                // state for SSR / no-JS / reduced-motion.
               />
             ))}
           </svg>
