@@ -156,7 +156,7 @@ function CategoryBody({ rows }: { rows: readonly CompareRow[] }) {
         {rows.map((row) => (
           <Fragment key={row.label}>
             <span className="flex flex-col gap-[2px] pl-[48px]">
-              <span className="text-[16px] leading-normal tracking-[-0.01em] text-white">
+              <span className="text-[20px] leading-normal tracking-[-0.01em] text-white">
                 {row.label}
               </span>
               {row.note && (
@@ -167,12 +167,12 @@ function CategoryBody({ rows }: { rows: readonly CompareRow[] }) {
             </span>
             <CompareValue
               value={row.subscription}
-              textClass="block text-center text-[16px] leading-normal tracking-[-0.01em] text-white/70"
+              textClass="block text-center text-[20px] leading-normal tracking-[-0.01em] text-white/70"
               iconClass="mx-auto block size-[20px]"
             />
             <CompareValue
               value={row.fixedSprint}
-              textClass="block text-center text-[16px] leading-normal tracking-[-0.01em] text-white/70"
+              textClass="block text-center text-[20px] leading-normal tracking-[-0.01em] text-white/70"
               iconClass="mx-auto block size-[20px]"
             />
           </Fragment>
