@@ -155,7 +155,7 @@ function CategoryBody({ rows }: { rows: readonly CompareRow[] }) {
       >
         {rows.map((row) => (
           <Fragment key={row.label}>
-            <span className="flex flex-col gap-[2px] pl-[9px]">
+            <span className="flex flex-col gap-[2px] pl-[48px]">
               <span className="text-[16px] leading-normal tracking-[-0.01em] text-white">
                 {row.label}
               </span>
