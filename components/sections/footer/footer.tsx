@@ -1,4 +1,5 @@
 import Image from "next/image";
+import AnchorLink from "@/components/ui/anchor-link";
 import { InstagramSocial, XSocial } from "@/components/ui/icons";
 import FooterReveal from "./footer-reveal";
 
@@ -59,16 +60,24 @@ import FooterReveal from "./footer-reveal";
  *     column's 43px gap meters to the INK, like the Figma box did.
  * Decorative (aria-hidden): the brand is already named in the page above.
  *
- * Links reuse the navbar's in-page anchors; the social icons are the shared
- * currentColor glyphs (ui/icons.tsx — same glyphs as the V4 node's 20px
- * frames). Actions stay unwired until routing / Cal.com land, matching the
- * rest of the site.
+ * Nav links route through <AnchorLink> (client-side next/link that keeps the
+ * shared sky/cloud canvas alive and smooth-scrolls in-page anchors via Lenis):
+ *   • home  → "/"            (route)
+ *   • pricing → "/pricing"   (route — matches the navbar)
+ *   • work  → "/#work"       (Portfolio section, id="work", home page)
+ *   • book a call → "/pricing#book" (BookACall section, id="book", /pricing)
+ * The two cross-route hashes work from either page (footer is shared): same-page
+ * clicks glide via Lenis, cross-page clicks navigate then land on the anchor.
+ * The LEGAL links stay placeholder <a>s — no privacy/terms pages exist yet
+ * (unwired until routing lands, matching the rest of the site). The social icons
+ * are the shared currentColor glyphs (ui/icons.tsx — same glyphs as the V4
+ * node's 20px frames).
  */
 const NAV = [
   { label: "home", href: "/" },
-  { label: "pricing", href: "#pricing" },
-  { label: "work", href: "#work" },
-  { label: "book a call", href: "#book" },
+  { label: "pricing", href: "/pricing" },
+  { label: "work", href: "/#work" },
+  { label: "book a call", href: "/pricing#book" },
 ];
 
 const LEGAL = [
@@ -109,12 +118,12 @@ export default function Footer() {
             <ul className="flex items-start gap-[13px] whitespace-nowrap text-[16px] text-[#f7f4f0] max-md:flex-wrap max-md:justify-center max-md:gap-x-[18px] max-md:gap-y-[8px]">
               {NAV.map(({ label, href }) => (
                 <li key={label}>
-                  <a
+                  <AnchorLink
                     href={href}
                     className="inline-block transition-opacity hover:opacity-70"
                   >
                     {label}
-                  </a>
+                  </AnchorLink>
                 </li>
               ))}
             </ul>

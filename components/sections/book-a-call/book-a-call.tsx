@@ -32,6 +32,7 @@ import BookACallReveal from "./book-a-call-reveal";
 export default function BookACall() {
   return (
     <section
+      id="book"
       data-book-a-call
       className="relative flex w-full items-center justify-center overflow-hidden py-[25dvh] max-md:py-[12dvh]"
     >

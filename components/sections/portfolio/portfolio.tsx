@@ -47,7 +47,7 @@ export default function Portfolio() {
   const [filter, setFilter] = useState<CloudFilter>("all");
 
   return (
-    <section data-portfolio className="relative min-h-dvh w-full overflow-hidden">
+    <section id="work" data-portfolio className="relative min-h-dvh w-full overflow-hidden">
       {/* Section header — filter tabs over the Figma 424:487 heading + button. */}
       <div className="pointer-events-none relative z-10 flex w-full flex-col items-center gap-[25px] pt-[10dvh] max-md:px-6">
         <div
