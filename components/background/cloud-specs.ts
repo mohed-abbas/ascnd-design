@@ -216,6 +216,72 @@ export const ROCK_CLOUDS: CloudSpec[] = [
 export const PRICING_SKY_CLOUDS: CloudSpec[] = [
   { key: "pricing-hero-tl", ndc: [-0.82, 0.7], dist: 22, seed: 4, bounds: [4, 1.2, 1], volume: 4, anchorVh: 0, perspectiveScroll: false },
   { key: "pricing-hero-br", ndc: [0.86, -0.86], dist: 26, seed: 11, bounds: [6, 1.4, 1], volume: 5, anchorVh: 0, perspectiveScroll: false },
+  // Continue the same hero-cloud recipe through the pricing route sections.
+  // Section binds are used instead of anchorVh counting so placement stays valid
+  // as section heights/order evolve.
+  {
+    key: "pricing-costs-left",
+    ndc: [-0.88, -0.72],
+    dist: 24,
+    seed: 11,
+    bounds: [5, 1.3, 1],
+    volume: 4,
+    section: { trigger: "[data-costs]" },
+    perspectiveScroll: false,
+  },
+  {
+    key: "pricing-compare-right",
+    ndc: [0.9, 0.55],
+    dist: 24,
+    seed: 4,
+    bounds: [4, 1.2, 1],
+    volume: 4,
+    section: { trigger: "[data-plan-compare]" },
+    perspectiveScroll: false,
+  },
+  // Companion bank low on the LEFT — balances pricing-compare-right diagonally
+  // across the (tall) plan-compare section. Distinct seed so the two banks read
+  // as different puffs, not a mirror.
+  {
+    key: "pricing-compare-left",
+    ndc: [-0.9, -0.62],
+    dist: 24,
+    seed: 7,
+    bounds: [5, 1.3, 1],
+    volume: 4,
+    section: { trigger: "[data-plan-compare]" },
+    perspectiveScroll: false,
+  },
+  {
+    key: "pricing-timeline-left",
+    ndc: [-0.9, -0.58],
+    dist: 24,
+    seed: 11,
+    bounds: [6, 1.4, 1],
+    volume: 5,
+    section: { trigger: "[data-timeline]" },
+    perspectiveScroll: false,
+  },
+  {
+    key: "pricing-book-right",
+    ndc: [0.88, -0.68],
+    dist: 24,
+    seed: 4,
+    bounds: [5, 1.2, 1],
+    volume: 4,
+    section: { trigger: "[data-book-a-call]" },
+    perspectiveScroll: false,
+  },
+  {
+    key: "pricing-faq-left",
+    ndc: [-0.88, 0.62],
+    dist: 24,
+    seed: 11,
+    bounds: [4.8, 1.2, 1],
+    volume: 4,
+    section: { trigger: "[data-faq]" },
+    perspectiveScroll: false,
+  },
 ];
 
 export const PRICING_ROCK_CLOUDS: CloudSpec[] = [];
