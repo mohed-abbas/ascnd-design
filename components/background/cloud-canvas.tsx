@@ -412,6 +412,9 @@ function SectionRig({
     const camUp = cameraUp(camera);
     const rest = new THREE.Vector3();
     const triggers: ScrollTrigger[] = [];
+    // Viewport height "top bottom" resolves against. Captured once — the effect
+    // re-runs on resize (width/height deps), so it stays current.
+    const viewH = window.innerHeight;
 
     clouds.forEach((c, i) => {
       const bind = c.section;
@@ -426,6 +429,19 @@ function SectionRig({
 
       const persp = !!c.perspectiveScroll;
       const travel = (bind.travel ?? 1) * (persp ? vwh : upSpan);
+
+      // FROZEN crossing span. This used to run "top bottom" → "bottom top", whose
+      // END tracks the section's BOTTOM — so an accordion (plan-compare / FAQ)
+      // growing or shrinking the section moved that end, remapped this scrubbed
+      // progress at the UNCHANGED scroll position, and the cloud lurched (no
+      // amount of easing survives it — scrub re-snaps to the remapped progress on
+      // the very next tick). Fix: anchor the start to the section TOP (an inner
+      // row never moves it — only the sections BELOW shift) and freeze the span to
+      // the build-time height as `end: "+=<viewH + secH>"`. That's the exact same
+      // distance the top-bottom→bottom-top crossing spanned, so the drift looks
+      // identical — but the end no longer follows the section's bottom, so
+      // toggling a row can't remap it. Re-measured on resize via the effect deps.
+      const secH = section.offsetHeight;
 
       const apply = (self: ScrollTrigger) => {
         const g = cloudRefs.current[i];
@@ -454,7 +470,7 @@ function SectionRig({
       const st = ScrollTrigger.create({
         trigger: section,
         start: "top bottom",
-        end: "bottom top",
+        end: `+=${viewH + secH}`,
         scrub: true,
         invalidateOnRefresh: true,
         onUpdate: (self) => apply(self),
