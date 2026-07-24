@@ -480,8 +480,13 @@ function ProgressChip() {
 
 /** The "11 days banked" calendar (746:4444) — a 7-wide grid of day cells. */
 function BankedCalendar() {
+  // Veil, NOT backdrop-blur (docs/backdrop-filter-sweep.md): the backdrop here
+  // is sky-only, and a live backdrop-filter under the reveal tween's ancestor
+  // filter/opacity is what made this card SNAP at the end of its fade — the
+  // ancestor filter suspends the frost, and it popped back on when clearProps
+  // removed it. The veil fades with the card like any other paint.
   return (
-    <div className="relative flex w-full flex-col items-center gap-[0.463cqw] overflow-hidden rounded-[0.7cqw] border-[0.048cqw] border-white bg-gradient-to-b from-black/10 to-black/5 px-[0.7cqw] py-[0.661cqw] backdrop-blur-[0.193cqw]">
+    <div className="relative flex w-full flex-col items-center gap-[0.463cqw] overflow-hidden rounded-[0.7cqw] border-[0.048cqw] border-white bg-gradient-to-b from-black/10 to-black/5 px-[0.7cqw] py-[0.661cqw] shadow-[inset_0_0_0_999px_rgba(255,255,255,0.06)]">
       {/* Subtle divider behind the grid (746:4445). */}
       <span className="pointer-events-none absolute left-[1.671cqw] top-[2.663cqw] h-[0.033cqw] w-[7.341cqw] bg-white" />
       <div className="flex items-center gap-[0.3cqw] text-white">

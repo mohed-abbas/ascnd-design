@@ -87,7 +87,7 @@ const DEFAULT_MODE: ScrollMode = "pin"; // what ships without a ?tl= param (team
 const SCRUB_START = "top 75%"; // same entry line the old once-trigger used
 const SCRUB_END = "bottom bottom"; // pen lands as the stage fills the viewport
 const PIN_START = "center center"; // stage centered; with the height-capped stage (timeline.tsx) the composition fits the viewport, the symmetric py padding hanging evenly off both edges
-const PIN_DISTANCE = "+=250%"; // scroll length driving the draw while pinned
+const PIN_DISTANCE = "+=200%"; // scroll length driving the draw while pinned
 const PIN_HOLD = 0.6; // beat of dead scroll on the finished composition before the pin releases
 
 export default function TimelineReveal() {
