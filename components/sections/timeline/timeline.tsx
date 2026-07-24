@@ -37,15 +37,15 @@ import { DOTS, PATH_D, PATH_TRANSFORM } from "./timeline-path";
  * ICONS are exported 1:1 from Figma (timeline-icons.tsx): the day-12 refresh, the
  * day-5 delivery check, the banked-day pause glyphs.
  *
- * ANIMATION is on-enter, one-shot, eased (ScrollTrigger fires once; no scrub).
- * <TimelineReveal/> (client, renders null) drives it off the data-tl-* hooks:
- *   • PHASE 2 (this pass) — heading blur-rise, then the spine draws on via a
- *     mask sweep (data-tl-mask) with the ascnd mark (data-tl-pen) riding the
- *     draw-head as the "pen", and each dot (data-tl-dot) popping as the head
- *     reaches it. The endnote ("and up we go") fades in as the pen lands.
- *   • PHASE 3 (next) — per-beat card reveals + in-card micro-animations
- *     (day-12 refresh spin→tick+aura, 70% count-up, calendar fill, …). The
- *     cards render in their finished state here; they're untouched by Phase 2.
+ * ANIMATION is BOUND TO SCROLL: the master reveal (heading blur-rise, the
+ * spine drawing on via the mask sweep with the ascnd mark riding the head as
+ * the "pen", dots + cards revealing as the head passes, the endnote settling)
+ * is SCRUBBED — scroll down draws, scroll up un-draws. Two team-A/B modes,
+ * switched with ?tl= (see timeline-reveal.tsx): ?tl=pin (DEFAULT — the
+ * section pins and ~2 viewport-heights of scroll drive the draw) or ?tl=scrub
+ * (unpinned — the draw advances as the stage travels the viewport). The in-card
+ * micro-LOOPS (board button, progress chip, refresh tick, bank fill) stay
+ * time-based infinite loops, idled off-screen by IntersectionObservers.
  *
  * Reduced motion / no-JS: every element renders in its finished state (spine
  * fully drawn, dots full-size, heading shown), and TimelineReveal early-returns,
@@ -323,7 +323,7 @@ export default function Timeline() {
             <BankedCalendar />
           </div>
 
-          {/* On-enter, one-shot spine draw + dot pops + pen travel (renders null). */}
+          {/* Scroll-scrubbed spine draw + dot pops + pen travel (renders null). */}
           <TimelineReveal />
         </div>
       </div>

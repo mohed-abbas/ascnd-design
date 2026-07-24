@@ -16,11 +16,25 @@ const useIsomorphicLayoutEffect =
 const REDUCE_MOTION = "(prefers-reduced-motion: reduce)";
 
 /**
- * "your first month, plotted" scroll reveal. One-shot on enter, using the SAME
- * draw mechanism + pacing as the home page's "simple pricing" connector
- * (pricing-reveal.tsx / pricing-icons.tsx): a fat solid brush masks the dotted
- * spine and its strokeDashoffset wipes 1→0 (power1.inOut) so the line draws on
- * smoothly — no per-frame length maths, no "racing" head.
+ * "your first month, plotted" scroll reveal — BOUND TO SCROLL (scrubbed). The
+ * master timeline (heading, spine draw, dots, cards, endnote) no longer plays
+ * once on enter: its playhead is tied to scroll position, so scrolling down
+ * draws the line and scrolling up un-draws it. It uses the SAME draw mechanism
+ * as the home page's "simple pricing" connector (pricing-reveal.tsx /
+ * pricing-icons.tsx): a fat solid brush masks the dotted spine and its
+ * strokeDashoffset wipes 1→0 so the line draws on smoothly — no per-frame
+ * length maths, no "racing" head.
+ *
+ * TWO SCROLL MODES, switchable per-visit with the ?tl= query param (the house
+ * A/B pattern — cf. ?intro / ?tier / ?noclouds) while the team picks one:
+ *   ?tl=scrub — no pin: the draw advances as the stage travels the viewport
+ *     (start/end in SCRUB_START/SCRUB_END below).
+ *   ?tl=pin (DEFAULT — the team's pick) — the section pins to the viewport
+ *     and PIN_DISTANCE of scroll drives the draw (plus a PIN_HOLD beat on the
+ *     finished composition) before it releases. NB the stage is taller than a
+ *     16:9 viewport, so a sliver of top/bottom clips while pinned — a known
+ *     trade-off of this mode.
+ * Flip DEFAULT_MODE to change what ships without a param.
  *
  * What THIS section adds on top of that shared approach:
  *   • the ascnd mark rides the draw-head as the "pen" (moved to
@@ -35,11 +49,15 @@ const REDUCE_MOTION = "(prefers-reduced-motion: reduce)";
  * HEADING — the same word-by-word blur-rise the pricing/cards headings use
  * (SplitText by words), the sub a beat later.
  *
+ * The in-card micro-LOOPS (day-1 board, day-2 progress chip, day-12 refresh,
+ * day-23 bank fill) are infinite and therefore stay TIME-BASED, gated by their
+ * IntersectionObservers — an endless loop can't be scrubbed.
+ *
  * Renders nothing — drives the [data-tl-*] / [data-timeline-*] nodes in
- * timeline.tsx. House rules: rides GSAP's shared ticker (LenisProvider); a
- * single `once: true` timeline (idles to zero); SSR / no-JS / reduced-motion
- * render the FINISHED composition (spine drawn, cards + dots shown), hidden only
- * once we know we'll animate.
+ * timeline.tsx. House rules: rides GSAP's shared ticker (LenisProvider); the
+ * scrubbed timeline only advances with scroll (idles to zero); SSR / no-JS /
+ * reduced-motion render the FINISHED composition (spine drawn, cards + dots
+ * shown), hidden only once we know we'll animate.
  */
 
 // PATH_TRANSFORM "translate(-2 70.66)" — path-local → frame shift (timeline-path.ts).
@@ -53,11 +71,28 @@ const DRAW_EASE = "power1.inOut";
 const DRAW_AT = 0.35; // the draw starts a beat after the heading begins
 const SAMPLES = 600; // path samples used to place each dot/card on the head
 
+// ── Scroll binding (team A/B — see header) ──────────────────────────────────
+// Under scrub, timeline "seconds" above become scroll PROPORTIONS — the
+// relative pacing (heading → draw → endnote) is unchanged, scroll just owns
+// the playhead.
+type ScrollMode = "scrub" | "pin";
+const DEFAULT_MODE: ScrollMode = "pin"; // what ships without a ?tl= param (team pick, 2026-07-24)
+const SCRUB_START = "top 75%"; // same entry line the old once-trigger used
+const SCRUB_END = "bottom bottom"; // pen lands as the stage fills the viewport
+const PIN_START = "center center"; // stage centered; the section's py-[10dvh] absorbs the overflow at the 1512×982 design ratio
+const PIN_DISTANCE = "+=200%"; // scroll length driving the draw while pinned
+const PIN_HOLD = 0.6; // beat of dead scroll on the finished composition before the pin releases
+
 export default function TimelineReveal() {
   useIsomorphicLayoutEffect(() => {
     const stage = document.querySelector<HTMLElement>("[data-tl-stage]");
     if (!stage) return;
     if (window.matchMedia(REDUCE_MOTION).matches) return;
+
+    // ?tl=pin | ?tl=scrub picks the scroll mode for this visit (team A/B).
+    const qMode = new URLSearchParams(window.location.search).get("tl");
+    const mode: ScrollMode =
+      qMode === "pin" || qMode === "scrub" ? qMode : DEFAULT_MODE;
 
     const maskPath = stage.querySelector<SVGPathElement>("[data-tl-mask]");
     const pen = stage.querySelector<SVGElement>("[data-tl-pen]");
@@ -111,6 +146,28 @@ export default function TimelineReveal() {
     const endPct = toPct(endPt.x + TX, endPt.y + TY);
     const footOffX = restLeftPct - endPct.x;
     const footOffY = restTopPct - endPct.y;
+
+    // The pen FACES its direction of travel: each frame the mark rotates about
+    // its foot to the path tangent. The PIVOT is the measured contact point —
+    // where the terminus sits inside the pen's own box at rest. The glyph's
+    // foot is INSET from the element's corner (the rest position is hand-tuned
+    // in timeline.tsx), so pivoting on a box corner would swing the glyph off
+    // the line as it turns; pivoting on the measured point keeps it planted on
+    // the head. Expressed in % of the box so it survives the stage rescaling.
+    // Angles are measured RELATIVE to the end tangent — the same
+    // self-calibration as the foot offset — so p=1 lands the mark back at its
+    // designed upright rest (rotation 0), and everywhere else it keeps that
+    // same relationship to the line. The stage shares the viewBox's aspect, so
+    // frame-space angles are screen-space angles.
+    const footOrigin = `${(((stageRect.left + (endPct.x / 100) * stageRect.width - penRect.left) / penRect.width) * 100).toFixed(2)}% ${(((stageRect.top + (endPct.y / 100) * stageRect.height - penRect.top) / penRect.height) * 100).toFixed(2)}%`;
+    const TAN_EPS = Math.max(1, L / 1000);
+    const angleAt = (len: number) => {
+      const a = maskPath.getPointAtLength(Math.max(0, len - TAN_EPS));
+      const b = maskPath.getPointAtLength(Math.min(L, len + TAN_EPS));
+      return (Math.atan2(b.y - a.y, b.x - a.x) * 180) / Math.PI;
+    };
+    const endAngle = angleAt(L);
+    const penRotation = (len: number) => angleAt(len) - endAngle;
 
     // Progress (0..1) at which the head reaches each dot: sample the path once and
     // match each dot (frame coords) to its nearest sample. Index maps 1:1 to DOTS.
@@ -179,7 +236,12 @@ export default function TimelineReveal() {
     gsap.set(hidden, { autoAlpha: 0 });
     gsap.set(dots.map((d) => d.el), { autoAlpha: 0 });
     maskPath.style.strokeDashoffset = "1"; // spine empty
-    gsap.set(pen, { autoAlpha: 0 });
+    // Rotation pivots on the measured foot — the point that rides the line.
+    gsap.set(pen, {
+      autoAlpha: 0,
+      transformOrigin: footOrigin,
+      rotation: penRotation(0),
+    });
     const startPt = maskPath.getPointAtLength(0);
     const startPct = toPct(startPt.x + TX, startPt.y + TY);
     pen.style.left = `${startPct.x + footOffX}%`;
@@ -208,8 +270,31 @@ export default function TimelineReveal() {
     const build = () => {
       if (cancelled) return;
       ctx = gsap.context(() => {
+        // SCRUBBED master timeline — scroll owns the playhead in both modes.
+        // Pin mode pins the whole <section> (not the stage) so the section's
+        // vertical padding rides along. pinSpacing must be set EXPLICITLY:
+        // the sections are direct children of the flex-column <body>
+        // (layout.tsx), and ScrollTrigger silently defaults pinSpacing to
+        // false inside flex parents — which let the next section scroll
+        // straight over the pinned stage.
         const tl = gsap.timeline({
-          scrollTrigger: { trigger: stage, start: "top 75%", once: true },
+          scrollTrigger:
+            mode === "pin"
+              ? {
+                  trigger: stage.closest<HTMLElement>("[data-timeline]") ?? stage,
+                  start: PIN_START,
+                  end: PIN_DISTANCE,
+                  pin: true,
+                  pinSpacing: true,
+                  anticipatePin: 1,
+                  scrub: true,
+                }
+              : {
+                  trigger: stage,
+                  start: SCRUB_START,
+                  end: SCRUB_END,
+                  scrub: true,
+                },
         });
 
         // Heading words blur-rise (SplitText), sub a beat later.
@@ -242,8 +327,10 @@ export default function TimelineReveal() {
 
         // The spine DRAWS on: wipe the brush's strokeDashoffset 1→0 (same as the
         // pricing connector) through a proxy + onUpdate, and ride the pen on the
-        // head each frame (drawn fraction p = 1 − o → getPointAtLength(p·L)).
+        // head each frame (drawn fraction p = 1 − o → getPointAtLength(p·L)),
+        // rotating it to face the direction of travel (penRotation).
         const draw = { o: 1 };
+        const setPenRot = gsap.quickSetter(pen, "rotation", "deg");
         tl.set(pen, { autoAlpha: 1 }, DRAW_AT);
         tl.to(
           draw,
@@ -258,6 +345,7 @@ export default function TimelineReveal() {
               const c = toPct(pt.x + TX, pt.y + TY);
               pen.style.left = `${c.x + footOffX}%`;
               pen.style.top = `${c.y + footOffY}%`;
+              setPenRot(penRotation(p * L));
             },
           },
           DRAW_AT,
@@ -320,6 +408,12 @@ export default function TimelineReveal() {
             { autoAlpha: 1, y: 0, duration: 0.5, ease: "power2.out" },
             DRAW_AT + DRAW_DURATION - 0.35,
           );
+        }
+
+        // Pin mode: a beat of dead scroll on the finished composition, so the
+        // pin doesn't release the instant the pen lands.
+        if (mode === "pin") {
+          tl.to({}, { duration: PIN_HOLD }, DRAW_AT + DRAW_DURATION);
         }
 
         // day-1 button: an INFINITE loop, separate from the once main timeline.
@@ -656,6 +750,12 @@ export default function TimelineReveal() {
           cellIO.observe(bankCells[0]);
         }
       }, stage);
+
+      // The pin's spacer pushes everything below the section down. The other
+      // sections' triggers also build behind fonts.ready in their own effects
+      // (order not guaranteed), so any built before this one measured the
+      // un-spaced layout — re-measure them all once the pin exists.
+      if (mode === "pin") ScrollTrigger.refresh();
     };
 
     // Defer until fonts are ready so SplitText measures real glyph metrics.
@@ -678,7 +778,7 @@ export default function TimelineReveal() {
       maskPath.style.removeProperty("stroke-dashoffset");
       pen.style.removeProperty("left");
       pen.style.removeProperty("top");
-      gsap.set(pen, { clearProps: "opacity,visibility" });
+      gsap.set(pen, { clearProps: "opacity,visibility,transform,transformOrigin" });
       gsap.set(dots.map((d) => d.el), { clearProps: "transform,opacity,visibility" });
       gsap.set(hidden, { clearProps: "opacity,visibility,transform,filter" });
       // Restore the micro-animation targets (opacity clears revert the tick/aura
