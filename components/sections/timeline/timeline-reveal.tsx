@@ -304,6 +304,7 @@ export default function TimelineReveal() {
 
     let ctx: gsap.Context | undefined;
     let split: SplitText | undefined;
+    let bankSplit: SplitText | undefined;
     let boardIO: IntersectionObserver | undefined;
     let progIO: IntersectionObserver | undefined;
     let refreshIO: IntersectionObserver | undefined;
@@ -727,9 +728,10 @@ export default function TimelineReveal() {
         // day 1 (top-left) — smoothly brightening from white/50 to solid white
         // and STAYING solid — so the fill sweeps the grid in a boustrophedon
         // snake (row 1 →, row 2 ←, row 3 →) while a connector line draws through
-        // the cells in lockstep. It flows through all 17 days (1 → 17), holds on
-        // the full board, then gently resets and replays. An IntersectionObserver
-        // idles it off-screen.
+        // the cells in lockstep. It flows through all 17 days (1 → 17), the
+        // paused-days signs land, the "11 days banked" caption blur-rises in,
+        // the full board holds, then everything gently resets and replays. An
+        // IntersectionObserver idles it off-screen.
         const bankDom = gsap.utils.toArray<HTMLElement>(
           stage.querySelectorAll("[data-tl-bankable]"),
         );
@@ -738,6 +740,18 @@ export default function TimelineReveal() {
         const pauseEls = gsap.utils.toArray<SVGElement>(
           stage.querySelectorAll("[data-tl-pause]"),
         );
+        // The "11 days banked" caption (label words + trailing check) — held
+        // back further still: it captions the board only once the paused-days
+        // signs have finished landing, rising word by word like the section
+        // headings (SplitText is loaded anyway for the main heading).
+        const bankLabel = stage.querySelector<HTMLElement>("[data-tl-bank-label]");
+        const bankCheck = stage.querySelector<SVGElement>("[data-tl-bank-check]");
+        const labelTargets: Element[] = [];
+        if (bankLabel) {
+          bankSplit = new SplitText(bankLabel, { type: "words" });
+          labelTargets.push(...bankSplit.words);
+        }
+        if (bankCheck) labelTargets.push(bankCheck);
         // Snake order (boustrophedon): group the muted cells into rows by their
         // vertical position, then reverse every other row so the fill — and the
         // trail line — flow row-to-row without diagonal jump-backs.
@@ -761,9 +775,17 @@ export default function TimelineReveal() {
           const SOLID = "rgba(255,255,255,1)";
           const FILL = 0.5; // per-cell brighten
           const STEP = 0.3; // gap between successive fills (overlaps → a flowing wave)
-          const HOLD_FULL = 2.5; // dwell on the full board (banked days + paused-days signs)
+          const HOLD_FULL = 3.2; // dwell on the full board (signs + caption need ~1.9s of it; the finished board then holds ~1.3s)
           const RESET = 0.5; // gentle dim back to muted before replaying
+          const PAUSE_IN = 0.4; // each paused-days sign's fade
+          const PAUSE_STAGGER = 0.06;
           const lastFillEnd = (bankCells.length - 1) * STEP + FILL;
+          // When the LAST paused-days sign has fully landed — the caption's cue.
+          const pauseDone =
+            lastFillEnd +
+            (pauseEls.length
+              ? PAUSE_IN + (pauseEls.length - 1) * PAUSE_STAGGER
+              : 0);
 
           // Pin an explicit rgba resting colour so GSAP tweens rgba→rgba. The
           // Tailwind `bg-white/50` class computes to an oklab/color-mix value
@@ -771,8 +793,18 @@ export default function TimelineReveal() {
           // day "disappearing" and leaving a gap in the row) when its tween
           // began. With a clean rgba start the fill just fades in place.
           gsap.set(bankCells, { backgroundColor: MUTED });
-          // The paused-days signs stay hidden until the fill completes.
+          // The paused-days signs stay hidden until the fill completes; the
+          // caption stays hidden until the signs have landed.
           if (pauseEls.length) gsap.set(pauseEls, { autoAlpha: 0 });
+          if (labelTargets.length) gsap.set(labelTargets, { autoAlpha: 0 });
+          // The STATIC row-1 divider (the resting design's stand-in for the
+          // banked-run connector, timeline.tsx) stays hidden for the whole
+          // animated session — the drawn [data-tl-bank-trail] replaces it, and
+          // left visible it reads as a line through days that haven't banked.
+          const bankDivider = stage.querySelector<HTMLElement>(
+            "[data-tl-bank-divider]",
+          );
+          if (bankDivider) gsap.set(bankDivider, { autoAlpha: 0 });
 
           const bankLoop = gsap.timeline({
             repeat: -1,
@@ -786,11 +818,21 @@ export default function TimelineReveal() {
             const setTrail = () => {
               bankTrail.style.strokeDashoffset = String(td.o);
             };
+            // The draw LAGS the fill by one cell-fill: it starts once day 1 has
+            // fully banked (t = FILL) and ends with the last day (lastFillEnd).
+            // The cell-to-cell path distances are uniform, so with ease "none"
+            // the head crosses each gap while the next cell brightens and lands
+            // on it exactly as it completes — the line never pokes into days
+            // that haven't banked yet (starting at 0 had it running a gap ahead).
             bankLoop
               .set(bankTrail, { autoAlpha: 1 }, 0)
               .set(td, { o: 1 }, 0)
               .add(setTrail, 0)
-              .to(td, { o: 0, duration: lastFillEnd, ease: "none", onUpdate: setTrail }, 0)
+              .to(
+                td,
+                { o: 0, duration: lastFillEnd - FILL, ease: "none", onUpdate: setTrail },
+                FILL,
+              )
               .to(bankTrail, { autoAlpha: 0, duration: RESET, ease: "power2.inOut" }, lastFillEnd + HOLD_FULL);
           }
           // Fill each cell in turn; they persist solid (no settle-back).
@@ -809,11 +851,41 @@ export default function TimelineReveal() {
               .set(pauseEls, { autoAlpha: 0 }, 0)
               .to(
                 pauseEls,
-                { autoAlpha: 1, duration: 0.4, ease: "power2.out", stagger: 0.06 },
+                {
+                  autoAlpha: 1,
+                  duration: PAUSE_IN,
+                  ease: "power2.out",
+                  stagger: PAUSE_STAGGER,
+                },
                 lastFillEnd,
               )
               .to(
                 pauseEls,
+                { autoAlpha: 0, duration: RESET, ease: "power2.inOut" },
+                lastFillEnd + HOLD_FULL,
+              );
+          }
+          // …and only THEN the "11 days banked" caption — the same word-by-word
+          // blur-rise the section headings use (the check trails as the final
+          // "word"), fading out with everything else on reset. No clearProps:
+          // the loop repeats, and the fromTo re-seeds the parked state each pass.
+          if (labelTargets.length) {
+            bankLoop
+              .fromTo(
+                labelTargets,
+                { yPercent: 40, autoAlpha: 0, filter: "blur(8px)" },
+                {
+                  yPercent: 0,
+                  autoAlpha: 1,
+                  filter: "blur(0px)",
+                  duration: 0.7,
+                  ease: "power3.out",
+                  stagger: 0.06,
+                },
+                pauseDone,
+              )
+              .to(
+                labelTargets,
                 { autoAlpha: 0, duration: RESET, ease: "power2.inOut" },
                 lastFillEnd + HOLD_FULL,
               );
@@ -859,6 +931,7 @@ export default function TimelineReveal() {
         ?.style.removeProperty("stroke-dashoffset");
       ctx?.revert();
       split?.revert();
+      bankSplit?.revert();
       // Drop the synchronous parks so the finished layout shows if we never built.
       // Restore the un-extended path (the lead-in rewrite, if it happened).
       maskPath.setAttribute("d", PATH_D);

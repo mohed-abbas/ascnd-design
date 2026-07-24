@@ -487,11 +487,24 @@ function BankedCalendar() {
   // removed it. The veil fades with the card like any other paint.
   return (
     <div className="relative flex w-full flex-col items-center gap-[0.463cqw] overflow-hidden rounded-[0.7cqw] border-[0.048cqw] border-white bg-gradient-to-b from-black/10 to-black/5 px-[0.7cqw] py-[0.661cqw] shadow-[inset_0_0_0_999px_rgba(255,255,255,0.06)]">
-      {/* Subtle divider behind the grid (746:4445). */}
-      <span className="pointer-events-none absolute left-[1.671cqw] top-[2.663cqw] h-[0.033cqw] w-[7.341cqw] bg-white" />
+      {/* Subtle divider behind the grid (746:4445). It lies exactly on row 1's
+          centerline — the RESTING design's static stand-in for the banked-run
+          connector (days 1-6 rest solid there). TimelineReveal hides it while
+          the bank loop animates, else it reads as a line drawn through days
+          that haven't banked yet; SSR / reduced-motion keep it. */}
+      <span
+        data-tl-bank-divider
+        className="pointer-events-none absolute left-[1.671cqw] top-[2.663cqw] h-[0.033cqw] w-[7.341cqw] bg-white"
+      />
+      {/* The "11 days banked" caption. TimelineReveal holds it back until the
+          paused-days signs land each loop pass, then blur-rises it in word by
+          word (the section headings' rise); resting markup shows it for
+          SSR / reduced-motion. */}
       <div className="flex items-center gap-[0.3cqw] text-white">
-        <span className="text-[0.661cqw]">{BANKED_LABEL}</span>
-        <Check className="size-[0.926cqw]" />
+        <span data-tl-bank-label className="text-[0.661cqw]">
+          {BANKED_LABEL}
+        </span>
+        <Check data-tl-bank-check className="size-[0.926cqw]" />
       </div>
       <div data-tl-grid className="relative flex flex-col items-center gap-[0.322cqw]">
         {/* The "banked run" connector line (746:4444). It sits behind the cells
