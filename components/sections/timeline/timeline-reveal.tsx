@@ -42,11 +42,12 @@ const REDUCE_MOTION = "(prefers-reduced-motion: reduce)";
  *   • the ascnd mark rides the draw-head as the "pen" (moved to
  *     getPointAtLength(p·L) each frame, self-calibrated so p=1 lands its foot
  *     back on the terminus), and
- *   • each day's content REVEALS as the head passes it — the beat cards and
- *     the floating "Designs in review" label are hidden, then fade / blur-rise
- *     in at the moment the head reaches their point on the path (placed on the
- *     timeline via the ease's inverse, so they stay locked to the visual head
- *     whatever power1.inOut does), and
+ *   • each day's content REVEALS ahead of the head — the beat cards and the
+ *     floating "Designs in review" label fade / blur-rise in as the head
+ *     approaches and are COMPLETELY revealed the moment it reaches their point
+ *     on the path (the tween ENDS at the arrival time, which is found via the
+ *     ease's inverse, so they stay locked to the visual head whatever
+ *     power1.inOut does), and
  *   • the milestone dots are two-state CHECKPOINTS: they park as hollow rings
  *     that soft-fade in as the section enters (a one-shot outside the scrub),
  *     then each ring FILLS solid as the head passes it (inside the scrub, so
@@ -421,8 +422,22 @@ export default function TimelineReveal() {
           );
         }
 
-        // Each day's content reveals as the head reaches it.
+        // Each day's content is COMPLETELY revealed the moment the head
+        // reaches its checkpoint, and the anticipation window is SPATIAL, not
+        // temporal: the bloom spans the head's travel across the last
+        // REVEAL_LEAD fraction of the path before the dot (both edges mapped
+        // through the ease inverse). A fixed time-lead was wrong here — under
+        // power1.inOut a constant 0.6 was ~a quarter of the whole draw, so
+        // far-away cards bloomed while the pen was still checkpoints away.
+        // Spatially the window always hugs the pen: bloom starts as the head
+        // closes in, fully sharp on touch.
+        // power2.inOut (not the house power3.out): the out-ease front-loads
+        // the motion so the rise felt rushed inside the short window; inOut
+        // spends the window evenly — a gentle build, a gentle settle.
+        const REVEAL_LEAD = 0.05; // path fraction before a dot over which its card blooms
         for (const r of cardReveals) {
+          const end = timeForP(r.p);
+          const start = timeForP(Math.max(0, r.p - REVEAL_LEAD));
           tl.fromTo(
             r.el,
             { autoAlpha: 0, y: 16, filter: "blur(8px)" },
@@ -430,23 +445,35 @@ export default function TimelineReveal() {
               autoAlpha: 1,
               y: 0,
               filter: "blur(0px)",
-              duration: 0.6,
-              ease: "power3.out",
+              duration: Math.max(0.15, end - start),
+              ease: "power2.inOut",
               clearProps: "filter",
             },
-            timeForP(r.p),
+            start,
           );
         }
 
         // ── In-card micro-animations, each keyed to its day's reveal moment. ──
 
-        // day-5: the delivery ✓ badge stamps onto the design.
+        // day-5: the delivery ✓ badge stamps onto the design — same spatial
+        // window as the cards (a shorter one), fully landed on touch.
         if (stampEl) {
+          const pDelivery = pByBeat.get("delivery");
+          const end = beatTime("delivery");
+          const start =
+            pDelivery == null
+              ? end - 0.2
+              : timeForP(Math.max(0, pDelivery - REVEAL_LEAD / 2));
           tl.fromTo(
             stampEl,
             { autoAlpha: 0, scale: 0.6 },
-            { autoAlpha: 1, scale: 1, duration: 0.4, ease: "back.out(1.8)" },
-            beatTime("delivery") + 0.3,
+            {
+              autoAlpha: 1,
+              scale: 1,
+              duration: Math.max(0.1, end - start),
+              ease: "back.out(1.8)",
+            },
+            Math.max(0, start),
           );
         }
 
