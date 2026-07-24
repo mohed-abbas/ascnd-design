@@ -81,9 +81,35 @@ export default function LenisProvider({
     gsap.ticker.add(update);
     gsap.ticker.lagSmoothing(0);
 
+    // Layout-height watchdog. ScrollTrigger re-measures on window resize, but
+    // NOT when the DOM alone changes the page height — the plan-compare / FAQ
+    // accordions (pure-CSS grid-rows transitions, no JS hook) and the Cal.com
+    // embed all grow the document after the triggers below them measured,
+    // leaving stale start/pin positions (symptom: the pinned timeline
+    // overlapping a freshly-expanded plan-compare). Watch the body's height
+    // and refresh once layout settles — debounced past the 300ms accordion
+    // transition so a toggle costs ONE refresh, not one per animation frame.
+    // The first observe-fire only seeds the baseline, and refresh() nudging
+    // the height itself (pin spacers) re-enters harmlessly: the debounce
+    // collapses it and the height check ignores no-ops.
+    let lastBodyH = 0;
+    let refreshTid: ReturnType<typeof setTimeout> | undefined;
+    const ro = new ResizeObserver((entries) => {
+      const h = Math.round(entries[0].contentRect.height);
+      if (h === lastBodyH) return;
+      const seeding = lastBodyH === 0;
+      lastBodyH = h;
+      if (seeding) return;
+      clearTimeout(refreshTid);
+      refreshTid = setTimeout(() => ScrollTrigger.refresh(), 200);
+    });
+    ro.observe(document.body);
+
     return () => {
       gsap.ticker.remove(update);
       bound?.off("scroll", ScrollTrigger.update);
+      ro.disconnect();
+      clearTimeout(refreshTid);
     };
   }, []);
 
