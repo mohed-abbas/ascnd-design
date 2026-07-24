@@ -4,7 +4,7 @@ import { useEffect, useLayoutEffect } from "react";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { SplitText } from "gsap/SplitText";
-import { DOTS } from "./timeline-path";
+import { DOTS, PATH_D } from "./timeline-path";
 
 gsap.registerPlugin(ScrollTrigger, SplitText);
 
@@ -31,9 +31,11 @@ const REDUCE_MOTION = "(prefers-reduced-motion: reduce)";
  *     (start/end in SCRUB_START/SCRUB_END below).
  *   ?tl=pin (DEFAULT — the team's pick) — the section pins to the viewport
  *     and PIN_DISTANCE of scroll drives the draw (plus a PIN_HOLD beat on the
- *     finished composition) before it releases. NB the stage is taller than a
- *     16:9 viewport, so a sliver of top/bottom clips while pinned — a known
- *     trade-off of this mode.
+ *     finished composition) before it releases. The stage caps its width to
+ *     the viewport height (timeline.tsx) so the whole composition fits a
+ *     single viewport while pinned, CENTERED — with a straight lead-in
+ *     prepended to the spine (see LEAD-IN below) so the line still starts at
+ *     the viewport's left margin.
  * Flip DEFAULT_MODE to change what ships without a param.
  *
  * What THIS section adds on top of that shared approach:
@@ -79,7 +81,7 @@ type ScrollMode = "scrub" | "pin";
 const DEFAULT_MODE: ScrollMode = "pin"; // what ships without a ?tl= param (team pick, 2026-07-24)
 const SCRUB_START = "top 75%"; // same entry line the old once-trigger used
 const SCRUB_END = "bottom bottom"; // pen lands as the stage fills the viewport
-const PIN_START = "center center"; // stage centered; the section's py-[10dvh] absorbs the overflow at the 1512×982 design ratio
+const PIN_START = "center center"; // stage centered; with the height-capped stage (timeline.tsx) the composition fits the viewport, the symmetric py padding hanging evenly off both edges
 const PIN_DISTANCE = "+=200%"; // scroll length driving the draw while pinned
 const PIN_HOLD = 0.6; // beat of dead scroll on the finished composition before the pin releases
 
@@ -129,6 +131,40 @@ export default function TimelineReveal() {
       "[data-tl-prog-full-inner]",
     );
 
+    // ── LEAD-IN: extend the spine back to the viewport's left margin. ──
+    // The height-capped stage is CENTERED (timeline.tsx), so a gutter opens on
+    // its left. The line must still ORIGINATE at the viewport edge, so prepend
+    // a straight segment along the path's start tangent (the path's first
+    // command is already a straight 45° line, so the joint has no kink) to
+    // BOTH the visible path and the mask brush, overshooting a few units so
+    // the section's overflow-hidden trims it exactly at the edge. Rewriting
+    // the `d` up front means everything downstream — total length, the draw
+    // wipe, dot progress mapping, the pen's travel + rotation — treats the
+    // lead-in as just more path. Skipped when the stage is full-bleed (no
+    // gutter): the path's own start already bleeds off the stage edge.
+    const visiblePath = stage.querySelector<SVGPathElement>("[data-tl-path]");
+    const stageRect = stage.getBoundingClientRect();
+    const frameScale = stageRect.width / FRAME_W; // uniform — the stage is aspect-locked
+    if (visiblePath && stageRect.left > 1 && frameScale > 0) {
+      const a = maskPath.getPointAtLength(0);
+      const b = maskPath.getPointAtLength(8);
+      const n = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+      const ux = (b.x - a.x) / n;
+      const uy = (b.y - a.y) / n;
+      // Backtrack t along the tangent until the new start's SCREEN x passes
+      // the viewport edge: stageLeft + (a.x + TX − t·ux)·scale = 0, +6 units.
+      const t = (stageRect.left / frameScale + a.x + TX) / ux + 6;
+      const head = PATH_D.match(/^M\s*(-?[\d.]+)[ ,](-?[\d.]+)/);
+      if (ux > 0.1 && t > 0 && head) {
+        const d =
+          `M${(a.x - ux * t).toFixed(2)} ${(a.y - uy * t).toFixed(2)}` +
+          `L${a.x.toFixed(2)} ${a.y.toFixed(2)}` +
+          PATH_D.slice(head[0].length);
+        maskPath.setAttribute("d", d);
+        visiblePath.setAttribute("d", d);
+      }
+    }
+
     const L = maskPath.getTotalLength();
     const toPct = (fx: number, fy: number) => ({
       x: (fx / FRAME_W) * 100,
@@ -138,7 +174,6 @@ export default function TimelineReveal() {
     // Pen foot offset: measure the mark's finished resting box (its foot on the
     // terminus, hand-tuned in timeline.tsx) and subtract the geometric terminus,
     // so the travel lands p=1 back on that exact spot — no magic numbers here.
-    const stageRect = stage.getBoundingClientRect();
     const penRect = pen.getBoundingClientRect();
     const restLeftPct = ((penRect.left - stageRect.left) / stageRect.width) * 100;
     const restTopPct = ((penRect.top - stageRect.top) / stageRect.height) * 100;
@@ -775,6 +810,9 @@ export default function TimelineReveal() {
       ctx?.revert();
       split?.revert();
       // Drop the synchronous parks so the finished layout shows if we never built.
+      // Restore the un-extended path (the lead-in rewrite, if it happened).
+      maskPath.setAttribute("d", PATH_D);
+      visiblePath?.setAttribute("d", PATH_D);
       maskPath.style.removeProperty("stroke-dashoffset");
       pen.style.removeProperty("left");
       pen.style.removeProperty("top");

@@ -26,9 +26,12 @@ import { DOTS, PATH_D, PATH_TRANSFORM } from "./timeline-path";
  * SCALING: the whole 1512×982 composition is one scalable "stage" — a
  * `@container` wrapper with every size in `cqw` (1cqw = 1% of the stage width)
  * and positions in `%`, so the artwork scales as a single unit with the viewport
- * (up through 2K+) and stays pixel-true at the 1512 design width. The stage is
- * left-aligned full-bleed so the dotted spine always starts flush at the left
- * viewport edge. The SVG spine scales via its viewBox; dots share that grid.
+ * (up through 2K+) and stays pixel-true at the 1512 design width. The wrapper's
+ * width is CAPPED at 153.97dvh (= 100dvh × 1512/982) so the aspect-locked stage
+ * always fits a single viewport's height — no clipping while pinned — and it is
+ * left-anchored, so when the cap bites the spare width sits on the right and the
+ * dotted spine still starts flush at the left viewport edge. The SVG spine
+ * scales via its viewBox; dots share that grid.
  *
  * FROST convention: the glass pills / badge / calendar use the site's inset-white
  * veil (shadow-[inset…]) in place of the Figma backdrop-blur (see
@@ -58,17 +61,32 @@ export default function Timeline() {
       data-timeline
       className="relative w-full overflow-hidden py-[10dvh] max-md:py-[8dvh]"
     >
-      {/* Full-bleed: the stage spans the viewport so the dotted spine runs from
-          the left edge; `cqw` sizing scales the whole composition with the
-          viewport width rather than capping at the 1512 design size. */}
-      <div className="@container w-full">
+      {/* FIT-TO-VIEWPORT: the stage's width is capped so its aspect-locked
+          height never exceeds the viewport height — 100dvh × 1512/982 ≈
+          153.97dvh — so the whole composition is visible in a single viewport
+          while pinned (no top/bottom clipping on 16:9). On viewports taller
+          than the design ratio (portrait/mobile) the cap is inert and the
+          stage spans the full width as before. `cqw` sizing keys off this
+          @container wrapper, so the entire artwork rescales as one unit.
+
+          CENTERED (mx-auto): when the cap bites, the spare width splits evenly
+          left/right so the composition sits balanced. The spine still
+          ORIGINATES at the viewport's left margin: TimelineReveal prepends a
+          straight lead-in segment along the path's start tangent, long enough
+          to cross the left gutter (the path's own start already bleeds 43
+          frame-px off the stage edge). SSR / no-JS / reduced-motion show the
+          un-extended path. */}
+      <div className="@container mx-auto w-[min(100%,153.97dvh)]">
         <div data-tl-stage className="relative aspect-[1512/982] w-full">
           {/* ── The dotted spine + its dots (one shared 1512×982 grid). ── */}
+          {/* overflow-visible: the lead-in extension renders LEFT of the
+              viewBox (negative x); the section's own overflow-hidden clips it
+              cleanly at the viewport edge. */}
           <svg
             viewBox="0 0 1512 982"
             fill="none"
             preserveAspectRatio="xMidYMid meet"
-            className="pointer-events-none absolute inset-0 h-full w-full"
+            className="pointer-events-none absolute inset-0 h-full w-full overflow-visible"
             aria-hidden
           >
             {/* Draw-on mask: a fat solid brush of the same centreline. pathLength=1
