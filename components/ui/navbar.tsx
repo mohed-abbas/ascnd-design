@@ -5,6 +5,7 @@ import gsap from "gsap";
 import { setMode } from "@/lib/theme/mode-store";
 import { useMode } from "@/lib/theme/use-mode";
 import AnchorLink from "./anchor-link";
+import BackToTop from "./back-to-top";
 import { CloseIcon, InstagramSocial, MenuLines, XSocial } from "./icons";
 import Logo from "./logo";
 import { MODE_ITEMS } from "./mode-switcher";
@@ -174,6 +175,7 @@ export default function Navbar() {
   }, [open]);
 
   return (
+    <>
     <nav
       ref={navRef}
       aria-label="Primary"
@@ -325,5 +327,13 @@ export default function Navbar() {
         )}
       </button>
     </nav>
+
+    {/* Back-to-top disc, parked directly under the pill (bottom-right corner
+        below md, where the pill is bottom-centre). Lives here rather than in
+        layout.tsx so it only exists on routes that actually show the navbar,
+        and so its placement constants stay next to the pill geometry they're
+        derived from. Hidden until the page is scrolled. */}
+    <BackToTop />
+    </>
   );
 }

@@ -81,6 +81,27 @@ export function SendHorizontal(props: SVGProps<SVGSVGElement>) {
   );
 }
 
+/** Upward arrow for the back-to-top control (back-to-top.tsx). Hand-drawn in
+ *  this module's stroked, currentColor style — not from the Figma payload, and
+ *  deliberately not a new icon-package import. */
+export function ArrowUp(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg
+      viewBox="0 0 14 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      xmlns="http://www.w3.org/2000/svg"
+      {...props}
+    >
+      <path d="M7 15V1.5" />
+      <path d="M1.5 7L7 1.5L12.5 7" />
+    </svg>
+  );
+}
+
 /* ── Sky-mode glyphs (theme controller, mode-switcher.tsx) ──────────────────
    Hand-drawn to match this module's stroked, currentColor style (lucide-shaped:
    sunrise/day/sunset/night). Not from the Figma payload — the switcher is a

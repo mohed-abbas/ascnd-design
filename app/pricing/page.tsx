@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import AnchorLink from "@/components/ui/anchor-link";
 import ChromeReveal from "@/components/ui/chrome-reveal";
 import BookACall from "@/components/sections/book-a-call/book-a-call";
 import Costs from "@/components/sections/costs/costs";
@@ -53,11 +54,15 @@ export default function PricingPage() {
       {/* ascnd wordmark — top-center brand mark over the plain sky, matching the
           hero's placement (glyph top ~40px, ~38px Product Sans Medium). Absolute
           to the page top (scrolls away with content). Masked slide-up reveal via
-          [data-reveal], driven by ChromeReveal. */}
+          [data-reveal], driven by ChromeReveal. Links home (cross-route here, so
+          AnchorLink hands off to next/link — the shared fixed sky/cloud canvas
+          survives the navigation). */}
       <div className="absolute left-1/2 top-[40px] z-10 -translate-x-1/2 text-[38px] max-md:top-[24px]">
         <span className="block overflow-hidden">
           <span className="block" data-reveal>
-            <Wordmark />
+            <AnchorLink href="/" aria-label="ascnd — home" className="block">
+              <Wordmark />
+            </AnchorLink>
           </span>
         </span>
       </div>

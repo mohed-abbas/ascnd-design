@@ -1,3 +1,4 @@
+import AnchorLink from "@/components/ui/anchor-link";
 import DesignShots from "@/components/sections/design-shots/design-shots";
 import DesignShotsReveal from "@/components/sections/design-shots/design-shots-reveal";
 import GrassRocks from "./grass-rocks";
@@ -77,10 +78,17 @@ export default function Hero() {
         // [data-shots-wheel] in globals.css) keeps clear air below the wordmark.
         className="absolute left-1/2 top-[40px] z-10 -translate-x-1/2 text-[38px] max-md:top-[24px]"
       >
-        {/* Masked slide-up reveal (cascade #1). */}
+        {/* Masked slide-up reveal (cascade #1). The link sits INSIDE
+            [data-reveal]: the intro measures the slot and animates that span by
+            selector ("[data-wordmark-slot] [data-reveal]") when the glass docks,
+            so neither may gain a wrapper. On the homepage this is a same-page
+            no-hash href → AnchorLink glides to the top through Lenis; from
+            /pricing the identical markup routes home instead. */}
         <span className="block overflow-hidden">
           <span className="block" data-reveal data-reveal-order={1}>
-            <Wordmark />
+            <AnchorLink href="/" aria-label="ascnd — home" className="block">
+              <Wordmark />
+            </AnchorLink>
           </span>
         </span>
       </div>
