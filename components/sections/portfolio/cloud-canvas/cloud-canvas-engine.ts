@@ -93,6 +93,8 @@ const SLOT_SIZE: Record<SlotType, { w: number; h: number }> = {
 interface LoadedImage {
   source: CanvasImageSource; // the downscaled fast copy
   aspect: number; // natural w/h, for "auto" slot classification
+  /** False for the seeded placeholder, true once the real bytes have decoded. */
+  ready: boolean;
 }
 
 interface Card {
@@ -120,6 +122,12 @@ interface Card {
   visTarget: number;
   /** Eased visibility — drives the evaporate/condense fade + shrink. */
   visEase: number;
+  /**
+   * 0 → 1 as this tile's own image arrives: the photo crossfades up over the
+   * placeholder chip. Per-card, so tiles resolve independently in whatever
+   * order the network delivers them rather than all at once.
+   */
+  loadEase: number;
 }
 
 /** Lite-mode pre-composited tile (frame + hairline + shot) — see buildTileSprites. */
@@ -418,8 +426,20 @@ export class CloudCanvasEngine {
    * every yield — the user can scroll away or unmount mid-init.
    */
   async init(): Promise<void> {
-    this.loaded = await Promise.all(this.images.map((img) => loadFastImage(img.src)));
-    if (this.disposed) return;
+    // PROGRESSIVE, not all-or-nothing. This used to `await Promise.all(...)` the
+    // whole image set before building a single card, so the section rendered as
+    // bare sky until the LAST byte of ~1.4MB arrived — measured on Fast 3G with
+    // a cold cache: 0 of 28 images ready when the canvas entered the viewport,
+    // and ~6s of empty sky after arrival. Now the cards are built immediately
+    // from placeholders and each tile crossfades in on its own as its bytes
+    // land, so the globe is present and turning from the first frame and simply
+    // sharpens. The formation never re-shuffles: slot shapes come from the
+    // authored `form` (see placeholderImage), not from natural aspect.
+    this.loaded = this.images.map((img) => placeholderImage(img.form));
+    // Fire every request BEFORE the (synchronous, multi-frame) build below, so
+    // the network is saturating while we bake — the fetch starts no later than
+    // it did when it was the first awaited thing.
+    this.startImageLoads();
     this.rebuildCards();
     await yieldToMain();
     if (this.disposed) return;
@@ -427,6 +447,31 @@ export class CloudCanvasEngine {
     await yieldToMain();
     if (this.disposed) return;
     await this.benchmarkAtInit();
+  }
+
+  /**
+   * Kick off every image fetch and fold each one in as it resolves. Independent
+   * promises (not Promise.all): one slow or failed image can no longer hold the
+   * other 27 hostage. Each arrival is O(1) work — swap the source, restart that
+   * card's crossfade — so this never lands as a burst, whatever order the
+   * network delivers in.
+   */
+  private startImageLoads(): void {
+    this.images.forEach((img, i) => {
+      void loadFastImage(img.src).then((loaded) => {
+        if (this.disposed) return;
+        this.loaded[i] = loaded;
+        const card = this.cards[i];
+        if (!card) return; // trimmed by visibleCount/allMax — nothing to show
+        card.image = loaded.source;
+        card.loadEase = 0; // crossfade the photo up over the placeholder chip
+        // LITE: the tile is pre-composited, so its sprite has the placeholder
+        // baked in — re-bake this one card. Lite swaps rather than crossfades
+        // (the sprite IS the tile, frame included); it's the degraded path and
+        // a second sprite per card purely to fade would defeat the point.
+        if (this.lite) this.tileSprites[i] = this.bakeTileSprite(card);
+      });
+    });
   }
 
   /**
@@ -559,6 +604,9 @@ export class CloudCanvasEngine {
         dimEase: 0,
         visTarget: 1,
         visEase: 1,
+        // A rebuild (filter change) must not re-fade tiles whose image is
+        // already in hand — only a genuinely unloaded one starts at 0.
+        loadEase: this.loaded[i].ready ? 1 : 0,
       };
     });
     this.assignFormation(true);
@@ -677,6 +725,7 @@ export class CloudCanvasEngine {
     // while the survivors are already sliding into the tighter formation.
     const reform = 1 - Math.pow(0.01, dt);
     const vis = 1 - Math.pow(0.02, dt);
+    const load = 1 - Math.pow(0.06, dt); // ~0.5s photo crossfade
     this.denSpread += (this.denSpreadTarget - this.denSpread) * reform;
     this.denSize += (this.denSizeTarget - this.denSize) * reform;
     for (const card of this.cards) {
@@ -690,6 +739,13 @@ export class CloudCanvasEngine {
       card.baseY += (card.targetY - card.baseY) * reform;
       card.baseZ += (card.targetZ - card.baseZ) * reform;
       card.visEase += (card.visTarget - card.visEase) * vis;
+      // Photo crossfade — a touch slower than the filter fade so an arriving
+      // tile resolves rather than snaps. Only advances once the image is in
+      // hand, so a placeholder holds indefinitely on a stalled connection.
+      if (this.loaded[card.index]?.ready && card.loadEase < 1) {
+        card.loadEase = Math.min(1, card.loadEase + (1 - card.loadEase) * load);
+        if (card.loadEase > 0.999) card.loadEase = 1;
+      }
     }
   }
 
@@ -907,8 +963,21 @@ export class CloudCanvasEngine {
     ctx.beginPath();
     ctx.roundRect(-w / 2, -h / 2, w, h, r);
     ctx.clip();
+    // 4a. Placeholder wash — a flat pane of the same glass the mat ring is made
+    // of, so an unloaded tile reads as an empty frame catching the light rather
+    // than a hole. Drawn only while the photo is still fading up, and left
+    // UNDER it (the photo is opaque once loadEase hits 1, so this costs nothing
+    // in the steady state). No per-image data by design — see placeholderImage.
+    const load = p.card.loadEase;
+    if (load < 1) {
+      ctx.globalAlpha = alpha * (1 - load);
+      ctx.fillStyle = "rgba(255,255,255,0.14)";
+      ctx.fillRect(-w / 2, -h / 2, w, h);
+    }
+    // 4b. The shot, crossfading over the wash as its bytes arrive.
+    ctx.globalAlpha = alpha * load;
+    if (load > 0) drawImageCover(ctx, p.card.image, -w / 2, -h / 2, w, h);
     ctx.globalAlpha = alpha;
-    drawImageCover(ctx, p.card.image, -w / 2, -h / 2, w, h);
     if (dim > 0.01) {
       // Atmospheric haze, NOT black: this site's depth cue is receding INTO the
       // sky (white/alpha — the clouds, the rocks), never toward black, which
@@ -1043,7 +1112,15 @@ export class CloudCanvasEngine {
     octx.beginPath();
     octx.roundRect(mat, mat, w, h, r);
     octx.clip();
-    drawImageCover(octx, card.image, mat, mat, w, h);
+    // Unloaded → bake the same placeholder wash the live path draws, so a lite
+    // tile is an empty lit frame rather than a hole. startImageLoads re-bakes
+    // this card when its image lands (lite swaps, it doesn't crossfade).
+    if (this.loaded[card.index]?.ready) {
+      drawImageCover(octx, card.image, mat, mat, w, h);
+    } else {
+      octx.fillStyle = "rgba(255,255,255,0.14)";
+      octx.fillRect(mat, mat, w, h);
+    }
     octx.restore();
     return { canvas: off, fw, fh, pad };
   }
@@ -1182,6 +1259,30 @@ function yieldToMain(): Promise<void> {
 
 // ── Image helpers ─────────────────────────────────────────────────────────────
 
+/**
+ * The stand-in a tile renders as until its own bytes land. Deliberately carries
+ * NO per-image data — no dominant colour, no LQIP thumbnail — so swapping the
+ * project images is only ever "drop in new files"; nothing here needs
+ * regenerating alongside them. The chip itself is drawn in drawCard (a flat
+ * wash inside the existing glass frame), so this only has to be a legal,
+ * zero-cost draw source and, crucially, the right ASPECT: `form` is authored in
+ * cloud-canvas-data.ts, so aspect-driven layouts ("auto"/"balanced") classify
+ * the slot correctly from the start and never have to re-shuffle the formation
+ * when the real image resolves.
+ */
+const FORM_ASPECT: Record<CloudProject["form"], number> = {
+  landscape: 4 / 3,
+  portrait: 3 / 4,
+  square: 1,
+};
+
+function placeholderImage(form: CloudProject["form"]): LoadedImage {
+  const off = document.createElement("canvas");
+  off.width = 1;
+  off.height = 1;
+  return { source: off, aspect: FORM_ASPECT[form] ?? 1, ready: false };
+}
+
 /** Load an image and pre-downscale it once into an offscreen canvas. */
 function loadFastImage(src: string): Promise<LoadedImage> {
   return new Promise((resolve) => {
@@ -1199,14 +1300,14 @@ function loadFastImage(src: string): Promise<LoadedImage> {
         octx.imageSmoothingQuality = "medium";
         octx.drawImage(img, 0, 0, off.width, off.height);
       }
-      resolve({ source: off, aspect: w / h });
+      resolve({ source: off, aspect: w / h, ready: true });
     };
     img.onerror = () => {
       // A 1×1 transparent stand-in keeps indexing stable if a file is missing.
       const off = document.createElement("canvas");
       off.width = 1;
       off.height = 1;
-      resolve({ source: off, aspect: 1 });
+      resolve({ source: off, aspect: 1, ready: true });
     };
     img.src = src;
   });

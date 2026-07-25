@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "optimize:portfolio": "node scripts/optimize-portfolio-images.mjs"
   },
   "dependencies": {
     "@react-three/drei": "^10.7.7",
