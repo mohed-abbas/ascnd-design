@@ -22,7 +22,7 @@ import { useMode } from "@/lib/theme/use-mode";
 import { getMode } from "@/lib/theme/mode-store";
 import { CROSSFADE, PALETTES } from "@/lib/theme/palette";
 import {
-  introWillPlay,
+  introPending,
   INTRO_REVEAL_EVENT,
   INTRO_START_EVENT,
 } from "@/components/sections/intro/intro-state";
@@ -501,8 +501,27 @@ function SectionRig({
  * does NOT cover a view registering onto an ALREADY-mounted plane — on FRONT the
  * intro mounts the canvas first), plus a few delayed nudges for slower texture
  * decode, and a burst whenever the tab becomes visible again.
+ *
+ * `specs` is a dependency for the same reason, one step later: a client-side
+ * navigation swaps the route's cloud set (cloud-specs.ts CLOUD_SCENES) on a view
+ * that STAYS mounted, so every <Cloud> child is replaced and drei rebuilds the
+ * instanced geometry over several frames — exactly the mount situation again.
+ * The spec change itself only yields ONE paint (CloudPlacement's markDirty), and
+ * with MORPH_CLOUDS off the view is pure demand, so that single paint can land on
+ * half-built geometry and then sit there. Re-burst instead. (This was masked
+ * until now: the reveal rig above was wrongly re-firing on every navigation, and
+ * its 1.1s of per-tick markDirty repainted the rebuild by accident.)
+ * requestBurst is Math.max-idempotent, so the mount run and a spec run can't
+ * fight each other.
  */
-function InvalidateOnReady({ requestBurst }: { requestBurst: (n: number) => void }) {
+function InvalidateOnReady({
+  requestBurst,
+  specs,
+}: {
+  requestBurst: (n: number) => void;
+  /** The view's cloud set — identity changes only on a route change. */
+  specs: CloudSpec[];
+}) {
   useEffect(() => {
     requestBurst(8);
     const timers = [100, 300, 600].map((ms) =>
@@ -516,7 +535,7 @@ function InvalidateOnReady({ requestBurst }: { requestBurst: (n: number) => void
       timers.forEach((t) => window.clearTimeout(t));
       document.removeEventListener("visibilitychange", onVisible);
     };
-  }, [requestBurst]);
+  }, [requestBurst, specs]);
   return null;
 }
 
@@ -598,14 +617,39 @@ function ThemeRig({
  * fragment is diffuseColor.a * vOpacity so material opacity scales every cloud, +
  * a small world-Y drift of the whole field). markDirty()s each tick. Two drivers,
  * same tween:
- *  - HOMEPAGE welcome: the clouds settle in WITH the rock entrance, fired by
- *    INTRO_START/REVEAL (introWillPlay). Unchanged.
- *  - OTHER ROUTES (revealOnLoad, e.g. /pricing): no welcome exists there, so the
- *    clouds ease themselves in on load instead of popping — seeded hidden, then
- *    the same tween as soon as drei has built the material.
- * When NEITHER applies (homepage returning-visitor / skipped intro), the clouds
- * show at rest immediately, as before. Reduced-motion never mounts the WebGL
- * clouds (cloud-layer eligibility), so no snap branch is needed here.
+ *  - HOMEPAGE welcome ("intro"): the clouds settle in WITH the rock entrance,
+ *    fired by INTRO_START/REVEAL.
+ *  - OTHER ROUTES ("load", i.e. revealOnLoad, e.g. /pricing): no welcome exists
+ *    there, so the clouds ease themselves in on load instead of popping — seeded
+ *    hidden, then the same tween as soon as drei has built the material.
+ * When NEITHER applies ("none" — homepage returning-visitor / skipped intro /
+ * a view mounting after the welcome is over), the clouds show at rest
+ * immediately. Reduced-motion never mounts the WebGL clouds (cloud-layer
+ * eligibility), so no snap branch is needed here.
+ *
+ * The driver is a MOUNT-TIME SNAPSHOT, and that is load-bearing twice over —
+ * both halves of this were a ~7s cloudless sky on every client-side navigation:
+ *
+ *  1. `introPending()`, not `introWillPlay()`. introWillPlay() is the memoised
+ *     INTENT for the document: hard-load the homepage and it stays true forever,
+ *     including long after the welcome has docked. A view that resolves it late
+ *     (below, the rock view remounting when you navigate BACK to "/") would take
+ *     the intro branch and subscribe to INTRO_START/REVEAL — both `once:true` and
+ *     both already consumed — so nothing would ever reveal it but the 7s
+ *     failsafe. introPending() goes false the moment the welcome is consumed, so
+ *     a late mount correctly resolves to "none" and shows at rest. Same fix as
+ *     hero-reveal / rock-reveal / design-shots-reveal / rock-hover.
+ *  2. Snapshotted, so `revealOnLoad` is NOT reactive. cloud-layer.tsx derives it
+ *     from the pathname, so it flips on every route change — and as a dependency
+ *     it re-ran this whole rig on the SKY view (which stays mounted across the
+ *     navigation), re-seeding opacity 0 on clouds that were already on screen and
+ *     then re-arming the failsafe. The reveal is a page-LOAD concept: a
+ *     client-side navigation must never re-hide clouds that are already visible.
+ *     Only a fresh mount reveals; a spec swap just repaints (InvalidateOnReady).
+ *
+ * Resolving it in ONE place also keeps the seed-hidden layout effect and the
+ * tween effect from ever disagreeing — a split decision (hide, then never
+ * reveal) would strand the field invisible.
  */
 function RevealRig({
   cloudsRef,
@@ -616,27 +660,35 @@ function RevealRig({
   cloudsRef: RefObject<Group | null>;
   fieldRef: RefObject<Group | null>;
   markDirty: () => void;
-  /** Ease the clouds in on mount when no welcome intro drives this route. */
+  /** Ease the clouds in on mount when no welcome intro drives this route. Read
+   *  ONCE, at mount — see the driver snapshot above. */
   revealOnLoad: boolean;
 }) {
-  const camera = useThree((s) => s.camera);
+  // Lazy camera read (`get()`), not useThree(s => s.camera): the per-view
+  // <PerspectiveCamera makeDefault> swaps the default camera a beat after mount,
+  // so a captured one would both be the wrong camera for the drift math and —
+  // as a dependency — re-run this rig. `get` is stable.
+  const get = useThree((s) => s.get);
+
+  const [driver] = useState<"intro" | "load" | "none">(() =>
+    introPending() ? "intro" : revealOnLoad ? "load" : "none",
+  );
 
   // Seed hidden BEFORE the first paint whenever something WILL fade the clouds in
   // (the welcome, or the on-load self-reveal), so they never flash at full opacity
   // first. If drei hasn't built the material yet, the effect below re-seals it 0
   // before starting the tween.
   useLayoutEffect(() => {
-    if (!introWillPlay() && !revealOnLoad) return;
+    if (driver === "none") return;
     const mat = findCloudMaterial(cloudsRef.current);
     if (mat) {
       mat.transparent = true;
       mat.opacity = 0;
     }
-  }, [cloudsRef, revealOnLoad]);
+  }, [cloudsRef, driver]);
 
   useEffect(() => {
-    const playsIntro = introWillPlay();
-    if (!playsIntro && !revealOnLoad) return;
+    if (driver === "none") return;
 
     let tween: gsap.core.Tween | undefined;
     // Idempotency latch: START, REVEAL, and the failsafe ALL route here, and a
@@ -652,7 +704,8 @@ function RevealRig({
       // 14px of screen travel → world-Y at the field's reference depth. The
       // clouds start this far UP (invisible) and settle to rest as they fade in.
       const drift =
-        (REVEAL_DRIFT_PX * viewportWorldHeight(camera)) / window.innerHeight;
+        (REVEAL_DRIFT_PX * viewportWorldHeight(get().camera)) /
+        window.innerHeight;
       if (g) g.position.y = drift;
       if (mat) {
         mat.transparent = true;
@@ -672,7 +725,7 @@ function RevealRig({
       });
     };
 
-    if (playsIntro) {
+    if (driver === "intro") {
       // Homepage: fade in WITH the welcome. Unchanged.
       window.addEventListener(INTRO_START_EVENT, reveal, { once: true });
       window.addEventListener(INTRO_REVEAL_EVENT, reveal, { once: true });
@@ -701,7 +754,7 @@ function RevealRig({
       cancelAnimationFrame(raf);
       tween?.kill();
     };
-  }, [cloudsRef, fieldRef, camera, markDirty, revealOnLoad]);
+  }, [cloudsRef, fieldRef, get, markDirty, driver]);
 
   return null;
 }
@@ -1035,7 +1088,7 @@ export default function CloudView({
           onScreenRef={onScreenRef}
           onActiveChange={onActiveChange}
         />
-        <InvalidateOnReady requestBurst={requestBurst} />
+        <InvalidateOnReady requestBurst={requestBurst} specs={clouds} />
         {RETINT_CLOUDS && (
           <ThemeRig ambientRef={ambientRef} keyRef={keyRef} markDirty={markDirty} />
         )}
@@ -1048,6 +1101,7 @@ export default function CloudView({
       </>
     ),
     [
+      clouds,
       perspFieldClouds,
       flatFieldClouds,
       sectionClouds,
