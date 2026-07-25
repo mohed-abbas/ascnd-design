@@ -1,6 +1,7 @@
 import Image from "next/image";
 import AnchorLink from "@/components/ui/anchor-link";
 import { InstagramSocial, XSocial } from "@/components/ui/icons";
+import { NAV_LINKS } from "@/lib/nav-links";
 import FooterReveal from "./footer-reveal";
 
 /**
@@ -60,30 +61,18 @@ import FooterReveal from "./footer-reveal";
  *     column's 43px gap meters to the INK, like the Figma box did.
  * Decorative (aria-hidden): the brand is already named in the page above.
  *
- * Nav links route through <AnchorLink> (client-side next/link that keeps the
- * shared sky/cloud canvas alive and smooth-scrolls in-page anchors via Lenis):
- *   • home  → "/"            (route; ON the homepage it's a same-page no-hash
- *                             href, so AnchorLink glides to the top via Lenis
- *                             rather than navigating — as the wordmark does)
- *   • work  → "/#work"       (Portfolio section, id="work", home page)
- *   • pricing → "/pricing"   (route)
- *   • book a call → "/pricing#book" (BookACall section, id="book", /pricing)
- * Same four entries, same order as the navbar's LINKS (ui/navbar.tsx) — the two
- * menus are the site's one nav, so they must not drift apart.
- * The two cross-route hashes work from either page (footer is shared): same-page
- * clicks glide via Lenis, cross-page clicks navigate then land on the anchor.
- * The LEGAL links stay placeholder <a>s — no privacy/terms pages exist yet
- * (unwired until routing lands, matching the rest of the site). The social icons
- * are the shared currentColor glyphs (ui/icons.tsx — same glyphs as the V4
- * node's 20px frames).
+ * The nav entries come from lib/nav-links.ts — the SAME array the floating glass
+ * menu renders (ui/navbar.tsx). This bar and that menu are the site's one nav
+ * shown twice; as separate literals they drifted (the footer sat on a different
+ * order), so they share the list. Each routes through <AnchorLink> (client-side
+ * next/link that keeps the shared sky/cloud canvas alive and smooth-scrolls
+ * in-page anchors via Lenis) — see nav-links.ts for the per-href behaviour.
+ * The LEGAL links below stay LOCAL and stay placeholder <a>s: no privacy/terms
+ * pages exist yet (unwired until routing lands, matching the rest of the site),
+ * so they're placeholders rather than navigation. The social icons are the
+ * shared currentColor glyphs (ui/icons.tsx — same glyphs as the V4 node's 20px
+ * frames).
  */
-const NAV = [
-  { label: "home", href: "/" },
-  { label: "work", href: "/#work" },
-  { label: "pricing", href: "/pricing" },
-  { label: "book a call", href: "/pricing#book" },
-];
-
 const LEGAL = [
   { label: "privacy policy", href: "#privacy" },
   { label: "terms of payment", href: "#terms" },
@@ -120,7 +109,7 @@ export default function Footer() {
           {/* Row 1 (746:4721) — nav links (left) + social icons (right). */}
           <div className="flex w-full items-center justify-between max-md:flex-col max-md:gap-[16px]">
             <ul className="flex items-start gap-[13px] whitespace-nowrap text-[16px] text-[#f7f4f0] max-md:flex-wrap max-md:justify-center max-md:gap-x-[18px] max-md:gap-y-[8px]">
-              {NAV.map(({ label, href }) => (
+              {NAV_LINKS.map(({ label, href }) => (
                 <li key={label}>
                   <AnchorLink
                     href={href}

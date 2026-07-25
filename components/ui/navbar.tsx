@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useRef, useState } from "react";
 import gsap from "gsap";
+import { NAV_LINKS } from "@/lib/nav-links";
 import { setMode } from "@/lib/theme/mode-store";
 import { useMode } from "@/lib/theme/use-mode";
 import AnchorLink from "./anchor-link";
@@ -10,28 +11,13 @@ import { CloseIcon, InstagramSocial, MenuLines, XSocial } from "./icons";
 import Logo from "./logo";
 import { MODE_ITEMS } from "./mode-switcher";
 
-type NavLink = { label: string; href: string };
-
-// All links route through <AnchorLink> (client-side next/link that keeps the
+// The link list is SHARED with the footer's utility bar (lib/nav-links.ts) —
+// they're the same nav rendered twice, and separate literals let them drift.
+// Every entry routes through <AnchorLink> (client-side next/link that keeps the
 // shared sky/cloud canvas alive AND smooth-scrolls in-page anchors through the
 // one Lenis instance). A plain <a href="#work"> here was a native instant jump:
 // not smooth, and — because the cloud parallax only advances while Lenis drives
 // ScrollTrigger — it froze the hero clouds in place at the target section.
-// hrefs are cross-route-safe (the navbar shows on / and /pricing):
-//   • home → "/"                 (route; ON the homepage it's a same-page
-//                                 no-hash href, so AnchorLink glides to the top
-//                                 through Lenis instead of navigating — same
-//                                 behaviour as the wordmark)
-//   • work → "/#work"            (Portfolio, id="work", home)
-//   • pricing → "/pricing"       (route)
-//   • book a call → "/pricing#book" (BookACall, id="book", /pricing)
-// Matches the footer's utility nav (footer.tsx), which carries the same four.
-const LINKS: NavLink[] = [
-  { label: "home", href: "/" },
-  { label: "work", href: "/#work" },
-  { label: "pricing", href: "/pricing" },
-  { label: "book a call", href: "/pricing#book" },
-];
 
 const SOCIALS = [
   { label: "X (Twitter)", href: "https://x.com", Icon: XSocial },
@@ -228,7 +214,7 @@ export default function Navbar() {
             md they sit top-left, leaving room to the right for the theme column
             and below for the bottom toggle bar. */}
         <ul className="absolute left-[26px] top-1/2 flex -translate-y-1/2 flex-col gap-[10px] text-[25px] font-light leading-[1.1] tracking-[-0.03em] max-md:top-[84px] max-md:translate-y-0">
-          {LINKS.map((link) => (
+          {NAV_LINKS.map((link) => (
             <li key={link.label} data-menu-item className="opacity-0">
               <AnchorLink
                 href={link.href}
