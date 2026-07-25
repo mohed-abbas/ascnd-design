@@ -71,10 +71,14 @@ const DPR_CAP = 1.5; // the site-wide cap — the design system values razor-sha
 // is NOT the authored slot px: cardScale() magnifies by
 //   perspective(≤1.39) × 1.42 × config.size(1.2) × zoom(0.9) × density × interaction
 // A focused landscape tile on a filtered tab (few tiles → densityFactors GROWS
-// them) reaches ~527 CSS px ⇒ ~790 device px at DPR_CAP. A 16:9 source only
+// them) reaches ~598 CSS px ⇒ ~897 device px at DPR_CAP. A 16:9 source only
 // contributes ~89% of its width after the cover-crop into the 1.58 slot, so it
 // needs ~890px to stay 1:1 there. Hence 900. At the old 520 a focused tile was a
 // 1.4× UPSCALE, which read as mush on screenshot work with fine UI text.
+//
+// That 598 figure is now the binding constraint in the other direction too:
+// FOCUS_SCALE is sized to land just under this, so raising the focus size means
+// raising this AND re-running scripts/optimize-portfolio-images.mjs.
 const FAST_MAX_SIDE = 900;
 const FRAME_SPRITE_SCALE = 2.5; // frame sprites bake at 2.5× the authored slot px
 // size, so the blit stays crisp through depth/zoom/DPR upscaling of near tiles
@@ -85,6 +89,19 @@ const LITE_RENDER_BUDGET_MS = 8; // init benchmark: avg full-recipe frame above
 // this → CPU-rasterized canvas2d → lite mode (accelerated Chromium measures
 // ~4.6ms, Firefox/Linux software raster ~35ms — the gap is unambiguous)
 const DT_MAX = 0.034; // clamp step (~29fps floor) so a stall can't fling the globe
+
+// Where a focused tile parks along the view axis. Past ~1.06 the perspective
+// term in cardScale() is already clamped, so every focused tile presents at the
+// identical size no matter which face of the sphere it was clicked on — the
+// whole reason the focus lerp goes fully to this value rather than partway.
+const FOCUS_Z = 1.16;
+// Extra scale at full focus, on top of that saturated perspective. Ceilinged by
+// FAST_MAX_SIDE, not taste: at 0.45 a focused landscape tile is ~506 CSS px on
+// "all" and ~598 px on a sparse filtered tab (densityFactors grows tiles when
+// few are visible) ⇒ ~897 device px at DPR_CAP, right at the 900px source. Any
+// higher and the focused view — the one moment the work is actually being
+// looked at — would be upscaling.
+const FOCUS_SCALE = 0.45;
 
 // ── Formation constants ──────────────────────────────────────────────────────
 const HALO_OUTER = 1; // braided ring — alternating tiles sit on two radii so the
@@ -717,20 +734,42 @@ export class CloudCanvasEngine {
     // Formation clocks. Ascent's PRIMARY motion is the climb, so its yaw autospin
     // is damped; cumulus drifts rather than spins. Clocks always advance (even
     // mid-drag) — the cloud keeps breathing and the thermal keeps rising.
-    this.modeTime += dt;
-    if (mode === "ascent") {
-      this.risePhase += dt * (0.02 + this.config.autoSpeed * 0.14);
+    // A FOCUSED TILE PARKS THE WHOLE FORMATION. Focus pins one tile at the orbit
+    // centre; leaving the globe turning underneath meant the remaining tiles
+    // kept sliding around it, which reads as the page still being busy at the
+    // exact moment the viewer has asked to look at ONE thing. Everything that
+    // moves on its own stops: the yaw/pitch spin, the ascent climb, the cumulus
+    // bob. Dragging still works — an explicit gesture outranks the park.
+    const parked = this.focusedIndex >= 0;
+
+    if (!parked) {
+      this.modeTime += dt;
+      if (mode === "ascent") {
+        this.risePhase += dt * (0.02 + this.config.autoSpeed * 0.14);
+      }
     }
     const autoFactor = mode === "ascent" ? 0.4 : mode === "cumulus" ? 0.55 : 1;
 
     if (!this.dragging) {
-      this.velYaw += this.config.autoSpeed * 0.00022 * autoFactor;
-      this.velYaw += this.releaseYaw;
-      this.velPitch += this.releasePitch;
-      this.releaseYaw *= 0.965;
-      this.releasePitch *= 0.955;
-      this.velYaw *= 0.972;
-      this.velPitch *= 0.958;
+      if (parked) {
+        // Decay rather than snap — the spin eases to a stop over ~0.3s and
+        // picks back up from rest on unfocus, so neither transition jolts.
+        // Any queued fling is dropped outright; it belongs to the gesture the
+        // click just superseded.
+        this.releaseYaw = 0;
+        this.releasePitch = 0;
+        const brake = Math.pow(0.02, dt);
+        this.velYaw *= brake;
+        this.velPitch *= brake;
+      } else {
+        this.velYaw += this.config.autoSpeed * 0.00022 * autoFactor;
+        this.velYaw += this.releaseYaw;
+        this.velPitch += this.releasePitch;
+        this.releaseYaw *= 0.965;
+        this.releasePitch *= 0.955;
+        this.velYaw *= 0.972;
+        this.velPitch *= 0.958;
+      }
       this.yaw += this.velYaw * dt * 60;
       this.pitch += this.velPitch * dt * 60;
     }
@@ -817,10 +856,20 @@ export class CloudCanvasEngine {
       let screenX = centerX + r.x * radius;
       let screenY = centerY + r.y * radius;
       let z = r.z;
-      // Focus/hover warp — pull the focused tile toward centre + forward.
-      screenX += (centerX - screenX) * 0.82 * card.focusEase;
-      screenY += (centerY - screenY) * 0.82 * card.focusEase;
-      z += (1.16 - z) * 0.58 * card.focusEase;
+      // Focus warp — a focused tile leaves the formation COMPLETELY: all the way
+      // to the orbit centre, and forward to a fixed FOCUS_Z.
+      //
+      // The lerps are 1.0, not partial, and that's the point: at 0.82/0.58 the
+      // landing spot still depended on where the tile started, so focusing a
+      // tile at the back of the globe presented it smaller and off-centre than
+      // one already at the front (z ended at 0.25 vs 1.09 — a 30% size
+      // difference for the same click). Going fully to FOCUS_Z makes every
+      // focused tile land at the same place at the same size, whichever face of
+      // the sphere it was on. baseX/Y/Z are untouched, so easing focusEase back
+      // to 0 returns it to its own spot in the formation.
+      screenX += (centerX - screenX) * card.focusEase;
+      screenY += (centerY - screenY) * card.focusEase;
+      z += (FOCUS_Z - z) * card.focusEase;
       z -= 0.28 * card.dimEase;
       z += 0.16 * card.hoverEase;
       // LITE edge fade: the full-canvas destination-in pass below costs ~8ms
@@ -1000,7 +1049,7 @@ export class CloudCanvasEngine {
   private cardScale(p: Projected, densitySize: number): number {
     const depth = 2.05 - p.z * 0.78 * this.config.depth;
     const interaction =
-      1 + p.card.focusEase * 0.28 + p.card.hoverEase * 0.08 - p.card.dimEase * 0.14;
+      1 + p.card.focusEase * FOCUS_SCALE + p.card.hoverEase * 0.08 - p.card.dimEase * 0.14;
     // Filtered-out tiles shrink as they fade — evaporation, not a dissolve.
     const vis = 0.6 + 0.4 * p.card.visEase;
     return (
@@ -1054,7 +1103,10 @@ export class CloudCanvasEngine {
     ctx.save();
     ctx.translate(p.screenX, p.screenY);
     const tilt = this.config.tiltToCenter ? Math.atan2(p.x, 1.4 + p.z) * 0.18 : 0;
-    ctx.rotate(tilt + p.card.jitter * 0.08);
+    // Unwound by focus: the face-the-centre tilt and the per-card jitter are
+    // formation character, and a tile pulled out to be READ should be square to
+    // the viewer, not still cocked at the angle its old orbital slot implied.
+    ctx.rotate((tilt + p.card.jitter * 0.08) * (1 - p.card.focusEase));
     ctx.globalAlpha = alpha;
 
     // LITE: the whole tile — frame + hairline + cover-cropped shot — was baked
