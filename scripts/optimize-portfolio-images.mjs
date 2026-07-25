@@ -37,6 +37,29 @@ const QUALITY = 82; // webp; these are heavily downscaled already, so this is
 // visually transparent at the size the globe draws them
 const INPUT_RE = /\.(webp|jpe?g|png|avif)$/i;
 
+/** Slot aspect ratios — must match SLOT_SIZE in cloud-canvas-engine.ts. */
+const SLOT_ASPECT = { landscape: 164 / 104, square: 1, portrait: 112 / 146 };
+
+/**
+ * Per-image crop overrides. Listed files are cut to their slot's aspect HERE,
+ * before shipping; everything else is left alone.
+ *
+ * Most images need no entry: the engine cover-crops from the CENTRE at draw
+ * time (drawImageCover), so a centred cut costs nothing to leave until runtime.
+ * This map is only for the images where centre is the wrong cut — an off-centre
+ * `focus` is the one thing runtime cropping cannot express.
+ *
+ * `focus` slides the crop window along whichever axis gets trimmed:
+ *   0 = keep the top/left edge, 1 = keep the bottom/right edge, 0.5 = centred.
+ */
+const CROPS = {
+  // 2:3 poster into the 0.767 portrait slot loses 13% of its height, and a
+  // centred cut slices the emerald wordmark in half along the bottom edge.
+  // 0.85 takes that loss off the top instead: full lockup and URL survive, the
+  // orange arc still reads, and no one's head gets cropped.
+  "emerald-poster-help": { form: "portrait", focus: 0.85 },
+};
+
 const dry = process.argv.includes("--dry");
 const kb = (n) => `${Math.round(n / 1024)}KB`;
 
@@ -44,6 +67,27 @@ const files = (await readdir(DIR)).filter((f) => INPUT_RE.test(f)).sort();
 if (files.length === 0) {
   console.error(`No images found in ${DIR}`);
   process.exit(1);
+}
+
+/**
+ * Resolve a CROPS entry into a sharp extract() box, or null when the image is
+ * already at (or within a pixel of) its slot aspect and nothing needs cutting.
+ */
+function cropBox(spec, meta) {
+  if (!spec) return null;
+  const target = SLOT_ASPECT[spec.form];
+  const w = meta.width ?? 0;
+  const h = meta.height ?? 0;
+  if (!target || !w || !h) return null;
+  const focus = spec.focus ?? 0.5;
+  if (w / h > target) {
+    const cw = Math.round(h * target);
+    if (cw >= w) return null;
+    return { left: Math.round((w - cw) * focus), top: 0, width: cw, height: h };
+  }
+  const ch = Math.round(w / target);
+  if (ch >= h) return null;
+  return { left: 0, top: Math.round((h - ch) * focus), width: w, height: ch };
 }
 
 let before = 0;
@@ -70,15 +114,19 @@ for (const file of files) {
 
   const out = path.join(DIR, file.replace(INPUT_RE, ".webp"));
   const tmp = `${out}.tmp`; // sharp can't read and write the same path
+  const crop = cropBox(CROPS[file.replace(INPUT_RE, "")], meta);
 
   if (dry) {
-    console.log(`would rewrite ${file}  ${meta.width}x${meta.height}  ${kb(size)}`);
+    const how = crop ? ` crop→${crop.width}x${crop.height}` : "";
+    console.log(`would rewrite ${file}  ${meta.width}x${meta.height}${how}  ${kb(size)}`);
     after += size;
     rewritten++;
     continue;
   }
 
-  await sharp(src)
+  let pipeline = sharp(src);
+  if (crop) pipeline = pipeline.extract(crop);
+  await pipeline
     // withoutEnlargement: a source already under MAX_SIDE keeps its pixels;
     // this pass is only ever allowed to remove detail the engine discards.
     .resize({ width: MAX_SIDE, height: MAX_SIDE, fit: "inside", withoutEnlargement: true })

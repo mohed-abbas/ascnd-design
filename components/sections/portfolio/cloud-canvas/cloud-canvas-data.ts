@@ -19,10 +19,11 @@
  * root, deliberately OUTSIDE public/ so they are never served); the Figma node
  * IDs are recorded in portfolio-src/SOURCES.md so any frame can be re-pulled.
  *
- * STATUS: the `web` set is real (slug filenames, Figma "Design shortlist" →
- * webdesigns). The remaining `cloud-NN` entries are still PLACEHOLDERS from the
- * Figma "Startup" collage, awaiting the branding and misc exports — their names
- * and types are invented, their forms seeded from natural aspect.
+ * STATUS: the `web` and `branding` sets are real (slug filenames, from the Figma
+ * "Design shortlist" → webdesigns / BrandingTiles). The remaining six `cloud-NN`
+ * entries are still PLACEHOLDERS from the Figma "Startup" collage, awaiting the
+ * misc export — their names are invented and their forms seeded from natural
+ * aspect.
  */
 
 export type ProjectType = "web" | "branding" | "misc";
@@ -50,38 +51,42 @@ export const PROJECT_FILTERS: { value: CloudFilter; label: string }[] = [
 
 const dir = "/portfolio/cloud";
 
-// Real web projects are interleaved with the surviving placeholders rather than
-// blocked together: registry order IS formation order, so a contiguous run of
-// one type would clump ten identical landscape tiles on one face of the globe.
+// Entries rotate web → branding → misc rather than sitting in per-type blocks:
+// registry order IS formation order, so a contiguous run would clump one type
+// (and one tile shape) on a single face of the globe.
+//
+// Physical-object mockups file under `misc`, not under the discipline they
+// present — a keycap render or a cloth tag is a photograph OF branding, not the
+// branding itself, and they read as scene renders next to flat artwork.
 export const cloudProjects: CloudProject[] = [
   { src: `${dir}/tasktrox-landing.webp`, name: "Tasktrox", type: "web", form: "landscape" },
-  { src: `${dir}/cloud-02.webp`, name: "Project 02", type: "branding", form: "portrait" },
+  { src: `${dir}/emerald-mark.webp`, name: "Emerald Psychiatry", type: "branding", form: "portrait" },
+  { src: `${dir}/cloth-tag-mockup.webp`, name: "cloth tag mockup", type: "misc", form: "square" },
   { src: `${dir}/kalinka.webp`, name: "Kalinka", type: "web", form: "landscape" },
-  { src: `${dir}/cloud-03.webp`, name: "Project 03", type: "branding", form: "square" },
+  { src: `${dir}/emerald-poster-mind.webp`, name: "Emerald Psychiatry — your mind matters", type: "branding", form: "portrait" },
+  { src: `${dir}/cloud-27.webp`, name: "Project 27", type: "misc", form: "square" },
   { src: `${dir}/medlink.webp`, name: "Medlink", type: "web", form: "landscape" },
+  // Pre-cropped by scripts/optimize-portfolio-images.mjs (CROPS), not centred:
+  // a centred cut into the portrait slot bisects the emerald wordmark.
+  { src: `${dir}/emerald-poster-help.webp`, name: "Emerald Psychiatry — ask for help", type: "branding", form: "portrait" },
   { src: `${dir}/cloud-07.webp`, name: "Project 07", type: "misc", form: "portrait" },
   { src: `${dir}/crypkit.webp`, name: "CrypKit", type: "web", form: "landscape" },
-  { src: `${dir}/cloud-09.webp`, name: "Project 09", type: "branding", form: "square" },
-  { src: `${dir}/dubai-blueprint.webp`, name: "Dubai Blueprint", type: "web", form: "landscape" },
-  { src: `${dir}/cloud-13.webp`, name: "Project 13", type: "branding", form: "portrait" },
-  { src: `${dir}/tasktrox-webapp.webp`, name: "Tasktrox — web app", type: "web", form: "landscape" },
-  { src: `${dir}/cloud-14.webp`, name: "Project 14", type: "branding", form: "portrait" },
-  { src: `${dir}/operations-dashboard.webp`, name: "operations dashboard", type: "web", form: "landscape" },
+  { src: `${dir}/elyv-logo.webp`, name: "ElyV", type: "branding", form: "square" },
   { src: `${dir}/cloud-15.webp`, name: "Project 15", type: "misc", form: "portrait" },
-  { src: `${dir}/crypto-scratchers.webp`, name: "crypto scratchers", type: "web", form: "landscape" },
+  { src: `${dir}/dubai-blueprint.webp`, name: "Dubai Blueprint", type: "web", form: "landscape" },
+  { src: `${dir}/emerald-poster-ohio.webp`, name: "Emerald Psychiatry — telehealth", type: "branding", form: "portrait" },
+  { src: `${dir}/keycap-mockup.webp`, name: "keycap mockup", type: "misc", form: "landscape" },
+  { src: `${dir}/tasktrox-webapp.webp`, name: "Tasktrox — web app", type: "web", form: "landscape" },
+  { src: `${dir}/circle-mark.webp`, name: "circle mark", type: "branding", form: "square" },
   { src: `${dir}/cloud-16.webp`, name: "Project 16", type: "misc", form: "portrait" },
-  { src: `${dir}/performance-consultancy.webp`, name: "performance consultancy", type: "web", form: "landscape" },
-  { src: `${dir}/cloud-17.webp`, name: "Project 17", type: "branding", form: "square" },
-  { src: `${dir}/fashion-storefront.webp`, name: "fashion storefront", type: "web", form: "landscape" },
-  { src: `${dir}/cloud-18.webp`, name: "Project 18", type: "misc", form: "portrait" },
-  // The one scene render in the set — a monitor on a studio pedestal, not a flat
-  // screen design, so it files under misc. `square` (not landscape) on purpose:
-  // the 4:3 source centre-crops to 1:1 around the monitor and drops the empty
-  // studio floor, which frames it tighter AND breaks up an otherwise
-  // all-landscape web set.
+  { src: `${dir}/operations-dashboard.webp`, name: "operations dashboard", type: "web", form: "landscape" },
+  // `square` (not landscape) on purpose: the 4:3 source centre-crops to 1:1
+  // around the monitor and drops the empty studio floor, which frames it
+  // tighter AND breaks up an otherwise all-landscape web set.
   { src: `${dir}/monitor-mockup.webp`, name: "monitor mockup", type: "misc", form: "square" },
-  { src: `${dir}/cloud-21.webp`, name: "Project 21", type: "branding", form: "portrait" },
-  { src: `${dir}/cloud-23.webp`, name: "Project 23", type: "branding", form: "square" },
-  { src: `${dir}/cloud-27.webp`, name: "Project 27", type: "misc", form: "square" },
+  { src: `${dir}/crypto-scratchers.webp`, name: "crypto scratchers", type: "web", form: "landscape" },
+  { src: `${dir}/cloud-18.webp`, name: "Project 18", type: "misc", form: "portrait" },
+  { src: `${dir}/performance-consultancy.webp`, name: "performance consultancy", type: "web", form: "landscape" },
   { src: `${dir}/cloud-28.webp`, name: "Project 28", type: "misc", form: "portrait" },
+  { src: `${dir}/fashion-storefront.webp`, name: "fashion storefront", type: "web", form: "landscape" },
 ];

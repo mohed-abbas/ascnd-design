@@ -34,7 +34,29 @@ Names for `operations-dashboard`, `performance-consultancy`, `crypto-scratchers`
 and `fashion-storefront` are **descriptive, not brands** — those designs carry
 icon-only marks with no wordmark, so there was nothing to read off them.
 
-## branding, misc
+## branding — Figma "Design shortlist"
 
-Not yet exported. The remaining `cloud-NN.webp` files are placeholders from the
-Figma "Startup" collage and get replaced the same way.
+Same file key, section `89:240` (`BrandingTiles`).
+
+| slug | Figma node | scale | export px | what it is | type |
+|---|---|---|---|---|---|
+| `keycap-mockup` | `56:124639` | 0.25 | 1024×768 | 3D keycap render | **misc** |
+| `emerald-mark` | `55:124452` | 0.32 | 672×1008 | Emerald Psychiatry — wordmark poster | branding |
+| `emerald-poster-mind` | `55:124453` | 0.32 | 672×1008 | "Your mind matters." | branding |
+| `emerald-poster-help` | `55:124477` | 0.32 | 672×1008 | "It's okay to ask for help" — **pre-cropped, focus 0.85** | branding |
+| `emerald-poster-ohio` | `55:124511` | 0.32 | 672×1008 | telehealth / "Serving all of Ohio" | branding |
+| `elyv-logo` | `56:124811` | 0.25 | 943×943 | ElyV wordmark, white on orange | branding |
+| `circle-mark` | `56:124824` | 0.25 | 943×943 | two-circle mark on periwinkle | branding |
+| `cloth-tag-mockup` | `59:139748` | 0.3 | 1000×1000 | woven tag on blue fabric | **misc** |
+
+The two marked **misc** are physical-object mockups — photographs *of* branding
+rather than the branding itself — filed by the same rule as `monitor-mockup` in
+the web set.
+
+`emerald-poster-help` is the only image in the whole set that needs an
+off-centre cut; see `CROPS` in `scripts/optimize-portfolio-images.mjs`.
+
+## misc
+
+Not yet exported. The remaining six `cloud-NN.webp` files are placeholders from
+the Figma "Startup" collage and get replaced the same way.
