@@ -161,6 +161,13 @@ interface Projected {
   fade: number;
 }
 
+/** Shaped core-label runs + the total line width used to centre them. */
+interface LabelMetrics {
+  runs: { text: string; font: string; width: number }[];
+  width: number;
+  size: number;
+}
+
 // ── Pure geometry ────────────────────────────────────────────────────────────
 
 /** i-th point of a Fibonacci lattice on the unit sphere (endpoint-inclusive). */
@@ -384,6 +391,14 @@ export class CloudCanvasEngine {
   // height + the fade stops, so it refreshes on resize or a stop change only.
   private fadeGradient: CanvasGradient | null = null;
   private fadeGradientKey = "";
+
+  // Core-label metrics cache (config.coreLabel). Resolving the CSS custom
+  // properties + shaping each run costs a style read and a measureText per run;
+  // both are stable between resizes, so they're keyed and reused. The key
+  // includes document.fonts.status so the first measurement taken against a
+  // fallback face is thrown away once the real webfonts land.
+  private labelMetrics: LabelMetrics | null = null;
+  private labelMetricsKey = "";
 
   // Orientation / camera
   private yaw: number;
@@ -819,9 +834,48 @@ export class CloudCanvasEngine {
     });
     this.projected.sort((a, b) => a.z - b.z); // painter's: far → near
 
+    // The core label (config.coreLabel) sits at the formation's CENTRE, which in
+    // globe space is z = 0 — so it draws in the MIDDLE of the painter's order,
+    // not on top of it: far hemisphere → type → near hemisphere. That single
+    // seam is the whole point of drawing the heading in-canvas. A DOM heading
+    // can only stack above the entire canvas (type covers the work) or below it
+    // (any far tile chops the words); neither can put a tile in front of the
+    // type on its way past and behind it on the way back.
+    //
+    // coreLabel.z decides how far forward the type sits (see the config doc —
+    // it's the legibility dial, NOT geometric centring). A focused tile is
+    // warped to z ≈ 1.16 by the focus lerp above, so clicking a project always
+    // brings it in front of the heading regardless. Falls through to a
+    // post-loop draw when no tile is nearer than the label.
+    const coreLabel = this.config.coreLabel;
+    const labelZ = coreLabel?.z ?? 0;
+    let labelDrawn = !coreLabel;
     for (const p of this.projected) {
+      if (!labelDrawn && p.z >= labelZ) {
+        this.drawCoreLabel(centerX, centerY);
+        labelDrawn = true;
+      }
       if (p.fade <= 0.01) continue; // fully evaporated at the wrap seam
       this.drawCard(p, this.denSize);
+    }
+    if (!labelDrawn) this.drawCoreLabel(centerX, centerY);
+
+    // SHOW-THROUGH pass. Depth sorting alone leaves the headline unreadable,
+    // and the reason is geometric rather than tunable: the sphere's near pole
+    // projects onto screen centre — exactly where the label is — so the tiles
+    // that eclipse it are the largest and most opaque ones on screen.
+    //
+    // Redrawing the same type over everything at a low alpha fixes it for free,
+    // because of what it composites onto:
+    //   • over open sky it lands on the ALREADY-OPAQUE first pass — white on
+    //     the same white, so the visible result is unchanged;
+    //   • over a crossing tile it's the only pass there, so the words read
+    //     through the tile at exactly `showThrough`.
+    // The tile itself stays at full strength — no ghosting, so the near tiles
+    // keep being the most vivid ones, which is the whole point of depth. No
+    // shadow on this pass or it would double up on the sky.
+    if (coreLabel?.showThrough) {
+      this.drawCoreLabel(centerX, centerY, coreLabel.showThrough, false);
     }
 
     // Edge fade (config.edgeFade) — the old .cloud-globe-mask CSS mask-image,
@@ -851,6 +905,79 @@ export class CloudCanvasEngine {
       ctx.fillRect(0, 0, this.cssW, this.cssH);
       ctx.globalCompositeOperation = "source-over";
     }
+  }
+
+  /**
+   * Shape the core label: resolve its CSS custom properties (family stacks +
+   * size, so the canvas type tracks the design tokens including --fs-display's
+   * mobile clamp) and measure each run once.
+   *
+   * Cached — the style read and the measureText calls are stable until the
+   * viewport changes or the webfonts land, and this runs inside the frame loop.
+   */
+  private coreLabelMetrics(): LabelMetrics | null {
+    const label = this.config.coreLabel;
+    if (!label) return null;
+
+    const cs = getComputedStyle(this.canvas);
+    const size = parseFloat(cs.getPropertyValue(label.sizeVar)) || label.size;
+    // fonts.status flips "loading" → "loaded" once the real faces arrive; the
+    // first frames of a cold load measure a fallback, and this discards them.
+    const key = `${size}|${document.fonts.status}`;
+    if (this.labelMetrics && this.labelMetricsKey === key) return this.labelMetrics;
+
+    const ctx = this.ctx;
+    ctx.save();
+    if (label.letterSpacing) ctx.letterSpacing = label.letterSpacing;
+    let width = 0;
+    const runs = label.runs.map((run) => {
+      const family = cs.getPropertyValue(run.familyVar).trim() || "sans-serif";
+      const font = `${run.style ?? "normal"} ${run.weight ?? "400"} ${size}px ${family}`;
+      ctx.font = font;
+      const runWidth = ctx.measureText(run.text).width;
+      width += runWidth;
+      return { text: run.text, font, width: runWidth };
+    });
+    ctx.restore();
+
+    this.labelMetrics = { runs, width, size };
+    this.labelMetricsKey = key;
+    return this.labelMetrics;
+  }
+
+
+  /**
+   * Paint the core label centred on the formation's centre.
+   *
+   * Called TWICE per frame: once from inside the painter's loop at the far/near
+   * seam (opaque, with its shadow), and once after every tile at `showThrough`
+   * alpha — see render() for why the second pass costs nothing where it isn't
+   * needed.
+   */
+  private drawCoreLabel(centerX: number, centerY: number, alpha = 1, shadow = true): void {
+    const label = this.config.coreLabel;
+    const metrics = this.coreLabelMetrics();
+    if (!label || !metrics || alpha <= 0) return;
+
+    const ctx = this.ctx;
+    ctx.save();
+    ctx.textAlign = "left"; // runs are laid end-to-end, so the LINE is centred
+    ctx.textBaseline = "middle";
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = label.color;
+    if (label.letterSpacing) ctx.letterSpacing = label.letterSpacing;
+    if (shadow && label.shadow) {
+      ctx.shadowColor = label.shadow.color;
+      ctx.shadowBlur = label.shadow.blur;
+      ctx.shadowOffsetY = label.shadow.offsetY ?? 0;
+    }
+    let x = centerX - metrics.width / 2;
+    for (const run of metrics.runs) {
+      ctx.font = run.font;
+      ctx.fillText(run.text, x, centerY);
+      x += run.width;
+    }
+    ctx.restore();
   }
 
   /**

@@ -17,26 +17,32 @@
  * `auto` (below the site's front cloud layer) ON PURPOSE, so the sky/cloud
  * atmosphere reads through the globe.
  *
- * Header (Figma 424:487): the house 49px mixed-font display heading — "stuff
- * we've " (Product Sans Light) + "shipped" (Instrument Serif) — over the shared
- * solid <Button> ("see all work", the exact white-gradient pill from the Figma
- * frame). The header wrapper is pointer-events-none so it never blocks the
- * globe's drag; only the tabs and button re-enable hits. The globe region
- * starts below the header (see cloud-canvas-scene.tsx) so tiles orbit under
- * the heading, and any faded far tile that drifts up passes BEHIND it (header
- * z-10) — the same "content floating among the atmosphere" move as the
- * testimonials quote.
+ * LAYOUT — tabs at the top, heading at the globe's core:
  *
- * FILTER TABS (above the heading): one glass pill segmented control — the
- * navbar's glass recipe (white/10 fill, white/30 hairline, inset sheen,
- * backdrop-blur; blur is safe here, the tabs are a SIBLING of the fixed
- * sky/cloud layers, never an ancestor). Selecting a type re-forms the globe
- * to just that type's projects (cloud-canvas-engine.ts setFilter); "all" is
- * the default. This is why the section is a client component: the tabs and
- * the scene share the filter state.
+ *   • FILTER TABS sit alone in the top header row: one glass pill segmented
+ *     control on the navbar's glass recipe (white/10 fill, white/30 hairline,
+ *     inset sheen, backdrop-blur; blur is safe here — the tabs are a SIBLING of
+ *     the fixed sky/cloud layers, never an ancestor). Selecting a type re-forms
+ *     the globe to just that type's projects (cloud-canvas-engine.ts setFilter);
+ *     "all" is the default. This is why the section is a client component: the
+ *     tabs and the scene share the filter state.
+ *
+ *   • The HEADING (Figma 424:487 — the house 49px mixed-font display: "stuff
+ *     we've " in Product Sans Light + "shipped" in Instrument Serif) is NOT a
+ *     DOM element here. It's drawn by the engine at the globe's core, spliced
+ *     into the painter's sort (config.coreLabel → cloud-canvas-engine.ts
+ *     render()), so far tiles pass behind it and near tiles pass IN FRONT.
+ *     A DOM heading can only sit above the whole canvas or below it — above
+ *     made the type cover the portfolio, below let any faded far tile chop the
+ *     words. Depth is what's being bought. The <h2> below is the accessible
+ *     twin, visually hidden.
+ *
+ * The tab row is z-10 over the canvas and pointer-events-none, so nothing
+ * blocks the globe's drag (only the tabs themselves re-enable hits).
+ *
+ * (No "see all work" button: the section is the whole body of work.)
  */
 import { useState } from "react";
-import Button from "@/components/ui/button";
 import CloudCanvasScene from "./cloud-canvas-scene";
 import {
   PROJECT_FILTERS,
@@ -48,8 +54,8 @@ export default function Portfolio() {
 
   return (
     <section id="work" data-portfolio className="relative min-h-dvh w-full overflow-hidden">
-      {/* Section header — filter tabs over the Figma 424:487 heading + button. */}
-      <div className="pointer-events-none relative z-10 flex w-full flex-col items-center gap-[25px] pt-[10dvh] max-md:px-6">
+      {/* Top row — filter tabs only; the heading lives at the globe's core. */}
+      <div className="pointer-events-none relative z-10 flex w-full flex-col items-center pt-[10dvh] max-md:px-6">
         <div
           role="group"
           aria-label="Filter projects by type"
@@ -74,14 +80,14 @@ export default function Portfolio() {
             );
           })}
         </div>
-
-        <h2 className="text-center text-display font-light leading-[1.1] tracking-[-0.03em] text-white [word-break:break-word]">
-          stuff we&apos;ve <span className="font-instrument">shipped</span>
-        </h2>
-        <Button variant="solid" className="pointer-events-auto">
-          see all work
-        </Button>
       </div>
+
+      {/* The VISIBLE heading is painted by the engine (config.coreLabel), not
+          by this element — that's the only way to get a tile in front of the
+          type on its near pass and behind it on the far pass. Canvas text is
+          invisible to screen readers and crawlers, so the real <h2> stays here,
+          same words, visually hidden. Keep the two in sync. */}
+      <h2 className="sr-only">stuff we&apos;ve shipped</h2>
 
       <CloudCanvasScene filter={filter} />
     </section>
