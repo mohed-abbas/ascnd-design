@@ -40,6 +40,22 @@ export default function Home() {
             {/* Quiet mixed-font statement + two-tone paragraph ("who you're working
           with"), centred over the shared sky. */}
             <WorkingWith />
+            {/* Cloud-canvas image globe: project stills arranged on a Fibonacci
+          sphere (2D canvas, no WebGL) that auto-spins, drags to rotate, and
+          click-focuses a tile. Floats transparently over the shared sky — it
+          does NOT pin/scrub, so no shrink-0 wrapper is needed (unlike WhyStay).
+
+          ORDER: deliberately placed BEFORE Comparison, i.e. between the two
+          heaviest scroll features rather than beside one. It used to sit
+          directly after Testimonials, so the WebGL GLB rocks and this 2D image
+          globe were adjacent and briefly co-visible across that boundary;
+          Comparison (a light glass table) now separates them by ~1200px so
+          they're never on screen together. The permutation is exact — these
+          three sections still fill the same band, so Pricing and everything
+          below keep their offsets, and the vh-anchored clouds (max anchorVh 7
+          ≈ 5390px, all above this point) are untouched. See the initAfter gate
+          in cloud-canvas-scene.tsx for the one thing this move DID require. */}
+            <Portfolio />
             {/* Feature matrix: ascnd vs hiring / agencies / freelancers ("none of the
           above"), a glass comparison table over the shared sky. */}
             <Comparison />
@@ -47,12 +63,6 @@ export default function Home() {
           with thin orbit outlines ("testimonials"), over the shared sky. Sits
           before pricing. */}
             <Testimonials />
-            {/* Cloud-canvas image globe: project stills arranged on a Fibonacci
-          sphere (2D canvas, no WebGL) that auto-spins, drags to rotate, and
-          click-focuses a tile. Floats transparently over the shared sky — it
-          does NOT pin/scrub, so no shrink-0 wrapper is needed (unlike WhyStay).
-          Sits between testimonials and pricing. */}
-            <Portfolio />
             {/* Two-tier pricing ("simple pricing, pause anytime"): subscription +
           fixed-sprint glass cards joined by a dashed connector, over the shared
           sky. */}

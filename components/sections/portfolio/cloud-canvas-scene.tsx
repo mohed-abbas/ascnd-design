@@ -43,10 +43,19 @@ export default function CloudCanvasScene({
           edge-mask device, but composited in-canvas. The old CSS mask-image on
           this canvas forced a per-frame full-screen mask pass (the layer's
           contents change every frame, so nothing was cacheable). */}
+      {/* initAfter: hold the 28-image (1.44MB) fetch + decode until the PINNED
+          WhyStay reel is fully behind the viewport. The view's near-view
+          observer arms 1000px ahead of this canvas, and with the portfolio
+          section sitting before Comparison that reach lands inside the WhyStay
+          pin — the page's heaviest scroll moment — so the two would compete.
+          Gating on the pin's exit keeps the full 1000px of lead time while
+          guaranteeing they never overlap. Homepage-specific by nature, which is
+          why it's passed here and not baked into the reusable view. */}
       <CloudCanvasView
         config={CLOUD_CANVAS_PORTFOLIO_CONFIG}
         filter={filter}
         wheelZoom={false}
+        initAfter="[data-whystay]"
         className="block h-full w-full"
       />
     </div>

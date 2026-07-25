@@ -34,6 +34,7 @@
  */
 import { useEffect, useRef } from "react";
 import gsap from "gsap";
+import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { heavyEffectFpsCap, scrollRepaintFpsCap } from "@/lib/perf/quality-store";
 import { CloudCanvasEngine } from "./cloud-canvas-engine";
 import {
@@ -55,6 +56,13 @@ interface CloudCanvasViewProps {
    * preventDefault on wheel and trap page scroll); ON in the lab sandbox.
    */
   wheelZoom?: boolean;
+  /**
+   * Selector for a section that must be fully ABOVE the viewport before the
+   * near-view init observer is armed — so the image load can never land on top
+   * of that section's scroll work. Omit (the lab sandbox) to arm at mount, and
+   * see the gate below for why it exists.
+   */
+  initAfter?: string;
   className?: string;
 }
 
@@ -64,6 +72,7 @@ export default function CloudCanvasView({
   filter = "all",
   interactive = true,
   wheelZoom = true,
+  initAfter,
   className,
 }: CloudCanvasViewProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -201,23 +210,60 @@ export default function CloudCanvasView({
     // kicked off at mount — at page load that work landed in the middle of the
     // intro/hero moment. This one-shot observer starts it ~1000px before the
     // section scrolls into view: far enough that a normal scroll finishes the
-    // load before the canvas is visible, close enough that it never fires while
-    // the user is at the top of the page (portfolio sits ~8000px+ down).
-    const initIo = new IntersectionObserver(
-      (entries) => {
-        if (!entries.some((e) => e.isIntersecting)) return;
-        initIo.disconnect();
-        startInit();
-      },
-      { rootMargin: "1000px" },
-    );
-    initIo.observe(canvas);
+    // load before the canvas is visible, close enough that it doesn't fire
+    // while the user is still up the page.
+    let initIo: IntersectionObserver | null = null;
+    const armInit = () => {
+      if (disposed || initIo) return;
+      initIo = new IntersectionObserver(
+        (entries) => {
+          if (!entries.some((e) => e.isIntersecting)) return;
+          initIo?.disconnect();
+          startInit();
+        },
+        { rootMargin: "1000px" },
+      );
+      initIo.observe(canvas);
+    };
+
+    // ...but "1000px ahead" is measured from the canvas, so how far up the page
+    // it reaches depends entirely on where the consumer puts this section — an
+    // assumption that silently broke when the portfolio section moved up the
+    // homepage (it used to sit ~8000px down, past everything). At its position
+    // before Comparison the observer would arm ~4860px in, landing the whole
+    // 1.44MB fetch + 28 decodes INSIDE the pinned WhyStay scrub, the heaviest
+    // scroll moment on the page. `initAfter` names a section that must be BEHIND
+    // the viewport before we even arm, so the burst can't overlap it; the
+    // near-view margin then still buys its full lead time afterwards.
+    // ScrollTrigger, not another IntersectionObserver: IO callbacks are
+    // throttled during continuous scroll (the same starvation testimonial-rocks
+    // documents), and ST also resolves the position correctly THROUGH the gate
+    // section's own pin. No gate (the lab sandbox) → arm immediately, exactly as
+    // before. A selector that matches nothing also arms immediately: the gate is
+    // an optimisation, never a prerequisite for the globe appearing.
+    let gate: ScrollTrigger | null = null;
+    const gateEl = initAfter
+      ? document.querySelector<HTMLElement>(initAfter)
+      : null;
+    if (gateEl) {
+      gsap.registerPlugin(ScrollTrigger);
+      gate = ScrollTrigger.create({
+        trigger: gateEl,
+        start: "bottom top", // gate section fully above the viewport
+        end: "max",
+        onEnter: armInit,
+      });
+      if (gate.isActive) armInit(); // seed: loaded/restored already past it
+    } else {
+      armInit();
+    }
 
     return () => {
       disposed = true;
       if (tickerFn) gsap.ticker.remove(tickerFn);
       io.disconnect();
-      initIo.disconnect();
+      initIo?.disconnect();
+      gate?.kill();
       ro.disconnect();
       if (interactive) {
         canvas.removeEventListener("pointerdown", onDown);
@@ -232,7 +278,7 @@ export default function CloudCanvasView({
       engineRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [images, interactive, wheelZoom]);
+  }, [images, interactive, wheelZoom, initAfter]);
 
   // Live config updates — read by the engine without a remount.
   useEffect(() => {
