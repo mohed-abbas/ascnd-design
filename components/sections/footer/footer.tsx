@@ -62,10 +62,14 @@ import FooterReveal from "./footer-reveal";
  *
  * Nav links route through <AnchorLink> (client-side next/link that keeps the
  * shared sky/cloud canvas alive and smooth-scrolls in-page anchors via Lenis):
- *   • home  → "/"            (route)
- *   • pricing → "/pricing"   (route — matches the navbar)
+ *   • home  → "/"            (route; ON the homepage it's a same-page no-hash
+ *                             href, so AnchorLink glides to the top via Lenis
+ *                             rather than navigating — as the wordmark does)
  *   • work  → "/#work"       (Portfolio section, id="work", home page)
+ *   • pricing → "/pricing"   (route)
  *   • book a call → "/pricing#book" (BookACall section, id="book", /pricing)
+ * Same four entries, same order as the navbar's LINKS (ui/navbar.tsx) — the two
+ * menus are the site's one nav, so they must not drift apart.
  * The two cross-route hashes work from either page (footer is shared): same-page
  * clicks glide via Lenis, cross-page clicks navigate then land on the anchor.
  * The LEGAL links stay placeholder <a>s — no privacy/terms pages exist yet
@@ -75,8 +79,8 @@ import FooterReveal from "./footer-reveal";
  */
 const NAV = [
   { label: "home", href: "/" },
-  { label: "pricing", href: "/pricing" },
   { label: "work", href: "/#work" },
+  { label: "pricing", href: "/pricing" },
   { label: "book a call", href: "/pricing#book" },
 ];
 

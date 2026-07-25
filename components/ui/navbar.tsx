@@ -18,14 +18,18 @@ type NavLink = { label: string; href: string };
 // not smooth, and — because the cloud parallax only advances while Lenis drives
 // ScrollTrigger — it froze the hero clouds in place at the target section.
 // hrefs are cross-route-safe (the navbar shows on / and /pricing):
+//   • home → "/"                 (route; ON the homepage it's a same-page
+//                                 no-hash href, so AnchorLink glides to the top
+//                                 through Lenis instead of navigating — same
+//                                 behaviour as the wordmark)
 //   • work → "/#work"            (Portfolio, id="work", home)
 //   • pricing → "/pricing"       (route)
 //   • book a call → "/pricing#book" (BookACall, id="book", /pricing)
-//   • about → "#about"           (no target section yet — a safe no-op until one exists)
+// Matches the footer's utility nav (footer.tsx), which carries the same four.
 const LINKS: NavLink[] = [
+  { label: "home", href: "/" },
   { label: "work", href: "/#work" },
   { label: "pricing", href: "/pricing" },
-  { label: "about", href: "#about" },
   { label: "book a call", href: "/pricing#book" },
 ];
 
