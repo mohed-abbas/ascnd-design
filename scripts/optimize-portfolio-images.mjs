@@ -15,6 +15,10 @@
  * must move together: raising the engine constant without re-running this script
  * means it upscales these files and the globe goes soft.
  *
+ * It was briefly 520, which was too low — see the FAST_MAX_SIDE comment for the
+ * arithmetic. A tile is drawn at up to ~2.6× its authored slot px, so 520 made a
+ * focused tile a 1.4× upscale and turned UI screenshots to mush.
+ *
  * RUN THIS WHENEVER THE PROJECT IMAGES CHANGE. It is idempotent (already-sized
  * files are skipped) and format-agnostic: drop in .jpg/.png/.webp/.avif named
  * cloud-NN.* and it normalises everything to cloud-NN.webp, removing the
@@ -28,7 +32,7 @@ import path from "node:path";
 import sharp from "sharp";
 
 const DIR = "public/portfolio/cloud";
-const MAX_SIDE = 520; // === FAST_MAX_SIDE (cloud-canvas-engine.ts)
+const MAX_SIDE = 900; // === FAST_MAX_SIDE (cloud-canvas-engine.ts)
 const QUALITY = 82; // webp; these are heavily downscaled already, so this is
 // visually transparent at the size the globe draws them
 const INPUT_RE = /\.(webp|jpe?g|png|avif)$/i;

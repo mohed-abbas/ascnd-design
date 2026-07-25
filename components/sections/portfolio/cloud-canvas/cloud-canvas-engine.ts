@@ -63,7 +63,19 @@ const Y_SQUASH = 0.86; // flatten the sphere vertically, as the reference does
 const DPR_CAP = 1.5; // the site-wide cap — the design system values razor-sharp
 // shots (design-shots ships raw PNGs for the same reason), and ~28 rounded-rect
 // draws leave 2D fill-rate headroom to spend on crispness.
-const FAST_MAX_SIDE = 520; // downscale source images once for cheap per-frame draws
+// Downscale source images ONCE on load, so the per-frame draw blits from a small
+// canvas instead of resampling a huge decoded bitmap 25× a frame.
+//
+// ⚠️ This is the ceiling on tile sharpness — shipping bigger files does nothing
+// until this rises with them. Size it from the LARGEST a tile is ever drawn, which
+// is NOT the authored slot px: cardScale() magnifies by
+//   perspective(≤1.39) × 1.42 × config.size(1.2) × zoom(0.9) × density × interaction
+// A focused landscape tile on a filtered tab (few tiles → densityFactors GROWS
+// them) reaches ~527 CSS px ⇒ ~790 device px at DPR_CAP. A 16:9 source only
+// contributes ~89% of its width after the cover-crop into the 1.58 slot, so it
+// needs ~890px to stay 1:1 there. Hence 900. At the old 520 a focused tile was a
+// 1.4× UPSCALE, which read as mush on screenshot work with fine UI text.
+const FAST_MAX_SIDE = 900;
 const FRAME_SPRITE_SCALE = 2.5; // frame sprites bake at 2.5× the authored slot px
 // size, so the blit stays crisp through depth/zoom/DPR upscaling of near tiles
 const TILE_SPRITE_SCALE = 1.5; // lite mode bakes each card's WHOLE visual at
