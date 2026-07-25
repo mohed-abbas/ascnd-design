@@ -43,19 +43,25 @@ export default function CloudCanvasScene({
           edge-mask device, but composited in-canvas. The old CSS mask-image on
           this canvas forced a per-frame full-screen mask pass (the layer's
           contents change every frame, so nothing was cacheable). */}
-      {/* initAfter: hold the 28-image (1.44MB) fetch + decode until the PINNED
-          WhyStay reel is fully behind the viewport. The view's near-view
-          observer arms 1000px ahead of this canvas, and with the portfolio
-          section sitting before Comparison that reach lands inside the WhyStay
-          pin — the page's heaviest scroll moment — so the two would compete.
-          Gating on the pin's exit keeps the full 1000px of lead time while
-          guaranteeing they never overlap. Homepage-specific by nature, which is
-          why it's passed here and not baked into the reusable view. */}
+      {/* initFrom: hold the 28-image (1.44MB) fetch + decode until the pinned
+          WhyStay reel has released. The view's near-view observer arms 1000px
+          ahead of this canvas, and with the portfolio section sitting before
+          Comparison that reach lands inside the WhyStay pin — the page's
+          heaviest scroll moment — so the two would compete.
+
+          [data-pills], NOT [data-whystay]: Pills is the first section AFTER the
+          pin, so reaching its top (5260) means the pin has just released — but
+          unlike WhyStay it isn't pinned itself, so the trigger resolves against
+          plain document flow no matter when it's created. Pointing at the
+          pinned section does work today; this just doesn't depend on pin
+          re-measurement from a next/dynamic'd trigger created out of page
+          order. Homepage-specific by nature, which is why it's passed here
+          rather than baked into the reusable view. */}
       <CloudCanvasView
         config={CLOUD_CANVAS_PORTFOLIO_CONFIG}
         filter={filter}
         wheelZoom={false}
-        initAfter="[data-whystay]"
+        initFrom="[data-pills]"
         className="block h-full w-full"
       />
     </div>

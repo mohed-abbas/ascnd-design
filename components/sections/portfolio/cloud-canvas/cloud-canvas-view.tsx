@@ -57,12 +57,13 @@ interface CloudCanvasViewProps {
    */
   wheelZoom?: boolean;
   /**
-   * Selector for a section that must be fully ABOVE the viewport before the
-   * near-view init observer is armed — so the image load can never land on top
-   * of that section's scroll work. Omit (the lab sandbox) to arm at mount, and
-   * see the gate below for why it exists.
+   * Selector for an element whose TOP must reach the top of the viewport before
+   * the near-view init observer is armed at all — a floor on how early the image
+   * load may start, so it can't land on top of heavier scroll work above it.
+   * Omit (the lab sandbox) to arm at mount; see the gate below for why it
+   * exists. Must be an UNPINNED element — see the note there.
    */
-  initAfter?: string;
+  initFrom?: string;
   className?: string;
 }
 
@@ -72,7 +73,7 @@ export default function CloudCanvasView({
   filter = "all",
   interactive = true,
   wheelZoom = true,
-  initAfter,
+  initFrom,
   className,
 }: CloudCanvasViewProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -232,24 +233,36 @@ export default function CloudCanvasView({
     // homepage (it used to sit ~8000px down, past everything). At its position
     // before Comparison the observer would arm ~4860px in, landing the whole
     // 1.44MB fetch + 28 decodes INSIDE the pinned WhyStay scrub, the heaviest
-    // scroll moment on the page. `initAfter` names a section that must be BEHIND
-    // the viewport before we even arm, so the burst can't overlap it; the
-    // near-view margin then still buys its full lead time afterwards.
-    // ScrollTrigger, not another IntersectionObserver: IO callbacks are
-    // throttled during continuous scroll (the same starvation testimonial-rocks
-    // documents), and ST also resolves the position correctly THROUGH the gate
-    // section's own pin. No gate (the lab sandbox) → arm immediately, exactly as
-    // before. A selector that matches nothing also arms immediately: the gate is
-    // an optimisation, never a prerequisite for the globe appearing.
+    // scroll moment on the page. `initFrom` puts a floor under that: no arming
+    // until its element's top reaches the viewport top. The near-view margin
+    // then still buys its full lead time from there.
+    //
+    // Prefer an UNPINNED element here. Naming the pinned section itself (the
+    // obvious reading of "wait for the pin to finish") does measurably work, but
+    // it resolves "top top" against an element ScrollTrigger re-measures with
+    // its pin reverted, while this view is loaded through next/dynamic — so its
+    // trigger is created well after the pin's own, out of page order, and
+    // nothing in this codebase sets refreshPriority. That's the arrangement the
+    // GSAP docs specifically warn about. Naming the first unpinned section AFTER
+    // the pin sidesteps it entirely: plain document flow, so "top top" is
+    // unambiguous whenever it's created, and reaching it already implies the pin
+    // released.
+    //
+    // ScrollTrigger rather than a second IntersectionObserver because IO
+    // callbacks are throttled during continuous scroll (the same starvation
+    // testimonial-rocks documents). No gate (the lab sandbox) → arm immediately,
+    // exactly as before; a selector that matches nothing also arms immediately,
+    // since the gate is an optimisation and never a prerequisite for the globe
+    // appearing.
     let gate: ScrollTrigger | null = null;
-    const gateEl = initAfter
-      ? document.querySelector<HTMLElement>(initAfter)
+    const gateEl = initFrom
+      ? document.querySelector<HTMLElement>(initFrom)
       : null;
     if (gateEl) {
       gsap.registerPlugin(ScrollTrigger);
       gate = ScrollTrigger.create({
         trigger: gateEl,
-        start: "bottom top", // gate section fully above the viewport
+        start: "top top", // gate element has reached the top of the viewport
         end: "max",
         onEnter: armInit,
       });
@@ -278,7 +291,7 @@ export default function CloudCanvasView({
       engineRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [images, interactive, wheelZoom, initAfter]);
+  }, [images, interactive, wheelZoom, initFrom]);
 
   // Live config updates — read by the engine without a remount.
   useEffect(() => {
