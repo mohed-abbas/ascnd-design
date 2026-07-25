@@ -7,7 +7,7 @@ import {
   INTRO_LAST_RESORT_MS,
   INTRO_REVEAL_EVENT,
   INTRO_START_EVENT,
-  introWillPlay,
+  introPending,
 } from "@/components/sections/intro/intro-state";
 
 // useLayoutEffect on the client (parks/plays before paint, no flash); falls back
@@ -193,7 +193,10 @@ export default function DesignShotsReveal() {
     // "no event ever arrived" (Intro crashed before either dispatch); it sits
     // ABOVE the last-resort budget so it can never race a live welcome that is
     // legitimately still waiting for its scene into a double collage.
-    if (introWillPlay()) {
+    // introPending(), not introWillPlay(): on a client-side nav back to the
+    // homepage the welcome (and its persistent WebGL tile scene) is gone —
+    // bloom the DOM conveyor immediately.
+    if (introPending()) {
       let started = false;
       let begun = false;
       const beginOnce = () => {

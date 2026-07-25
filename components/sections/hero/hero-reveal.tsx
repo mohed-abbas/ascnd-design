@@ -7,7 +7,7 @@ import {
   INTRO_LAST_RESORT_MS,
   INTRO_REVEAL_EVENT,
   introHasStarted,
-  introWillPlay,
+  introPending,
 } from "@/components/sections/intro/intro-state";
 
 gsap.registerPlugin(SplitText);
@@ -69,6 +69,15 @@ export default function HeroReveal() {
     const splits: SplitText[] = [];
     let ctx: gsap.Context | undefined;
     let cancelled = false;
+
+    // Snapshot ONCE at mount: is a welcome still owed this document load? It
+    // decides both the branch below (wait for the dock vs reveal at once) and
+    // the wordmark handoff inside build(). introPending(), not introWillPlay():
+    // after the welcome has run, a client-side nav back to the homepage
+    // re-mounts this with the INTENT still true — the hero must then cascade
+    // immediately, and the wordmark must join it (no glass is coming to dock
+    // this time, even though introHasStarted() remains true from the first run).
+    const waitForIntro = introPending();
 
     const build = () => {
       if (cancelled) return;
@@ -146,13 +155,14 @@ export default function HeroReveal() {
       // the glass fade-out, so the wordmark must stay hidden here (no slide-up,
       // never shown through the transmissive glass). Skip it entirely; the
       // masked slide-up still runs for returning sessions.
-      // introHasStarted(), not introWillPlay(): the intent can be "play" and the
-      // intro still never start (SKIP_BUDGET on a slow network, or the
-      // can't-place-the-glass bail). In those paths the glass never docks, so
-      // nothing else would ever reveal the wordmark — it must join this cascade.
-      // Evaluated inside build(), which runs at reveal time, so the outcome is
-      // known by now: INTRO_START always precedes INTRO_REVEAL in a live welcome.
-      const introHandoff = introWillPlay() && introHasStarted();
+      // waitForIntro (this mount actually parked behind a welcome) AND
+      // introHasStarted(): the intent can be "play" and the intro still never
+      // start (SKIP_BUDGET on a slow network, or the can't-place-the-glass
+      // bail). In those paths the glass never docks, so nothing else would ever
+      // reveal the wordmark — it must join this cascade. Evaluated inside
+      // build(), which runs at reveal time, so the outcome is known by now:
+      // INTRO_START always precedes INTRO_REVEAL in a live welcome.
+      const introHandoff = waitForIntro && introHasStarted();
 
       // Masked blocks — slide up from below their overflow:hidden wrapper.
       root.querySelectorAll<HTMLElement>("[data-reveal]").forEach((el) => {
@@ -256,7 +266,7 @@ export default function HeroReveal() {
     // budget + welcome length so it can never fire under a live welcome that
     // is legitimately still waiting for its scene on a slow connection.
     let stopWaiting: (() => void) | undefined;
-    if (introWillPlay()) {
+    if (waitForIntro) {
       let revealed = false;
       const onReveal = () => {
         if (revealed) return; // event + backstop can both land — start() once

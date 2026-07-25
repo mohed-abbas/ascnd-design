@@ -89,19 +89,43 @@ export default function RootLayout({
             crossOrigin="anonymous"
           />
         )}
-        {/* Always open at the hero on a reload. The browser's default
-            `scrollRestoration: "auto"` restores the previous scroll offset on
-            refresh, which (a) drops the visitor mid-page instead of at the top
-            and (b) makes intro-state's `atHeroTop()` read a non-zero scrollY and
-            SUPPRESS the welcome. Switching to "manual" (set here during HTML
-            parse, before hydration and before <Intro> reads scrollY) makes every
-            reload load scrolled to the top — so the hero shows and the intro
-            reliably replays. The property persists on the history entry, so it
-            stays manual across subsequent refreshes. */}
+        {/* Always open at the hero on a reload. Two separate browser behaviours
+            can drop a homepage load below the fold, and both must be neutralised
+            here — synchronously during HTML parse, before hydration, before
+            <Intro> reads scrollY, and before the anchor target even exists:
+            (1) The default `scrollRestoration: "auto"` restores the previous
+                scroll offset on refresh, which drops the visitor mid-page and
+                makes intro-state's `atHeroTop()` read a non-zero scrollY and
+                SUPPRESS the welcome. "manual" makes every reload land at the
+                top; the property persists on the history entry across
+                subsequent refreshes.
+            (2) A fragment in the URL (the in-page nav leaves /#work, /#plans …
+                behind) makes the browser scroll to that anchor as soon as the
+                element renders — scrollRestoration doesn't cover fragment
+                navigation. On a homepage load that anchored mid-welcome: the
+                loader/intro played at the hero while the page sat at the
+                section (the "glitched loader, stuck at #work" refresh bug).
+                Stripping the hash NOW (before the section is parsed, so the
+                anchor lookup never matches) keeps the load at the hero and the
+                welcome intact. Homepage only: interior deep links like
+                /pricing#book have no welcome and must keep anchoring.
+            Belt-and-suspenders: some engines/profiles still sneak a scroll in
+            around load (late restoration, anchor timing) despite the two
+            guards above — so on homepage loads the viewport is ALSO zeroed
+            here and once more when `load` fires. Harmless when already at the
+            top; during a welcome the scroll is Lenis-locked anyway, so this
+            can never yank a real user interaction. intro.tsx re-zeroes a
+            final time right before it measures the hero (the last write
+            wins). */}
         <script
           dangerouslySetInnerHTML={{
             __html:
-              "if('scrollRestoration' in history)history.scrollRestoration='manual';",
+              "if('scrollRestoration' in history)history.scrollRestoration='manual';" +
+              "if(location.pathname==='/'){" +
+              "if(location.hash)history.replaceState(null,'',location.pathname+location.search);" +
+              "scrollTo(0,0);" +
+              "addEventListener('load',function(){scrollTo(0,0)},{once:true});" +
+              "}",
           }}
         />
         {/* Stamp the persisted sky mode onto <html> before first paint, so the

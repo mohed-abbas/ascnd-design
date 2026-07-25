@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import gsap from "gsap";
-import { INTRO_REVEAL_EVENT, introWillPlay } from "@/components/sections/intro/intro-state";
+import { INTRO_REVEAL_EVENT, introPending } from "@/components/sections/intro/intro-state";
 
 const REDUCE_MOTION = "(prefers-reduced-motion: reduce)";
 const REVEAL_SIZE = 340; // diameter (px) of the soft reveal disc
@@ -129,7 +129,7 @@ export default function RockHover() {
     // rock-reveal.tsx: hold off until the glass docks (INTRO_REVEAL_EVENT), when
     // the real cliffs exist for the disc to reveal.
     let stopWaiting: (() => void) | undefined;
-    if (introWillPlay()) {
+    if (introPending()) {
       const onReveal = () => wire();
       window.addEventListener(INTRO_REVEAL_EVENT, onReveal, { once: true });
       stopWaiting = () =>

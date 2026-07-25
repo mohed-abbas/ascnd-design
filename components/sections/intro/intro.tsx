@@ -2,13 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { useLenis } from "lenis/react";
-import {
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-  useSyncExternalStore,
-} from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import gsap from "gsap";
 import {
   INTRO_CHUNK_READY_EVENT,
@@ -17,7 +11,8 @@ import {
   INTRO_REVEAL_EVENT,
   INTRO_SCENE_READY_EVENT,
   INTRO_START_EVENT,
-  introWillPlay,
+  introHasRevealed,
+  introPending,
 } from "./intro-state";
 import { CAMERA_Z, ROCK_Z, TILE_Z } from "./intro-scene";
 import {
@@ -74,11 +69,6 @@ const IntroScene = dynamic(() => import("./intro-scene"), { ssr: false });
 
 const useIso = typeof window !== "undefined" ? useLayoutEffect : useEffect;
 
-// Client-only "should the intro play" decision, the same useSyncExternalStore
-// pattern as cloud-layer.tsx: SSR snapshot is false (cheap server render), the
-// client re-evaluates after hydration — no mismatch, no setState-in-effect.
-const noopSubscribe = () => () => {};
-
 // Glass "ascnd" width ≈ 2.55 × Text3D `size` (advances + the -0.03em tracking).
 const WIDTH_PER_SIZE = 2.55;
 const NAVBAR_FONT_PX = 38; // matches the DOM <Wordmark> (text-[38px]) dock target
@@ -119,19 +109,27 @@ type Plan = {
  * INTRO_REVEAL_EVENT so <HeroReveal> cascades the hero in underneath; then the
  * canvas fades out, handing off to the real DOM wordmark.
  *
- * Plays once per session, locks Lenis scroll while running, and is skipped under
- * reduced-motion (see intro-state). Measures the DOM and converts to the scene's
- * world units (perspective camera) so the glass lines up with the hero.
+ * Plays once per DOCUMENT load — a first visit or refresh of the homepage.
+ * Client-side navigations back to the homepage re-mount this component, but
+ * introPending() is false once the welcome has run (or bailed), so it renders
+ * nothing and the DOM hero cascades in immediately instead. Locks Lenis scroll
+ * while running, and is skipped under reduced-motion (see intro-state).
+ * Measures the DOM and converts to the scene's world units (perspective
+ * camera) so the glass lines up with the hero.
  *
  * Dev query hooks: ?intro=force|skip · ?introslow=N (N× slower) · ?intropos=P
  * (freeze at progress 0..1).
  */
 export default function Intro() {
-  const shouldPlay = useSyncExternalStore(
-    noopSubscribe,
-    () => introWillPlay(),
-    () => false,
-  );
+  // Captured ONCE at mount (useState initializer, not a live read): the welcome
+  // plays only while it's still pending this document load, so a client-side
+  // re-mount (nav back to the homepage) after it has run renders nothing. It
+  // must be a frozen snapshot, because the reveal firing MID-play flips
+  // introPending() false — a live read would unmount the canvas under the
+  // running timeline. SSR-safe: the initializer returns false on the server
+  // (introWillPlay() window-guards), and the first client render is null either
+  // way (no plan yet), so hydration output always matches.
+  const [shouldPlay] = useState(() => introPending());
   const [dismissed, setDismissed] = useState(false);
   const play = shouldPlay && !dismissed;
 
@@ -174,6 +172,22 @@ export default function Intro() {
     lenisRef.current = lenis;
   }, [lenis]);
 
+  // Consume the welcome when this page instance dies (client-side nav away,
+  // possibly mid-welcome — e.g. the browser back button while the loader still
+  // covers). If the reveal never fired, fire it on the way out: module state
+  // then records the welcome as over, layout-persistent waiters (the cursor,
+  // the cloud RevealRig, the quality watchdog) release, and a navigation back
+  // to the homepage mounts the plain hero instead of waiting on — or replaying
+  // — a dead intro. After a normal dock/bail the reveal already fired and this
+  // is a no-op.
+  useEffect(() => {
+    if (!shouldPlay) return;
+    return () => {
+      if (!introHasRevealed())
+        window.dispatchEvent(new Event(INTRO_REVEAL_EVENT));
+    };
+  }, [shouldPlay]);
+
   // Warm the heavy WebGL scene chunk (Three.js + drei) the instant we know the
   // intro will play, so its download overlaps the DOM measure instead of only
   // starting when <IntroScene> first renders. Shares the module cache with the
@@ -191,6 +205,15 @@ export default function Intro() {
   // Measure the hero once we're going to play, and build the plan.
   useIso(() => {
     if (!play) return;
+
+    // The homepage load is pinned to the hero: the layout's inline script
+    // strips any #fragment and zeroes scroll at parse + load, but a browser
+    // that restores or anchors scroll late would poison every viewport-
+    // relative rect measured below AND leave the welcome playing over the
+    // wrong section. Zero it one last time, synchronously before measuring —
+    // native scrollTo; Lenis re-syncs from the native position on its next
+    // raf, and the welcome locks scroll right after anyway.
+    if (window.scrollY) window.scrollTo(0, 0);
 
     const hero = document.querySelector<HTMLElement>("[data-hero]");
     const slot = document.querySelector<HTMLElement>("[data-wordmark-slot]");
@@ -438,10 +461,25 @@ export default function Intro() {
     if (!play || !plan) return;
 
     lenisRef.current?.stop(); // lock now — keep it locked through the load
+
+    // The welcome OWNS the viewport: while it runs (warm-up included), any
+    // scroll that lands anyway — a browser's late scroll restoration slipping
+    // past the layout script's parse/load zeroing, or native keyboard scroll
+    // that Lenis's stop() doesn't intercept — is a stray, and it would leave
+    // the page parked mid-content under a welcome playing at the hero. Snap it
+    // straight back. Removed the moment the welcome ends (onComplete, before
+    // Lenis restarts) or this effect tears down, so real user scrolling is
+    // never touched.
+    const pinTop = () => {
+      if (window.scrollY) window.scrollTo(0, 0);
+    };
+    window.addEventListener("scroll", pinTop, { passive: true });
+
     if (!ready || !released) {
       // Waiting on the scene to paint AND the loader to hand off; stay locked,
       // release the lock if we unmount before both land.
       return () => {
+        window.removeEventListener("scroll", pinTop);
         lenisRef.current?.start();
       };
     }
@@ -464,6 +502,7 @@ export default function Intro() {
 
     const tl = gsap.timeline({
       onComplete: () => {
+        window.removeEventListener("scroll", pinTop); // hand scroll back first
         lenisRef.current?.start();
         // Don't unmount — drop the glass/rocks (and switch the canvas to the
         // cheap demand loop) so it persists as the steady-state tile scene.
@@ -624,6 +663,7 @@ export default function Intro() {
       window.dispatchEvent(new Event("intro:frozen-seek"));
       return () => {
         tl.kill();
+        window.removeEventListener("scroll", pinTop);
         gsap.killTweensOf(animObj);
         gsap.killTweensOf(rockObjs);
         gsap.killTweensOf(tileObjs);
@@ -639,6 +679,7 @@ export default function Intro() {
     return () => {
       tl.kill();
       window.clearTimeout(failsafe);
+      window.removeEventListener("scroll", pinTop);
       gsap.killTweensOf(animObj);
       gsap.killTweensOf(rockObjs);
       gsap.killTweensOf(tileObjs);

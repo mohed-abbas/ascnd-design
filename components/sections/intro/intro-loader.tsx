@@ -1,19 +1,26 @@
 "use client";
 
 import type { CSSProperties } from "react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import gsap from "gsap";
 import Logo from "@/components/ui/logo";
 // Wordmark temporarily disabled in the loader column (see commented block below).
 // import Wordmark from "@/components/ui/wordmark";
 import {
+  documentLoadedOnHome,
   INTRO_CHUNK_READY_EVENT,
   INTRO_GO_EVENT,
   INTRO_LAST_RESORT_MS,
   INTRO_REVEAL_EVENT,
   INTRO_SCENE_READY_EVENT,
-  introWillPlay,
+  introHasRevealed,
+  introPending,
 } from "./intro-state";
+
+// Layout effect on the client so the no-welcome mount decision lands BEFORE
+// paint (an SPA arrival must never flash even one frame of the cover); plain
+// effect during SSR to avoid React's server warning. Mirrors intro.tsx.
+const useIso = typeof window !== "undefined" ? useLayoutEffect : useEffect;
 
 /**
  * Welcome loading screen — a PURE DOM/CSS cover shown over the sky while the
@@ -51,10 +58,13 @@ import {
  * last-resort budget guarantees the cover can't outlive a crashed intro.
  *
  * It is rendered on the server too (markup ships in the initial HTML) and is
- * visible by default. The play decision runs after hydration:
- *   • intro WILL play  → run the welcome above, then hand off via INTRO_GO.
- *   • intro WON'T play (returning/mid-page/no-WebGL) → drop it next frame; the
- *     DOM hero reveals on its own with nothing heavy to wait on.
+ * visible by default. The play decision runs at mount:
+ *   • welcome pending  → run the welcome above, then hand off via INTRO_GO.
+ *   • homepage hard load but suppressed (mid-page/no-WebGL/?intro=skip) → drop
+ *     the SSR cover next frame; the DOM hero reveals with nothing to wait on.
+ *   • client-side arrival (SPA nav back to the homepage, or the document
+ *     loaded on an interior route) → unmount before paint; the cover — like
+ *     the welcome itself — belongs to first load and refresh only.
  *
  * Reduced motion hides it entirely via CSS (`display:none`), so those visitors
  * never see it — and introWillPlay() is false for them regardless.
@@ -84,12 +94,23 @@ export default function IntroLoader() {
   const [done, setDone] = useState(false);
   const fillRef = useRef<HTMLSpanElement>(null);
 
-  useEffect(() => {
+  useIso(() => {
     const dismiss = () => setDismissing(true);
 
-    // No heavy welcome to cover — let the DOM hero reveal and drop the cover on
-    // the next frame (a flash of matching sky, never a lingering hold).
-    if (!introWillPlay()) {
+    // No welcome pending this document load. Two flavours:
+    //  • Client-side arrival — the welcome already ran (nav back to the
+    //    homepage) or this document loaded on an interior route: there is no
+    //    SSR cover on screen and none must ever paint. Unmount synchronously
+    //    (layout effect runs pre-paint) so not even one frame of logo flashes.
+    //  • Homepage HARD load with the welcome suppressed (?intro=skip, no
+    //    WebGL; reduced-motion never shows the cover via CSS): the SSR cover
+    //    has been visible since first paint — drop it on the next frame with
+    //    the soft fade (a flash of matching sky, never a lingering hold).
+    if (!introPending()) {
+      if (introHasRevealed() || !documentLoadedOnHome()) {
+        setDone(true);
+        return;
+      }
       const raf = requestAnimationFrame(dismiss);
       return () => cancelAnimationFrame(raf);
     }

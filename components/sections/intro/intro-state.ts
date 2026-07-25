@@ -5,12 +5,15 @@
  * SAME way for both within a page load. <Intro> dispatches INTRO_REVEAL_EVENT
  * at the dock; HeroReveal / RockReveal / DesignShotsReveal listen for it.
  *
- * The intro replays on EVERY load that lands at the hero (top of page). It's
- * suppressed by an explicit ?intro=skip, reduced-motion, missing WebGL, OR a
- * load the browser restores mid-page (e.g. refreshing while scrolled down to a
- * lower section): the glass docks onto the hero's wordmark and its rocks sit at
- * the hero's base, so off the hero it has nothing to land on and would only
- * lock scroll over content it doesn't belong to.
+ * The intro replays on every DOCUMENT load of the homepage — a first visit or
+ * a refresh, never a client-side navigation (see introPending(): route mounts
+ * re-occur on every SPA nav, but the welcome is consumed once per document
+ * load). Every homepage document load OPENS AT THE HERO by policy: the
+ * layout's inline script strips any #fragment, disables scroll restoration
+ * and zeroes the viewport (parse + load), and intro.tsx re-zeroes right
+ * before it measures — so there is no "restored mid-page" load to suppress
+ * for anymore. Suppression is only ?intro=skip, reduced-motion, or missing
+ * WebGL.
  */
 
 export const INTRO_REVEAL_EVENT = "ascnd:intro-reveal";
@@ -91,26 +94,15 @@ function hasWebGL(): boolean {
   }
 }
 
-// How close to the top counts as "at the hero". The browser restores scroll to
-// the exact saved pixel, so a small epsilon just absorbs sub-pixel rounding.
-const TOP_EPSILON = 4;
-
-/**
- * Are we (essentially) at the top of the page? On a hard refresh the browser
- * restores the previous scroll position during the initial layout — before
- * React hydration runs — so `scrollY` already reflects the restored position by
- * the time this first evaluates (Lenis hasn't initialised yet, so this is the
- * native value, not a reset-to-0). `introWillPlay()` is memoised, so the answer
- * is captured once and stays consistent for <Intro> and the reveals.
- */
-function atHeroTop(): boolean {
-  const y =
-    window.scrollY ||
-    document.documentElement.scrollTop ||
-    document.body?.scrollTop ||
-    0;
-  return y <= TOP_EPSILON;
-}
+// The pathname this DOCUMENT loaded on, captured at module-evaluation time
+// (the root layout's client components import this module, so it evaluates
+// during the initial load of every route — always before any client-side
+// navigation). The welcome belongs to HARD loads of the homepage only:
+// computeShouldPlay pins its route check to this instead of the live pathname,
+// so a client-side arrival at "/" (e.g. from /pricing) can never read as a
+// homepage load, no matter when the memoised decision is first evaluated.
+const INITIAL_PATH =
+  typeof window !== "undefined" ? window.location.pathname : "";
 
 function computeShouldPlay(): boolean {
   if (typeof window === "undefined") return false;
@@ -122,7 +114,9 @@ function computeShouldPlay(): boolean {
   // must take its IMMEDIATE path there, or it hangs until the last-resort
   // failsafe (the "clouds appear seconds late on /pricing" bug). Checked before
   // the ?intro override since forcing an intro that never mounts is meaningless.
-  if (window.location.pathname !== "/") return false;
+  // INITIAL_PATH, not the live pathname: the decision belongs to the document
+  // load, so an SPA navigation to "/" from an interior page stays a no-play.
+  if (INITIAL_PATH !== "/") return false;
 
   // Dev/QA overrides: ?intro=force always plays (even mid-page), ?intro=skip never.
   const q = new URLSearchParams(window.location.search).get("intro");
@@ -132,9 +126,12 @@ function computeShouldPlay(): boolean {
   if (window.matchMedia(REDUCE_MOTION).matches) return false;
   // No WebGL → the glass/rocks can't render; skip so the DOM rocks reveal normally.
   if (!hasWebGL()) return false;
-  // Only welcome at the hero — never strand a mid-page refresh under a locked,
-  // off-screen intro (see file header).
-  if (!atHeroTop()) return false;
+  // NO scroll-position gate here (the old atHeroTop() check): homepage loads
+  // are FORCED to the top by the layout's inline script, and reading scrollY
+  // at hydration raced browsers that restore/anchor scroll late — a transient
+  // non-zero value suppressed the welcome into the glitchy loader quick-fade
+  // and stranded the visitor mid-page. The welcome now always plays at the
+  // hero; intro.tsx zeroes any stray scroll right before it measures.
   return true;
 }
 
@@ -166,6 +163,29 @@ if (typeof window !== "undefined") {
 
 export function introHasRevealed(): boolean {
   return revealed;
+}
+
+/**
+ * Is a welcome still OWED this document load? True from a homepage hard load
+ * until the reveal fires (dock, bail, or <Intro>'s unmount-consume). This —
+ * not introWillPlay() — is what the mount gates (<Intro>, <IntroLoader>) and
+ * every reveal-waiting consumer must read: introWillPlay() is the memoised
+ * INTENT and stays true for the whole document lifetime, so on a client-side
+ * navigation back to the homepage it alone would replay the welcome (or park
+ * the hero behind a reveal that already happened). Reading THIS instead makes
+ * the welcome single-shot per document load: it triggers on first load and
+ * refresh only, never on an SPA return.
+ */
+export function introPending(): boolean {
+  return introWillPlay() && !revealed;
+}
+
+/** Did this document's initial load happen on the homepage? <IntroLoader> uses
+ *  it to tell a homepage HARD load with a suppressed welcome (its SSR cover has
+ *  painted — fade it out gently) from a client-side arrival (no SSR cover
+ *  exists and none must ever paint). */
+export function documentLoadedOnHome(): boolean {
+  return INITIAL_PATH === "/";
 }
 
 /**

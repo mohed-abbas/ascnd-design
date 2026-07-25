@@ -2,7 +2,7 @@
 
 import { useEffect, useLayoutEffect } from "react";
 import gsap from "gsap";
-import { INTRO_REVEAL_EVENT, introWillPlay } from "@/components/sections/intro/intro-state";
+import { INTRO_REVEAL_EVENT, introPending } from "@/components/sections/intro/intro-state";
 
 // useLayoutEffect on the client (parks/plays before paint, no flash); falls back
 // to useEffect during SSR to avoid React's server warning. Mirrors hero-reveal.tsx.
@@ -76,10 +76,12 @@ export default function RockReveal() {
       );
     };
 
-    // While the welcome intro plays, the DOM rocks stay parked until the glass
-    // docks (INTRO_REVEAL_EVENT) so the welcome shows only the WebGL rocks.
+    // While a welcome is still pending, the DOM rocks stay parked until the
+    // glass docks (INTRO_REVEAL_EVENT) so the welcome shows only the WebGL
+    // rocks. introPending(), not introWillPlay(): on a client-side nav back to
+    // the homepage the welcome has already run — drift immediately.
     let stopWaiting: (() => void) | undefined;
-    if (introWillPlay()) {
+    if (introPending()) {
       const onReveal = () => crossfade();
       window.addEventListener(INTRO_REVEAL_EVENT, onReveal, { once: true });
       stopWaiting = () =>
