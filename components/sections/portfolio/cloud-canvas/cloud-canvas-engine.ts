@@ -1121,7 +1121,21 @@ export class CloudCanvasEngine {
       // Atmospheric haze, NOT black: this site's depth cue is receding INTO the
       // sky (white/alpha — the clouds, the rocks), never toward black, which
       // reads muddy over the bright atmosphere.
-      ctx.globalAlpha = Math.min(0.44, dim);
+      //
+      // ⚠️ Scaled BY THE TILE'S OWN ALPHA. This used to assign the raw haze
+      // straight to globalAlpha, which OVERRODE the tile's alpha instead of
+      // composing with it — so the wash could end up more opaque than the tile
+      // beneath it. At the far pole that was a 0.34 white fill over a tile drawn
+      // at 0.24: a blank white card. That's the "white tiles" that flashed on
+      // every filter change — re-forming swings tiles through far z, and a
+      // filtered tab GROWS them (densityFactors), so the artefact got bigger the
+      // fewer projects were showing. It hit evaporating tiles the same way,
+      // their photo fading to nothing while the wash kept painting at full
+      // strength.
+      //
+      // Multiplying is also what the lite path has always done a few lines up
+      // (alpha *= 1 - dim), so this puts the two back in agreement.
+      ctx.globalAlpha = alpha * Math.min(0.44, dim);
       ctx.fillStyle = "#fff";
       ctx.fillRect(-w / 2, -h / 2, w, h);
     }
