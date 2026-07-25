@@ -165,11 +165,22 @@ export default function Footer() {
             is the ADVANCE width (2.671em, side bearings included), slightly
             wider than the ink — centring leaves the ink spanning the column
             with a ~6px optical shift, invisible at this scale.
-            FooterReveal drives its blur-rise via [data-footer-wordmark]. */}
+            FooterReveal drives its blur-rise via [data-footer-wordmark].
+
+            pointer-events-none is LOAD-BEARING, not tidiness. At 38.574cqw
+            (~461px) with leading-none this <p>'s box is ~461px tall, while the
+            ink-trimming margins (mt -0.1375em ≈ -63px) only pull it UP — a
+            negative margin moves the box, it doesn't shrink it. So the box
+            overlaps the nav row and the legal row stacked above it and, being
+            later in DOM order at the same z, took every click on them. Hovers
+            still landed wherever a link's own glyphs won the hit test, which is
+            why this read as "sometimes hoverable, never clickable". The element
+            is aria-hidden + select-none decoration; it should never take input.
+            (Same reason the cliff cutouts below carry it.) */}
         <p
           data-footer-wordmark
           aria-hidden
-          className="w-full whitespace-nowrap text-center font-product font-bold leading-none tracking-[-0.0151em] text-white select-none text-[38.574cqw] mt-[-0.1375em] mb-[-0.1305em]"
+          className="pointer-events-none w-full whitespace-nowrap text-center font-product font-bold leading-none tracking-[-0.0151em] text-white select-none text-[38.574cqw] mt-[-0.1375em] mb-[-0.1305em]"
         >
           ascnd
         </p>
