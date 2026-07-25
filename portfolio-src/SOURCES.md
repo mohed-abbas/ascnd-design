@@ -56,7 +56,23 @@ the web set.
 `emerald-poster-help` is the only image in the whole set that needs an
 off-centre cut; see `CROPS` in `scripts/optimize-portfolio-images.mjs`.
 
-## misc
+## misc — Figma "Design shortlist"
 
-Not yet exported. The remaining six `cloud-NN.webp` files are placeholders from
-the Figma "Startup" collage and get replaced the same way.
+Same file key, section `89:241` (`Mics`). All device mockups.
+
+| slug | Figma node | scale | export px | form | note |
+|---|---|---|---|---|---|
+| `phone-mockup-finance` | `51:4339` | 0.25 | 683×1024 | portrait | |
+| `laptop-mockup` | `51:4512` | 0.4 | 689×1033 | portrait | |
+| `desktop-mockup` | `52:4528` | 0.25 | 1024×768 | landscape | Pro Display XDR |
+| `phone-mockup-fitness` | `52:112177` | 0.25 | 1024×768 | **portrait** | 4:3 source, portrait slot — see below |
+| `tablet-mockup` | `52:103841` | 0.32 | 983×983 | square | iPad on sofa |
+
+`phone-mockup-fitness` is the one place where the source aspect and the right
+slot disagree: the frame is 4:3 but its subject is a vertical phone on black, so
+the landscape slot would spend half the tile on empty background. `form` is
+authored per project precisely so the slot can follow the subject rather than
+the file.
+
+With this batch the placeholder set is fully retired — every tile on the globe
+is real work.

@@ -19,11 +19,10 @@
  * root, deliberately OUTSIDE public/ so they are never served); the Figma node
  * IDs are recorded in portfolio-src/SOURCES.md so any frame can be re-pulled.
  *
- * STATUS: the `web` and `branding` sets are real (slug filenames, from the Figma
- * "Design shortlist" → webdesigns / BrandingTiles). The remaining six `cloud-NN`
- * entries are still PLACEHOLDERS from the Figma "Startup" collage, awaiting the
- * misc export — their names are invented and their forms seeded from natural
- * aspect.
+ * Every entry is real work now — the Figma "Startup" collage placeholders that
+ * seeded this file are gone, and the set comes from the Figma "Design shortlist"
+ * (webdesigns / BrandingTiles / Mics). portfolio-src/SOURCES.md maps every slug
+ * back to its node ID.
  */
 
 export type ProjectType = "web" | "branding" | "misc";
@@ -64,29 +63,31 @@ export const cloudProjects: CloudProject[] = [
   { src: `${dir}/cloth-tag-mockup.webp`, name: "cloth tag mockup", type: "misc", form: "square" },
   { src: `${dir}/kalinka.webp`, name: "Kalinka", type: "web", form: "landscape" },
   { src: `${dir}/emerald-poster-mind.webp`, name: "Emerald Psychiatry — your mind matters", type: "branding", form: "portrait" },
-  { src: `${dir}/cloud-27.webp`, name: "Project 27", type: "misc", form: "square" },
+  { src: `${dir}/desktop-mockup.webp`, name: "desktop mockup", type: "misc", form: "landscape" },
   { src: `${dir}/medlink.webp`, name: "Medlink", type: "web", form: "landscape" },
   // Pre-cropped by scripts/optimize-portfolio-images.mjs (CROPS), not centred:
   // a centred cut into the portrait slot bisects the emerald wordmark.
   { src: `${dir}/emerald-poster-help.webp`, name: "Emerald Psychiatry — ask for help", type: "branding", form: "portrait" },
-  { src: `${dir}/cloud-07.webp`, name: "Project 07", type: "misc", form: "portrait" },
+  { src: `${dir}/phone-mockup-finance.webp`, name: "phone mockup — finance", type: "misc", form: "portrait" },
   { src: `${dir}/crypkit.webp`, name: "CrypKit", type: "web", form: "landscape" },
   { src: `${dir}/elyv-logo.webp`, name: "ElyV", type: "branding", form: "square" },
-  { src: `${dir}/cloud-15.webp`, name: "Project 15", type: "misc", form: "portrait" },
+  { src: `${dir}/tablet-mockup.webp`, name: "tablet mockup", type: "misc", form: "square" },
   { src: `${dir}/dubai-blueprint.webp`, name: "Dubai Blueprint", type: "web", form: "landscape" },
   { src: `${dir}/emerald-poster-ohio.webp`, name: "Emerald Psychiatry — telehealth", type: "branding", form: "portrait" },
-  { src: `${dir}/keycap-mockup.webp`, name: "keycap mockup", type: "misc", form: "landscape" },
+  { src: `${dir}/laptop-mockup.webp`, name: "laptop mockup", type: "misc", form: "portrait" },
   { src: `${dir}/tasktrox-webapp.webp`, name: "Tasktrox — web app", type: "web", form: "landscape" },
   { src: `${dir}/circle-mark.webp`, name: "circle mark", type: "branding", form: "square" },
-  { src: `${dir}/cloud-16.webp`, name: "Project 16", type: "misc", form: "portrait" },
+  // 4:3 source, PORTRAIT slot — the frame is landscape but its subject is a
+  // vertical phone on black, so the landscape slot would spend half the tile on
+  // empty background. Cropping to portrait fills it with the device.
+  { src: `${dir}/phone-mockup-fitness.webp`, name: "phone mockup — fitness", type: "misc", form: "portrait" },
   { src: `${dir}/operations-dashboard.webp`, name: "operations dashboard", type: "web", form: "landscape" },
   // `square` (not landscape) on purpose: the 4:3 source centre-crops to 1:1
   // around the monitor and drops the empty studio floor, which frames it
   // tighter AND breaks up an otherwise all-landscape web set.
   { src: `${dir}/monitor-mockup.webp`, name: "monitor mockup", type: "misc", form: "square" },
   { src: `${dir}/crypto-scratchers.webp`, name: "crypto scratchers", type: "web", form: "landscape" },
-  { src: `${dir}/cloud-18.webp`, name: "Project 18", type: "misc", form: "portrait" },
+  { src: `${dir}/keycap-mockup.webp`, name: "keycap mockup", type: "misc", form: "landscape" },
   { src: `${dir}/performance-consultancy.webp`, name: "performance consultancy", type: "web", form: "landscape" },
-  { src: `${dir}/cloud-28.webp`, name: "Project 28", type: "misc", form: "portrait" },
   { src: `${dir}/fashion-storefront.webp`, name: "fashion storefront", type: "web", form: "landscape" },
 ];
