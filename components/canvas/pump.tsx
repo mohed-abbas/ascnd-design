@@ -115,6 +115,10 @@ export function Pump({ plane }: { plane: PlaneName }) {
     // so fiber never sees a gap-sized delta after mount/idle/tab-away (M3).
     let vt = 0;
     let lastPaintSec = 0; // real gsap time (s) of the last paint — for vt's delta
+    // Has the ONE settle frame for the current idle period already been painted?
+    // See the settle block in tick(). Reset on every normal paint, so each new
+    // idle period gets exactly one.
+    let idleSettled = false;
 
     // HOST-OWNED MOUNT BURST (M2): this effect lives INSIDE the Canvas, so it
     // re-runs on every ContextWatchdog key-bump remount — where a fresh context
@@ -141,7 +145,39 @@ export function Pump({ plane }: { plane: PlaneName }) {
         if (f === Infinity) uncapped = true;
         else if (f > effRate) effRate = f;
       });
-      if (!anyRequesting) return; // gated off → idle to zero
+      // SETTLE FRAME — paint exactly ONE more frame when the plane goes idle,
+      // then truly idle to zero.
+      //
+      // Under frameloop="never" the drawing buffer PERSISTS: ClearPass only runs
+      // inside an advance, so the instant the last view stops requesting, the
+      // frame that happens to be in the buffer is frozen onto a fixed,
+      // full-viewport canvas — and nothing will ever clear it. Whether that
+      // frozen frame is blank is pure luck, because a view's paint gate and its
+      // on-screen position are updated by DIFFERENT mechanisms at different
+      // times: the testimonial rocks flip to "demand" from a ScrollTrigger,
+      // which is evaluated synchronously in the scroll frame, while their pixels
+      // are placed from the track's rect, measured by drei per render. Stop
+      // advancing on the same tick the gate closes and the last painted frame
+      // still has the rocks where they were — they stay on screen over whatever
+      // the user scrolls to next. Big jumps are the dangerous case (Lenis
+      // scrollTo from the back-to-top control covers the whole page in a fixed
+      // duration, so the taller the viewport the more ground per frame), which
+      // is why this showed up as "rocks persist into the hero" rather than as a
+      // steady leak.
+      //
+      // One advance costs one frame and fixes it by construction: drei's <View>
+      // re-measures its track and skips when off-screen, so this repaints at the
+      // CURRENT scroll position — ClearPass wipes, gone-away views draw nothing,
+      // still-visible ones redraw identically.
+      if (!anyRequesting) {
+        if (!idleSettled) {
+          advance(vt, true);
+          debug.advances++;
+          idleSettled = true;
+        }
+        return; // gated off → idle to zero
+      }
+      idleSettled = false;
 
       // Rate limit.
       const nowMs = time * 1000;
