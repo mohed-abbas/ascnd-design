@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist_Mono, Instrument_Serif } from "next/font/google";
 import localFont from "next/font/local";
 import "./globals.css";
@@ -7,6 +7,7 @@ import CloudLayer from "@/components/background/cloud-layer";
 import SharedCanvasHost from "@/components/canvas/shared-canvas-host";
 import Cursor from "@/components/cursor/cursor";
 import { FLAGS } from "@/lib/flags";
+import { SITE_DESCRIPTION, SITE_NAME, SITE_TAGLINE, SITE_URL } from "@/lib/site";
 import LenisProvider from "@/components/providers/lenis-provider";
 import QualityController from "@/components/providers/quality-controller";
 import ThemeDriver from "@/components/providers/theme-driver";
@@ -38,10 +39,56 @@ const productSans = localFont({
   ],
 });
 
+/**
+ * Root metadata. `metadataBase` is what lets every route below express its
+ * canonical/OG URLs as relative paths — without it, a relative URL in any
+ * metadata field is a build error (Next metadata docs, "metadataBase").
+ *
+ * `title.template` means a child route sets only its own name ("pricing") and
+ * gets "pricing — ascnd" for free; `title.default` covers routes that set none.
+ */
 export const metadata: Metadata = {
-  title: "ascnd — your design and front-end team without the hiring",
-  description:
-    "Subscribe and request unlimited brand, web, and product design. Delivered in days, shipped as real code.",
+  metadataBase: new URL(SITE_URL),
+  title: {
+    default: `${SITE_NAME} — ${SITE_TAGLINE}`,
+    template: `%s — ${SITE_NAME}`,
+  },
+  description: SITE_DESCRIPTION,
+  applicationName: SITE_NAME,
+  alternates: { canonical: "/" },
+  openGraph: {
+    type: "website",
+    siteName: SITE_NAME,
+    title: `${SITE_NAME} — ${SITE_TAGLINE}`,
+    description: SITE_DESCRIPTION,
+    url: "/",
+    locale: "en_US",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: `${SITE_NAME} — ${SITE_TAGLINE}`,
+    description: SITE_DESCRIPTION,
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: { index: true, follow: true, "max-image-preview": "large" },
+  },
+};
+
+/**
+ * The sky is the brand — tint the mobile browser chrome to match it rather than
+ * letting Safari/Chrome pick white and break the edge-to-edge sky. One entry per
+ * scheme so the night sky doesn't get a bright chrome bar above it.
+ *
+ * themeColor lives on the `viewport` export, NOT `metadata` — Next moved it and
+ * warns at build time if it's in the wrong one (generateViewport docs).
+ */
+export const viewport: Viewport = {
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#62abff" },
+    { media: "(prefers-color-scheme: dark)", color: "#1c3f6e" },
+  ],
 };
 
 export default function RootLayout({
