@@ -95,7 +95,16 @@ export default function Portfolio() {
           <div
             role="group"
             aria-label="Filter projects by type"
-            className="pointer-events-auto flex items-center gap-[2px] rounded-full border border-white/30 bg-white/10 p-[4px] shadow-[inset_0_0_18px_0_rgba(255,255,255,0.25)] backdrop-blur-[10px]"
+            // No backdrop-blur on a coarse pointer. This pill sits z-10 DIRECTLY
+            // OVER the globe canvas, which repaints continuously while the
+            // section is on screen — so the blur had to re-sample its backdrop
+            // on every canvas frame. Worse, a backdrop-filter turns the content
+            // behind it into a backdrop root, which can stop the canvas being
+            // composited on its own layer: every repaint then dirties a region
+            // the compositor is also scrolling, which is what produces tearing
+            // and flashing during a scroll rather than a clean slide.
+            // The white/10 fill and inset sheen hold the glass read without it.
+            className="pointer-events-auto flex items-center gap-[2px] rounded-full border border-white/30 bg-white/10 p-[4px] shadow-[inset_0_0_18px_0_rgba(255,255,255,0.25)] backdrop-blur-[10px] pointer-coarse:backdrop-blur-none"
           >
             {PROJECT_FILTERS.map(({ value, label }) => {
               const isActive = value === filter;
