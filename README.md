@@ -1,36 +1,88 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# ascnd
 
-## Getting Started
+The marketing site for **ascnd** — a design and front-end subscription. One page
+of scroll-driven WebGL over a live sky, plus a standalone `/pricing` route.
 
-First, run the development server:
+Production: [ascnd.design](https://ascnd.design)
+
+## Stack
+
+| | |
+|---|---|
+| Framework | Next.js 16 (App Router, Turbopack) · React 19.2 |
+| Styling | Tailwind v4, CSS-first — `@theme` in `app/globals.css`, **no `tailwind.config.js`** |
+| 3D | Three.js · React Three Fiber · drei |
+| Motion | GSAP + ScrollTrigger, Lenis smooth-scroll |
+| Language | TypeScript, path alias `@/*` → repo root |
+
+## Getting started
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+npm run dev      # Turbopack dev server → http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Only **one** `next dev` may run per project directory — Next 16 enforces this,
+and two instances sharing `.next/` will corrupt the cache. If startup fails with
+`SyntaxError: Unexpected end of JSON input`, stop every `next` process,
+`rm -rf .next`, and start one.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+| Script | What it does |
+|---|---|
+| `npm run dev` | dev server (Turbopack) |
+| `npm run build` | production build |
+| `npm run start` | serve the production build |
+| `npm run lint` | ESLint (`next/core-web-vitals` + `next/typescript`) |
+| `npm run optimize:portfolio` | re-encode the portfolio globe imagery |
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+**There is no test runner.** No Jest, Vitest or Playwright suite exists — don't
+infer one from the `playwright` devDependency (it's used for ad-hoc scripted
+capture, not tests). Verification is `lint` + `build` + a manual browser pass.
 
-## Learn More
+## Layout
 
-To learn more about Next.js, take a look at the following resources:
+`app/` is routing only; all UI lives in the root-level `components/` tree.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```
+app/            routes, metadata, robots/sitemap/OG, error + 404 UI
+components/     background · canvas · cursor · providers · ui · sections/*
+lib/            site constants, perf tiers, theme palette, flags
+docs/           architecture decision records — read before touching WebGL
+public/         fonts, textures, cloud sprites, rock cut-outs, imagery
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Read `CLAUDE.md` before making structural changes — it documents the layered
+rendering model (fixed sky behind scrolling content, one shared GSAP ticker, one
+shared WebGL canvas host) and the constraints that keep it working. The
+non-negotiable ones:
 
-## Deploy on Vercel
+- **No `filter` / `backdrop-filter` on any ancestor of the fixed background
+  layers** — a blurred ancestor breaks `position: fixed` descendants.
+- **Every heavy effect idles to zero**, rides the shared ticker, reads the
+  quality tier, and caps `dpr` at 1.5.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+`docs/` holds the reasoning behind the cloud rendering, colour/lighting, canvas
+consolidation and performance work. Those are decision records — check them
+before reversing something that looks arbitrary.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Branches
+
+- **`main`** — production. No sandboxes, no debug query params.
+- **`dev`** — the workshop. Carries the `/lab/*` tuning routes and their leva
+  panels. **Merging `dev` into `main` re-introduces them**: drop `app/lab/`,
+  `app/api/lab/` and the `leva` dependency as part of any such merge.
+
+## Deploying
+
+Hosted on Vercel. `docs/hosting-vercel-and-domain.md` records the plan analysis
+and the exact DNS steps for pointing `ascnd.design` at it.
+
+Set `NEXT_PUBLIC_SITE_URL` per environment so canonical, OG and sitemap URLs
+describe the deployment they're on; it defaults to the production origin.
+
+## Fonts
+
+Product Sans is the global default, self-hosted from `app/fonts/`. It is
+**Google's proprietary corporate typeface** — a licensing question that needs
+answering before launch, not a settled one. Instrument Serif (hero accent) and
+Geist Mono come from `next/font/google`.
