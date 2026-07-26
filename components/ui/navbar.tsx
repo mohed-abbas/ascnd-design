@@ -190,17 +190,13 @@ export default function Navbar() {
         // inline on mount + toggle; the max-md values just approximate the
         // bottom-centre pill (140-wide, flush to the frame bottom) so there's no
         // wrong-shaped flash before the first gsap.set lands.
-        // The backdrop-blur is dropped on a coarse pointer WHILE CLOSED. This
-        // element is `fixed` and, on mobile, is the bottom-centre pill that is
-        // on screen for the entire page — so its backdrop-filter had to
-        // resample the page moving behind it on every scroll frame, forever,
-        // to blur a 140×52 capsule sitting over a soft sky gradient. Open, it
-        // becomes the full menu panel with real content behind it and scrolling
-        // has stopped, so there the blur is worth paying for and is kept.
-        // Desktop keeps it in both states (max-md/pointer-coarse only).
-        className={`pointer-events-none absolute bottom-[108px] left-[332px] right-[22px] top-[108px] rounded-[61px] border border-white/30 bg-white/10 shadow-[inset_0_0_28.3px_0_rgba(255,255,255,0.25)] backdrop-blur-[10px] max-md:bottom-0 max-md:left-[101px] max-md:right-[101px] max-md:top-[368px] max-md:rounded-[26px] ${
-          open ? "" : "pointer-coarse:backdrop-blur-none"
-        }`}
+        // The backdrop-blur runs on EVERY input type, phones included. It was
+        // briefly dropped on a coarse pointer while closed (this element is
+        // fixed and permanently on screen, so the filter resamples the page
+        // behind it every scroll frame) — but the capsule reads as flat plastic
+        // without it, and the glass is the point. Restored deliberately: the
+        // cost is accepted, not overlooked.
+        className="pointer-events-none absolute bottom-[108px] left-[332px] right-[22px] top-[108px] rounded-[61px] border border-white/30 bg-white/10 shadow-[inset_0_0_28.3px_0_rgba(255,255,255,0.25)] backdrop-blur-[10px] max-md:bottom-0 max-md:left-[101px] max-md:right-[101px] max-md:top-[368px] max-md:rounded-[26px]"
       />
 
       {/* Menu content — fixed in the nav frame (so it never slides as the box
