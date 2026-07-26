@@ -148,6 +148,16 @@ const SLOT_SIZE: Record<SlotType, { w: number; h: number }> = {
  */
 const DESIGN_BASE = 982;
 
+/**
+ * Canvas width at or below which `config.narrow` is merged over the authored
+ * preset (cloud-canvas-config.ts). 640 rather than the site's 768 md
+ * breakpoint: what actually matters here is which dimension `min(cssW, cssH)`
+ * binds to — i.e. whether the viewport is PORTRAIT — and 640 keeps a landscape
+ * phone and a small desktop window on the wide composition, where the sphere
+ * is height-bound and already fits.
+ */
+const NARROW_MAX_W = 640;
+
 interface LoadedImage {
   source: CanvasImageSource; // the downscaled fast copy
   aspect: number; // natural w/h, for "auto" slot classification
@@ -398,6 +408,14 @@ function buildSlotTypes(
 export class CloudCanvasEngine {
   private canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
+  /**
+   * The config as AUTHORED (cloud-canvas-config.ts) — the preset the consumer
+   * handed us, kept verbatim so the narrow merge is always applied to a clean
+   * base rather than compounding on itself across resizes.
+   */
+  private authored: CloudCanvasConfig;
+  /** The RESOLVED config every frame reads: `authored`, plus `authored.narrow`
+   *  merged over it on a narrow canvas. Recomputed in resize(). */
   private config: CloudCanvasConfig;
   private images: CloudProject[];
 
@@ -442,6 +460,9 @@ export class CloudCanvasEngine {
   // height + the fade stops, so it refreshes on resize or a stop change only.
   private fadeGradient: CanvasGradient | null = null;
   private fadeGradientKey = "";
+  // …and the same for the horizontal pass (config.edgeFadeX), keyed on width.
+  private fadeGradientX: CanvasGradient | null = null;
+  private fadeGradientXKey = "";
 
   // Core-label metrics cache (config.coreLabel). Resolving the CSS custom
   // properties + shaping each run costs a style read and a measureText per run;
@@ -482,6 +503,9 @@ export class CloudCanvasEngine {
     const ctx = canvas.getContext("2d", { alpha: true });
     if (!ctx) throw new Error("CloudCanvasEngine: 2D context unavailable");
     this.ctx = ctx;
+    this.authored = config;
+    // Provisional: resize() resolves the real one before the first frame, and
+    // it can't run yet (the canvas has no client box at construction time).
     this.config = config;
     this.images = images;
     this.yaw = config.camera.yaw;
@@ -606,7 +630,8 @@ export class CloudCanvasEngine {
 
   setConfig(config: CloudCanvasConfig): void {
     const prev = this.config;
-    this.config = config;
+    this.authored = config;
+    this.resolveConfig();
     // A mode/count/layout/balance change alters the card set; the rest are read live.
     const layoutChanged =
       prev.mode !== config.mode ||
@@ -749,6 +774,9 @@ export class CloudCanvasEngine {
     const rect = this.canvas.getBoundingClientRect();
     this.cssW = Math.max(1, rect.width);
     this.cssH = Math.max(1, rect.height);
+    // Before anything below reads this.config — the narrow preset can change
+    // centerY/spread/edgeFade, all of which the cached values here depend on.
+    this.resolveConfig();
     // LITE: CPU raster cost scales directly with backing-store pixels, so a
     // software canvas draws at 1.0 instead of the site-wide 1.5 cap — the soft
     // atmospheric look hides the resolution drop, the frame-time doesn't.
@@ -764,6 +792,22 @@ export class CloudCanvasEngine {
     // change it (7.5vw), so the cached metrics must go with it.
     this.labelSizePx = this.resolveLabelSizePx();
     this.labelMetrics = null;
+  }
+
+  /**
+   * Merge `authored.narrow` over the authored preset on a narrow canvas.
+   *
+   * A fresh object each time rather than mutating in place, so `this.config`
+   * stays a plain value the render path can read without defensive checks —
+   * and always derived from `authored`, never from the previous resolution, so
+   * repeatedly crossing the breakpoint can't accumulate.
+   */
+  private resolveConfig(): void {
+    const narrow = this.authored.narrow;
+    this.config =
+      narrow && this.cssW <= NARROW_MAX_W
+        ? { ...this.authored, ...narrow }
+        : this.authored;
   }
 
   /**
@@ -947,8 +991,8 @@ export class CloudCanvasEngine {
       // per frame on CPU raster on its own, so lite folds the same stops into
       // a per-tile alpha ramp on the tile's screen centre instead — whole-tile
       // fade rather than a pixel gradient, visually close at these tile sizes.
-      if (this.lite && this.config.edgeFade) {
-        fade *= this.edgeFadeRamp(screenY);
+      if (this.lite && (this.config.edgeFade || this.config.edgeFadeX)) {
+        fade *= this.edgeFadeRamp(screenX, screenY);
       }
       return { card, screenX, screenY, x: r.x, z, fade };
     });
@@ -1019,6 +1063,34 @@ export class CloudCanvasEngine {
         grad.addColorStop(edgeFade.bottom[1], "rgba(0,0,0,0)");
         this.fadeGradient = grad;
         this.fadeGradientKey = key;
+      }
+      ctx.globalCompositeOperation = "destination-in";
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, this.cssW, this.cssH);
+      ctx.globalCompositeOperation = "source-over";
+    }
+
+    // The horizontal twin (config.edgeFadeX), a second destination-in pass.
+    // Two passes rather than one because the two gradients run on different
+    // axes and a CanvasGradient is one-dimensional; stacking them multiplies
+    // alpha, which is the correct compositing for two independent dissolves.
+    //
+    // Only the narrow preset sets edgeFadeX, so no wide viewport pays for this
+    // fill at all — and on a phone the canvas is small enough that a second
+    // full-surface fill is a rounding error next to the ~30 tile blits it
+    // follows. (Lite skips it — same stops, applied per tile in edgeFadeRamp.)
+    const edgeFadeX = this.config.edgeFadeX;
+    if (edgeFadeX && !this.lite) {
+      const key = `${this.cssW}|${edgeFadeX.left[0]},${edgeFadeX.left[1]},${edgeFadeX.right[0]},${edgeFadeX.right[1]}`;
+      let grad = this.fadeGradientX;
+      if (!grad || this.fadeGradientXKey !== key) {
+        grad = ctx.createLinearGradient(0, 0, this.cssW, 0);
+        grad.addColorStop(edgeFadeX.left[0], "rgba(0,0,0,0)");
+        grad.addColorStop(edgeFadeX.left[1], "rgba(0,0,0,1)");
+        grad.addColorStop(edgeFadeX.right[0], "rgba(0,0,0,1)");
+        grad.addColorStop(edgeFadeX.right[1], "rgba(0,0,0,0)");
+        this.fadeGradientX = grad;
+        this.fadeGradientXKey = key;
       }
       ctx.globalCompositeOperation = "destination-in";
       ctx.fillStyle = grad;
@@ -1108,19 +1180,30 @@ export class CloudCanvasEngine {
   }
 
   /**
-   * LITE stand-in for the destination-in edge fade: a clamped linear alpha
-   * ramp over the tile's screen-space centre against the SAME config.edgeFade
-   * stops — 0→1 across top[0]..top[1] of cssH, 1→0 across bottom[0]..bottom[1].
+   * LITE stand-in for the destination-in edge fades: a clamped linear alpha
+   * ramp over the tile's screen-space centre against the SAME stops —
+   * config.edgeFade 0→1 across top[0]..top[1] of cssH and 1→0 across
+   * bottom[0]..bottom[1], config.edgeFadeX likewise across cssW. The four ramps
+   * MIN together (not multiply) so a tile in a corner isn't double-dimmed.
    */
-  private edgeFadeRamp(screenY: number): number {
-    const edgeFade = this.config.edgeFade;
-    if (!edgeFade) return 1;
-    const y = screenY / this.cssH;
-    const [t0, t1] = edgeFade.top;
-    const [b0, b1] = edgeFade.bottom;
+  private edgeFadeRamp(screenX: number, screenY: number): number {
     let ramp = 1;
-    if (t1 > t0) ramp = Math.min(ramp, Math.max(0, Math.min(1, (y - t0) / (t1 - t0))));
-    if (b1 > b0) ramp = Math.min(ramp, Math.max(0, Math.min(1, (b1 - y) / (b1 - b0))));
+    const edgeFade = this.config.edgeFade;
+    if (edgeFade) {
+      const y = screenY / this.cssH;
+      const [t0, t1] = edgeFade.top;
+      const [b0, b1] = edgeFade.bottom;
+      if (t1 > t0) ramp = Math.min(ramp, Math.max(0, Math.min(1, (y - t0) / (t1 - t0))));
+      if (b1 > b0) ramp = Math.min(ramp, Math.max(0, Math.min(1, (b1 - y) / (b1 - b0))));
+    }
+    const edgeFadeX = this.config.edgeFadeX;
+    if (edgeFadeX) {
+      const x = screenX / this.cssW;
+      const [l0, l1] = edgeFadeX.left;
+      const [r0, r1] = edgeFadeX.right;
+      if (l1 > l0) ramp = Math.min(ramp, Math.max(0, Math.min(1, (x - l0) / (l1 - l0))));
+      if (r1 > r0) ramp = Math.min(ramp, Math.max(0, Math.min(1, (r1 - x) / (r1 - r0))));
+    }
     return ramp;
   }
 

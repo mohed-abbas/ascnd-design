@@ -151,6 +151,37 @@ export interface CloudCanvasConfig {
    */
   edgeFade?: { top: [number, number]; bottom: [number, number] };
   /**
+   * The same dissolve on the HORIZONTAL axis — `left`/`right` as fractions of
+   * the canvas WIDTH. Off by default, because on a landscape viewport the
+   * sphere never reaches the side edges: its radius is `min(cssW, cssH) × …`,
+   * which on a desktop band binds to the HEIGHT, so the globe is comfortably
+   * narrower than the canvas and there is nothing to fade.
+   *
+   * On a phone that same `min()` binds to the WIDTH instead, and the sphere is
+   * then as wide as the canvas by construction. Any attempt to use the tall
+   * band's vertical room (see `narrow` below) pushes the limb past both side
+   * edges, where without this it terminates in a hard vertical cut — the one
+   * straight line in a composition made entirely of soft edges. With it the
+   * limb dissolves into the sky exactly like the top and bottom already do.
+   */
+  edgeFadeX?: { left: [number, number]; right: [number, number] };
+  /**
+   * Overrides applied when the canvas is NARROWER than NARROW_MAX_W
+   * (cloud-canvas-engine.ts) — the phone composition, authored right here
+   * beside the desktop one rather than hidden in the engine.
+   *
+   * Deliberately limited to the fields the engine reads LIVE each frame. The
+   * layout-affecting knobs (mode/layout/visibleCount/balance) are excluded on
+   * purpose: those rebuild the card set, so a viewport crossing the breakpoint
+   * mid-session would re-lay-out the globe under the reader.
+   */
+  narrow?: Partial<
+    Pick<
+      CloudCanvasConfig,
+      "spread" | "size" | "depth" | "centerY" | "autoSpeed" | "edgeFade" | "edgeFadeX"
+    >
+  >;
+  /**
    * Optional heading drawn at the formation's core, depth-sorted among the
    * tiles. Omit for a bare globe (the lab / default presets).
    */
@@ -226,6 +257,40 @@ export const CLOUD_CANVAS_PORTFOLIO_CONFIG: CloudCanvasConfig = {
   // leave a bald band where the type used to be. Starting the fade-in at the
   // tabs lets the sphere read as a full orbit around the centred heading.
   edgeFade: { top: [0.1, 0.22], bottom: [0.86, 0.98] },
+  // ── The phone composition ──────────────────────────────────────────────────
+  // Why it needs one at all: the radius is `min(cssW, cssH) × 0.45 × spread ×
+  // density × zoom`, and `min()` swaps which dimension it binds to. On the
+  // 1512×982 design frame it binds to the HEIGHT and the sphere fills the band.
+  // On a 390-wide phone it binds to the WIDTH — so the globe came out ~379px
+  // across inside a ~700px-tall band and sat as a small ball in a large empty
+  // sky, with roughly 200px of nothing between the filter tabs and its top
+  // edge. Nothing was broken; the desktop preset simply doesn't say anything
+  // about what to do with the extra 300px of height a portrait viewport has.
+  //
+  //   • spread 1.38 — grows the sphere to ~464px across (≈119% of the screen),
+  //     which is what finally uses the vertical room. It overflows the sides by
+  //     construction, hence edgeFadeX below; the overflow is the price of the
+  //     globe reading as a globe rather than a marble. Filtered tabs land well
+  //     inside the screen anyway (densityFactors CONTRACTS spread below 16
+  //     tiles, to ~296px across), so this only bites on the full "all" set.
+  //   • centerY 0.50 — lifts the orbit centre so the sphere's crown sits just
+  //     under the filter tabs and the leftover sky falls BELOW, where the
+  //     section's own pb-section and the next section's approach already read
+  //     as breathing room. Above the globe the same gap read as a hole.
+  //     Measured on a 390×700 band, "all" tab: the tabs end at y=107 and the
+  //     first tile ink began at y=211 — a 104px band of empty sky. Same math at
+  //     spread 1.38 / centerY 0.50 puts the crown tile's centre at y≈126, i.e.
+  //     inside the top edgeFade ramp (70→154), so it dissolves under the tabs
+  //     rather than clearing them.
+  //   • the vertical edgeFade is unchanged and now actually does something:
+  //     at this radius the crown reaches up into the top ramp, so tiles
+  //     dissolve as they pass behind the tabs instead of clearing them by
+  //     150px, and the bottom limb reaches the bottom ramp for the first time.
+  narrow: {
+    spread: 1.38,
+    centerY: 0.5,
+    edgeFadeX: { left: [0, 0.12], right: [0.88, 1] },
+  },
   // The section heading, living AT the core of the sphere (Figma 424:487). It
   // renders between the far and near halves of the painter's sort, so the work
   // orbits it in real depth — near tiles eclipse the words on their way past
