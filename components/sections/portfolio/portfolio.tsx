@@ -53,16 +53,20 @@ export default function Portfolio() {
   const [filter, setFilter] = useState<CloudFilter>("all");
 
   return (
-    // `pb` is sky BELOW the globe band. The sphere's lowest tiles run right to
-    // the canvas edge — unlike a text section, whose ink stops well inside its own
-    // padding — so the bare 25dvh Comparison brings to the boundary read as
-    // cramped against a hard edge of imagery. The padding lives on THIS section,
-    // not Comparison's top, so the extra air belongs to the globe and Comparison
-    // keeps the same 25dvh lead-in it gets coming from every other section.
+    // ASYMMETRIC padding, and the only section that can't just take `py-section`
+    // on both sides — because its two edges present very differently:
+    //   • BOTTOM: the sphere's lowest tiles run right to the canvas edge, so the
+    //     boundary starts at hard imagery. It takes the full `pb-section`, and
+    //     Comparison's own `pt-section` completes the house gap.
+    //   • TOP: the band already opens with 10dvh of its own sky above the filter
+    //     tabs (below), which is part of the same boundary. Only the remainder
+    //     is padded here, or the gap coming out of working-with would run to
+    //     ~1.5× the house value.
+    // Both edges therefore land on the SAME boundary as every other section.
     <section
       id="work"
       data-portfolio
-      className="relative w-full overflow-hidden pb-[14dvh] max-md:pb-[8dvh]"
+      className="relative w-full overflow-hidden pt-[8dvh] pb-section"
     >
       {/* The GLOBE BAND — an in-flow 100dvh block, and the containing block for
           the absolutely-positioned canvas.

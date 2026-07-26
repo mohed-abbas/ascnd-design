@@ -32,12 +32,12 @@ export default function WorkingWith() {
     <section
       data-working-with
       // Content-driven (no min-h-dvh): this is the sparsest section (~213px of
-      // text). 25dvh viewport-proportional padding gives it the same breathing
-      // room as the full-screen tagline/cards sections, scaling with the
-      // viewport but staying CONSISTENT with the other sections instead of the
-      // near-double air a fixed full-viewport section gave this sparse content
-      // (see comparison.tsx). Mobile keeps its full-height layout.
-      className="relative flex max-md:min-h-dvh w-full items-center justify-center overflow-hidden py-[25dvh] max-md:py-[12dvh]"
+      // text), so a full-viewport box left it floating in near-double the air of
+      // a dense one. `py-section` is the shared rhythm token (--gap-section in
+      // globals.css — see comparison.tsx for the rationale), which keeps this
+      // boundary identical to every other one. Mobile keeps its full-height
+      // layout; the token drops to 12dvh there on its own.
+      className="relative flex max-md:min-h-dvh w-full items-center justify-center overflow-hidden py-section"
     >
       {/* Word-by-word headline reveal + serif flourish + paragraph blur-in;
           renders nothing, drives the [data-ww-*] nodes below. */}

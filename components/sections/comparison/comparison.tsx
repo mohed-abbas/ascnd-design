@@ -56,15 +56,17 @@ export default function Comparison() {
   return (
     <section
       data-comparison
-      // Desktop is CONTENT-DRIVEN (no min-h-dvh) with viewport-proportional
-      // padding: 25dvh per side reproduces the breathing room of the
-      // full-screen tagline/cards sections (~25vh of air each side), so the
-      // rhythm SCALES with the viewport like they do — spacious on 2K, tighter
-      // on a laptop — while staying CONSISTENT across sections regardless of
-      // their content height (a fixed viewport section made sparse content float
-      // in far more air than dense content). Mobile keeps its full-height layout
-      // (max-md:min-h-dvh) + its own padding, untouched.
-      className="relative flex max-md:min-h-dvh w-full items-center justify-center overflow-hidden py-[25dvh] max-md:py-[12dvh]"
+      // CONTENT-DRIVEN (no min-h-dvh) + the shared section rhythm: `py-section`
+      // is --gap-section (globals.css), HALF the sky between two sections, so
+      // this boundary and every other one between padded sections come out the
+      // same. Viewport-proportional (dvh) so the rhythm scales like the
+      // full-screen tagline/cards sections it sits between, and CONSISTENT
+      // regardless of content height — a fixed-viewport section made sparse
+      // content float in far more air than dense content. This section used to
+      // carry a hand-written py-[25dvh]; two of those met at ~490px and read as
+      // a dead gap. Mobile keeps its full-height layout (max-md:min-h-dvh); the
+      // token drops to 12dvh there on its own.
+      className="relative flex max-md:min-h-dvh w-full items-center justify-center overflow-hidden py-section"
     >
       {/* Content block (Figma 469:646, 812×1360), flow-centred so a viewport
           shorter than the block grows the section (page scrolls) instead of

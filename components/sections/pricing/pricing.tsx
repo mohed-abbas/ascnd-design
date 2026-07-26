@@ -34,12 +34,11 @@ export default function Pricing() {
       // data-pricing stays the styling/query hook; ids are for anchors.
       id="plans"
       data-pricing
-      // Desktop content-driven (no min-h-dvh) with 25dvh viewport-proportional
-      // padding — matches the full-screen tagline/cards breathing room, so the
-      // rhythm scales with the viewport but stays consistent across sections
-      // (see comparison.tsx for the rationale). Mobile keeps its full-height
-      // layout + 20dvh padding, untouched.
-      className="relative flex max-md:min-h-dvh w-full items-center justify-center overflow-hidden py-[25dvh] max-md:py-[20dvh]"
+      // Desktop content-driven (no min-h-dvh) with the shared rhythm token
+      // `py-section` (--gap-section in globals.css — see comparison.tsx), so
+      // the sky above and below matches every other boundary on the page.
+      // Mobile keeps its full-height layout; the token drops to 12dvh there.
+      className="relative flex max-md:min-h-dvh w-full items-center justify-center overflow-hidden py-section"
     >
       <div className="flex w-[1146px] flex-col items-center gap-[20px] max-md:w-full max-md:px-6">
         {/* ── Header ─────────────────────────────────────────────────────── */}

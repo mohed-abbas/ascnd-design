@@ -57,7 +57,9 @@ export default function PlanCompare() {
   return (
     <section
       data-plan-compare
-      className="relative flex w-full items-center justify-center overflow-hidden py-[25dvh] max-md:py-[12dvh]"
+      // Shared section rhythm (--gap-section, globals.css — see comparison.tsx):
+      // /pricing runs on the same boundary as the homepage.
+      className="relative flex w-full items-center justify-center overflow-hidden py-section"
     >
       <div className="w-[1130px] max-w-full max-md:px-6">
         <PlanCompareReveal />

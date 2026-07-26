@@ -70,6 +70,34 @@ html[data-mode="night"] {
   }
 }
 
+/* ─── Section rhythm ───────────────────────────────────────────────────────
+   HALF the sky between two sections. Every content-driven section pads by this
+   on BOTH sides, so any boundary between two of them is 2 × the token — the one
+   number that sets the page's vertical rhythm. Mapped to Tailwind's spacing
+   scale in @theme inline below, so sections write `py-section` and a change
+   here re-times the whole page at once.
+
+   18dvh (≈354px of boundary at a 982px viewport) is the measured midpoint of
+   the two boundaries the design settles on: working-with → portfolio (343px)
+   and portfolio → comparison (382px). It replaces the old per-section
+   `py-[25dvh]`, which stacked to ~490px wherever two padded sections met and
+   read as a dead gap — the same failure the final CTA was hand-patched for.
+
+   Viewport-proportional ON PURPOSE (dvh, not px): the rhythm scales with the
+   screen like the full-height tagline/cards/pills sections it has to sit
+   between. Sections that are still `min-h-dvh` (hero, tagline, cards, why-stay,
+   pills, costs) centre fixed content in a viewport and set their own slack —
+   they don't use this token. */
+:root {
+  --gap-section: 18dvh;
+}
+
+@media (width < 768px) {
+  :root {
+    --gap-section: 12dvh;
+  }
+}
+
 /* Pill-field edge fade (components/sections/pills) — a vertical band so pills
    dissolve at the top/bottom edges where the upward drift melts in/out. Below md
    the compressed cloud (pills-data.ts) reaches the side edges too, so a left/right
@@ -193,6 +221,10 @@ html[data-mode="night"] {
   --text-hero: var(--fs-hero);
   --text-body-lg: var(--fs-body-lg);
   --text-body: var(--fs-body);
+  /* Section rhythm → py-section / pt-section / pb-section. Same trick as the
+     type tokens: `inline` keeps the utility emitting var(--gap-section), so the
+     mobile override above applies at runtime instead of being baked in. */
+  --spacing-section: var(--gap-section);
   /* Product Sans (proprietary) is the primary typeface, self-hosted via
      next/font/local in layout.tsx (--font-product-sans). It's the default sans
      for the whole site, so font-sans and the base body font both resolve to it.
