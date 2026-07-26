@@ -53,43 +53,66 @@ export default function Portfolio() {
   const [filter, setFilter] = useState<CloudFilter>("all");
 
   return (
-    <section id="work" data-portfolio className="relative min-h-dvh w-full overflow-hidden">
-      {/* Top row — filter tabs only; the heading lives at the globe's core. */}
-      <div className="pointer-events-none relative z-10 flex w-full flex-col items-center pt-[10dvh] max-md:px-6">
-        <div
-          role="group"
-          aria-label="Filter projects by type"
-          className="pointer-events-auto flex items-center gap-[2px] rounded-full border border-white/30 bg-white/10 p-[4px] shadow-[inset_0_0_18px_0_rgba(255,255,255,0.25)] backdrop-blur-[10px]"
-        >
-          {PROJECT_FILTERS.map(({ value, label }) => {
-            const isActive = value === filter;
-            return (
-              <button
-                key={value}
-                type="button"
-                onClick={() => setFilter(value)}
-                aria-pressed={isActive}
-                className={`rounded-full px-5 py-[7px] text-[14px] lowercase leading-none transition-colors duration-300 max-md:px-3.5 max-md:text-[13px] ${
-                  isActive
-                    ? "bg-white/25 text-white"
-                    : "text-white/60 hover:text-white/90"
-                }`}
-              >
-                {label}
-              </button>
-            );
-          })}
+    // `pb` is sky BELOW the globe band. The sphere's lowest tiles run right to
+    // the canvas edge — unlike a text section, whose ink stops well inside its own
+    // padding — so the bare 25dvh Comparison brings to the boundary read as
+    // cramped against a hard edge of imagery. The padding lives on THIS section,
+    // not Comparison's top, so the extra air belongs to the globe and Comparison
+    // keeps the same 25dvh lead-in it gets coming from every other section.
+    <section
+      id="work"
+      data-portfolio
+      className="relative w-full overflow-hidden pb-[14dvh] max-md:pb-[8dvh]"
+    >
+      {/* The GLOBE BAND — an in-flow 100dvh block, and the containing block for
+          the absolutely-positioned canvas.
+
+          This exists so the section's bottom padding cannot reach the canvas.
+          With `min-h-dvh` + padding on the section itself the padding lands
+          INSIDE the 100dvh border box (border-box sizing), so the section never
+          grows and the gap never changes; sizing the band explicitly and letting
+          the section be content-driven puts the padding genuinely below it. It
+          also pins the canvas to exactly 100dvh, which the tuned preset depends
+          on — see cloud-canvas-scene.tsx for why a taller canvas would rescale
+          the sphere instead of clearing it. */}
+      <div className="relative h-dvh w-full">
+        {/* Top row — filter tabs only; the heading lives at the globe's core. */}
+        <div className="pointer-events-none relative z-10 flex w-full flex-col items-center pt-[10dvh] max-md:px-6">
+          <div
+            role="group"
+            aria-label="Filter projects by type"
+            className="pointer-events-auto flex items-center gap-[2px] rounded-full border border-white/30 bg-white/10 p-[4px] shadow-[inset_0_0_18px_0_rgba(255,255,255,0.25)] backdrop-blur-[10px]"
+          >
+            {PROJECT_FILTERS.map(({ value, label }) => {
+              const isActive = value === filter;
+              return (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setFilter(value)}
+                  aria-pressed={isActive}
+                  className={`rounded-full px-5 py-[7px] text-[14px] lowercase leading-none transition-colors duration-300 max-md:px-3.5 max-md:text-[13px] ${
+                    isActive
+                      ? "bg-white/25 text-white"
+                      : "text-white/60 hover:text-white/90"
+                  }`}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
         </div>
+
+        {/* The VISIBLE heading is painted by the engine (config.coreLabel), not
+            by this element — that's the only way to get a tile in front of the
+            type on its near pass and behind it on the far pass. Canvas text is
+            invisible to screen readers and crawlers, so the real <h2> stays here,
+            same words, visually hidden. Keep the two in sync. */}
+        <h2 className="sr-only">stuff we&apos;ve shipped</h2>
+
+        <CloudCanvasScene filter={filter} />
       </div>
-
-      {/* The VISIBLE heading is painted by the engine (config.coreLabel), not
-          by this element — that's the only way to get a tile in front of the
-          type on its near pass and behind it on the far pass. Canvas text is
-          invisible to screen readers and crawlers, so the real <h2> stays here,
-          same words, visually hidden. Keep the two in sync. */}
-      <h2 className="sr-only">stuff we&apos;ve shipped</h2>
-
-      <CloudCanvasScene filter={filter} />
     </section>
   );
 }

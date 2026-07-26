@@ -37,6 +37,13 @@ export default function CloudCanvasScene({
     // the preset's centerY/zoom instead (cloud-canvas-config.ts): the orbit
     // centre sits lower in the full-height canvas, and any far tile that still
     // reaches up fades behind the z-10 header like the rest of the atmosphere.
+    //
+    // NB: `inset-0` resolves against the section's 100dvh GLOBE BAND, not the
+    // whole section (portfolio.tsx) — the band exists precisely so the section's
+    // bottom padding can't reach the canvas. The globe's radius is
+    // `min(cssW, cssH) × 0.45 × spread × zoom` (cloud-canvas-engine.ts), so a
+    // canvas that grew with that padding would scale the sphere up by the same
+    // amount and hand back exactly the clearance the padding bought.
     <div className="absolute inset-0">
       {/* The edge fade lives IN the engine (config.edgeFade): tiles dissolve
           into the sky as they rise toward the header — the pills section's

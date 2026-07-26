@@ -35,13 +35,17 @@ export default function FinalCta() {
   return (
     <section
       data-final-cta
-      // No min-h-dvh. ASYMMETRIC padding: a spacious 25dvh TOP matches the
-      // viewport-scaling breathing room of the other sections (consistent
-      // rhythm coming out of the FAQ), while the BOTTOM stays tight (clamped
-      // ~128px) so the buttons sit close to the closing section below it — that
-      // section adds its own sky headroom, and a 25dvh bottom here would re-open
-      // the dead gap before it. Mobile keeps its own symmetric padding.
-      className="relative flex w-full items-center justify-center overflow-hidden pt-[25dvh] pb-[clamp(96px,13dvh,136px)] max-md:pt-[9dvh] max-md:pb-[9dvh]"
+      // No min-h-dvh. ASYMMETRIC padding, and the TOP is deliberately NOT the
+      // house 25dvh: the FAQ already contributes its own 25dvh bottom, and
+      // stacking two of them put ~490px of empty sky above a block that is only
+      // ~130px of ink (heading + button row) — the CTA read as marooned rather
+      // than as the close of the page. Sections either side of a dense neighbour
+      // can afford the doubled gap; this one can't. 8dvh here lands the total
+      // lead-in near ~320px, in line with the rest of the page's rhythm.
+      // The BOTTOM stays tight (clamped ~128px) so the buttons sit close to the
+      // footer below — it adds its own sky headroom, and a bigger bottom here
+      // would re-open the dead gap before it. Mobile keeps its symmetric padding.
+      className="relative flex w-full items-center justify-center overflow-hidden pt-[8dvh] pb-[clamp(96px,13dvh,136px)] max-md:pt-[9dvh] max-md:pb-[9dvh]"
     >
       {/* Content block, flow-centred so a viewport shorter than the block grows
           the section (page scrolls) instead of clipping it. Below md it goes
