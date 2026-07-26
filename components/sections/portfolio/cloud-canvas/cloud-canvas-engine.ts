@@ -113,11 +113,40 @@ const HELIX_FADE_START = 0.88; // |y| where the pole fade begins (fade≈0 at wr
 const CUMULUS_SCALE = { x: 1.32, y: 0.42, z: 0.78 }; // cloud-bank ellipsoid axes
 
 type SlotType = "landscape" | "square" | "portrait";
+// ⚠️ ABSOLUTE px, authored against the desktop band — read DESIGN_BASE below
+// before changing them.
 const SLOT_SIZE: Record<SlotType, { w: number; h: number }> = {
   landscape: { w: 164, h: 104 },
   square: { w: 126, h: 126 },
   portrait: { w: 112, h: 146 },
 };
+
+/**
+ * The `min(cssW, cssH)` the SLOT_SIZE numbers above were tuned against: the
+ * 100dvh globe band on the 1512×982 design frame.
+ *
+ * This exists because the sphere was responsive and the tiles on it were not.
+ * The radius is `min(cssW, cssH) × 0.45 × spread × density × zoom` — the ONLY
+ * viewport-driven quantity in the whole formation — while cardScale() below was
+ * a pure product of constants. `min()` also flips which dimension it binds to:
+ * height on a laptop (982), width on a phone (390). So a phone got a sphere
+ * 2.5× smaller carrying tiles of exactly the same pixel size.
+ *
+ * Measured before this fix, "all" tab: a front landscape tile was 299px wide on
+ * both, i.e. 19.8% of a 1512px canvas but 76.7% of a 390px one, and the
+ * tile-to-neighbour-spacing ratio went from 0.76 (clear) to 1.92 (overlapping).
+ * Filtering made it worse, not better — the sparsity branch in densityFactors()
+ * shrinks spread and GROWS size, so the "brandings" tab reached 93.8% of the
+ * screen width per tile.
+ *
+ * Scaling tiles by the same quantity that drives the radius holds the
+ * tile-to-sphere proportion constant at every size, which is what "the design"
+ * actually means here. Clamped at 1 so anything at or above the design base —
+ * every normal desktop viewport — is byte-identical to before; only viewports
+ * SMALLER than the frame scale down, which also relieves the same congestion on
+ * short desktop windows.
+ */
+const DESIGN_BASE = 982;
 
 interface LoadedImage {
   source: CanvasImageSource; // the downscaled fast copy
@@ -391,6 +420,11 @@ export class CloudCanvasEngine {
 
   private cssW = 1;
   private cssH = 1;
+  /** min(cssW, cssH) / DESIGN_BASE, clamped to ≤1 — keeps the tiles in
+   *  proportion to the sphere on viewports smaller than the design frame. */
+  private viewportScale = 1;
+  /** Core label size in resolved px (see resolveLabelSizePx). 0 until resize. */
+  private labelSizePx = 0;
 
   // Pre-rendered glass frames — drawCard steps 1–2 baked once per slot shape
   // (see frameSprite). Lazy: built on each shape's first draw.
@@ -436,6 +470,8 @@ export class CloudCanvasEngine {
   private lastX = 0;
   private lastY = 0;
   private pointerMoved = false;
+  /** Total |dx|+|dy| travelled since pointerDown — the tap/drag discriminator. */
+  private pointerTravel = 0;
   private hoveredIndex = -1;
   private focusedIndex = -1;
 
@@ -722,6 +758,41 @@ export class CloudCanvasEngine {
     this.ctx.setTransform(ratio, 0, 0, ratio, 0, 0); // draw in CSS px
     this.ctx.imageSmoothingEnabled = true;
     this.ctx.imageSmoothingQuality = "low";
+    this.viewportScale = Math.min(1, Math.min(this.cssW, this.cssH) / DESIGN_BASE);
+    // The label's px size comes from a CSS token that can be a clamp() — resolve
+    // it here (a style read + layout) rather than per frame. Any resize can
+    // change it (7.5vw), so the cached metrics must go with it.
+    this.labelSizePx = this.resolveLabelSizePx();
+    this.labelMetrics = null;
+  }
+
+  /**
+   * Resolve the core label's size token to real pixels.
+   *
+   * It cannot be parsed straight off the custom property: `--text-display` maps
+   * to `--fs-display`, which below 768px is `clamp(28px, 7.5vw, 40px)`. The
+   * property is not registered with `@property`, so getPropertyValue() hands
+   * back that un-evaluated token stream and `parseFloat("clamp(28px, …")` is
+   * NaN — which silently fell through to the 49px desktop fallback. The heading
+   * therefore rendered at its DESKTOP size on phones (~370–410px wide inside a
+   * 390px canvas, i.e. edge to edge), and the mobile clamp never applied once.
+   *
+   * Assigning the token to a probe's font-size makes the engine do the work:
+   * computed `font-size` is always an absolute length, clamp() and vw resolved.
+   */
+  private resolveLabelSizePx(): number {
+    const label = this.config.coreLabel;
+    if (!label) return 0;
+    const host = this.canvas.parentElement ?? document.body;
+    const probe = document.createElement("span");
+    probe.setAttribute("aria-hidden", "true");
+    probe.style.cssText =
+      "position:absolute;left:-9999px;top:0;visibility:hidden;pointer-events:none";
+    probe.style.fontSize = `var(${label.sizeVar})`;
+    host.appendChild(probe);
+    const px = parseFloat(getComputedStyle(probe).fontSize);
+    probe.remove();
+    return Number.isFinite(px) && px > 0 ? px : label.size;
   }
 
   // ── Frame ──────────────────────────────────────────────────────────────────
@@ -968,13 +1039,20 @@ export class CloudCanvasEngine {
     const label = this.config.coreLabel;
     if (!label) return null;
 
-    const cs = getComputedStyle(this.canvas);
-    const size = parseFloat(cs.getPropertyValue(label.sizeVar)) || label.size;
+    // Resolved in resize() (see resolveLabelSizePx) — NOT read from the custom
+    // property here. Two reasons: the token can be a clamp(), which parseFloat
+    // cannot evaluate, and this method runs inside the frame loop, so the
+    // getComputedStyle call that used to sit above the cache check was a style
+    // read on every single frame regardless of whether anything had changed.
+    const size = this.labelSizePx || label.size;
     // fonts.status flips "loading" → "loaded" once the real faces arrive; the
     // first frames of a cold load measure a fallback, and this discards them.
     const key = `${size}|${document.fonts.status}`;
     if (this.labelMetrics && this.labelMetricsKey === key) return this.labelMetrics;
 
+    // Past the cache — only now is a style read worth paying for (the family
+    // stacks, which change only with the theme/token set).
+    const cs = getComputedStyle(this.canvas);
     const ctx = this.ctx;
     ctx.save();
     if (label.letterSpacing) ctx.letterSpacing = label.letterSpacing;
@@ -1057,6 +1135,9 @@ export class CloudCanvasEngine {
       1.42 *
       this.config.size *
       this.zoom *
+      // The missing viewport term — see DESIGN_BASE. Exactly 1 on any viewport
+      // at or above the design frame, so desktop is unchanged.
+      this.viewportScale *
       densitySize *
       interaction *
       vis
@@ -1355,6 +1436,7 @@ export class CloudCanvasEngine {
     this.lastX = x;
     this.lastY = y;
     this.pointerMoved = false;
+    this.pointerTravel = 0;
     this.velYaw = 0;
     this.velPitch = 0;
     this.releaseYaw = 0;
@@ -1371,7 +1453,14 @@ export class CloudCanvasEngine {
     const dy = y - this.lastY;
     this.lastX = x;
     this.lastY = y;
-    if (Math.abs(dx) + Math.abs(dy) > 3) this.pointerMoved = true;
+    // Accumulate the travel — do NOT test the per-event delta. Touch move events
+    // arrive at 60–120Hz, so a deliberate slow drag delivers 1–2px per event
+    // and never trips a per-event threshold: the whole gesture then read as a
+    // TAP on release and toggled focus on whichever tile happened to be under
+    // the finger. That was always wrong; it matters more now that `pan-y`
+    // makes the horizontal drag the primary way to spin the globe on a phone.
+    this.pointerTravel += Math.abs(dx) + Math.abs(dy);
+    if (this.pointerTravel > 6) this.pointerMoved = true;
     this.yaw += dx * 0.0038;
     this.pitch -= dy * 0.0032;
     const targetYaw = dx * 0.0009;

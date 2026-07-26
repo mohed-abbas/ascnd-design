@@ -105,7 +105,33 @@ export default function CloudCanvasView({
     );
     io.observe(canvas);
 
-    const ro = new ResizeObserver(() => engine.resize());
+    // Is the primary input a finger? Decides the touch-action policy, the
+    // repaint cap and the resize debounce below. Locked at mount like every
+    // other quality decision here.
+    const coarse =
+      typeof window !== "undefined" &&
+      window.matchMedia("(pointer: coarse)").matches;
+
+    // Resize → reallocate the backing store. On a phone the canvas is `h-dvh`,
+    // so the URL bar collapsing during a fling changes its height and would
+    // reallocate 740,610 device px MID-SCROLL. Width changes (rotation) still
+    // apply immediately; height-only changes are debounced past the fling so a
+    // URL-bar animation costs one reallocation instead of one per frame. The
+    // canvas is briefly stretched during the debounce, which on a soft
+    // out-of-focus cloud of tiles is invisible.
+    let lastW = canvas.clientWidth;
+    let resizeTid: ReturnType<typeof setTimeout> | undefined;
+    const ro = new ResizeObserver(() => {
+      const w = canvas.clientWidth;
+      if (!coarse || w !== lastW) {
+        lastW = w;
+        clearTimeout(resizeTid);
+        engine.resize();
+        return;
+      }
+      clearTimeout(resizeTid);
+      resizeTid = setTimeout(() => engine.resize(), 250);
+    });
     ro.observe(canvas);
 
     // Pointer input (Pointer Events cover mouse + single-finger touch).
@@ -115,7 +141,12 @@ export default function CloudCanvasView({
     };
     const onDown = (e: PointerEvent) => {
       if (!interactive) return;
-      canvas.setPointerCapture(e.pointerId);
+      // Capture only for mouse/pen. Pointer capture exists so a drag that
+      // leaves the canvas keeps rotating, which is meaningless for a finger —
+      // and grabbing a touch pointer the instant it lands can stop the browser
+      // handing the gesture to the scroller. `pointercancel` (mapped to onUp)
+      // is what ends a touch drag once the page takes over the pan.
+      if (e.pointerType !== "touch") canvas.setPointerCapture(e.pointerId);
       const p = localPoint(e);
       engine.pointerDown(p.x, p.y);
     };
@@ -140,7 +171,23 @@ export default function CloudCanvasView({
 
     if (interactive) {
       canvas.style.cursor = "grab";
-      canvas.style.touchAction = "none";
+      // ⚠️ `pan-y`, never `none`. This canvas is full-bleed inside a 100dvh
+      // band, so on a phone it IS the viewport — 844 of the section's 1012px,
+      // full width. With `touch-action: none` the browser performs no default
+      // behaviour for any touch landing on it, and since scrolling here is
+      // native (Lenis is not mounted on touch, and did not drive touch scroll
+      // even when it was), that made ~83% of the section a hard scroll-dead
+      // zone exactly one viewport tall: a visitor who stopped mid-section had
+      // no on-screen scrollable area left except the ~36px filter pill row.
+      // They were stuck, and no amount of swiping got them out.
+      //
+      // `pan-y` gives the vertical axis back to the scroller and keeps the
+      // horizontal for the globe, so a swipe scrolls the page and a sideways
+      // drag still spins it. Pitch-by-drag is what this trades away on touch —
+      // the correct trade, since the page has to win. Harmless on desktop:
+      // touch-action does not affect mouse input at all, and on a touchscreen
+      // laptop it is the same right answer.
+      canvas.style.touchAction = "pan-y";
       canvas.addEventListener("pointerdown", onDown);
       canvas.addEventListener("pointermove", onMove);
       canvas.addEventListener("pointerup", onUp);
@@ -187,11 +234,26 @@ export default function CloudCanvasView({
             // (scrollRepaintFpsCap: 0 = uncapped, 60 on stepped-down tiers) —
             // same input-linked rule as the scroll rigs. Lite engines stay at
             // 30 regardless: software raster is too slow either way.
-            const cap = engine.isLite
+            // COARSE POINTER: a hard 30. The tier system cannot be relied on
+            // to protect phones here — it has no viewport input at all, and
+            // both common phones resolve to tier `high`: iOS reports "Apple
+            // GPU" (no /apple m\d/ match), exposes no navigator.deviceMemory
+            // and 6 cores, so it falls through to `unknown` → high; a flagship
+            // Adreno matches `strong` → high. On high, heavyEffectFpsCap() is
+            // 0 (uncapped) below 70Hz and scrollRepaintFpsCap() is 0 always.
+            // So the busiest recipe on the page — 48 drawImage, 25 fillRect, 24
+            // clips and 2 shadow-blurred fillText per frame, with no dirty
+            // check because the 0.2 autospin never reaches rest — was running
+            // uncapped for the ~1688px of scroll this canvas intersects.
+            // The drift is one revolution per 66s; at 30fps that is visually
+            // identical and costs half.
+            const cap = coarse
               ? 30
-              : engine.interacting
-                ? scrollRepaintFpsCap()
-                : heavyEffectFpsCap();
+              : engine.isLite
+                ? 30
+                : engine.interacting
+                  ? scrollRepaintFpsCap()
+                  : heavyEffectFpsCap();
             // 1ms tolerance: on a 120Hz ticker two ~8.33ms deltas sum to
             // ~16.66ms — JUST under the 16.67ms budget — so without it every
             // second paint slipped a tick and the cadence degraded to a
@@ -278,6 +340,7 @@ export default function CloudCanvasView({
       initIo?.disconnect();
       gate?.kill();
       ro.disconnect();
+      clearTimeout(resizeTid);
       if (interactive) {
         canvas.removeEventListener("pointerdown", onDown);
         canvas.removeEventListener("pointermove", onMove);
