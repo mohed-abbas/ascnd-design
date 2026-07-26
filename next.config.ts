@@ -48,7 +48,6 @@ const nextConfig: NextConfig = {
       value: "public, max-age=86400, stale-while-revalidate=31536000",
     };
     const imageDirs = [
-      "brand",
       "cards",
       "clouds",
       "fonts",

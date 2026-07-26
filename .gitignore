@@ -43,6 +43,11 @@ next-env.d.ts
 # playwright-mcp session artifacts (screenshots/console logs)
 .playwright-mcp/
 
+# Local-only scratch: debug screenshots, throwaway HTML, vendored references and
+# the raw rock/GLB sources the shipped cut-outs were derived from. Never served,
+# never committed — delete the folder once you're sure you don't want the files.
+.local-archive/
+
 # Uncropped Figma exports for the portfolio globe — kept locally for re-cropping,
 # never served and never committed. SOURCES.md is the exception: it records the
 # Figma node IDs + export scales, so the ignored pixels can always be re-pulled.
