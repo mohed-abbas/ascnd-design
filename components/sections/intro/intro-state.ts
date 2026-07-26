@@ -112,16 +112,10 @@ function computeShouldPlay(): boolean {
   // (e.g. /pricing) no intro exists, so INTRO_START/REVEAL never fire — anything
   // that waits on the welcome (the cloud RevealRig, the static useIntroReveal)
   // must take its IMMEDIATE path there, or it hangs until the last-resort
-  // failsafe (the "clouds appear seconds late on /pricing" bug). Checked before
-  // the ?intro override since forcing an intro that never mounts is meaningless.
+  // failsafe (the "clouds appear seconds late on /pricing" bug).
   // INITIAL_PATH, not the live pathname: the decision belongs to the document
   // load, so an SPA navigation to "/" from an interior page stays a no-play.
   if (INITIAL_PATH !== "/") return false;
-
-  // Dev/QA overrides: ?intro=force always plays (even mid-page), ?intro=skip never.
-  const q = new URLSearchParams(window.location.search).get("intro");
-  if (q === "force") return true;
-  if (q === "skip") return false;
 
   if (window.matchMedia(REDUCE_MOTION).matches) return false;
   // No WebGL → the glass/rocks can't render; skip so the DOM rocks reveal normally.

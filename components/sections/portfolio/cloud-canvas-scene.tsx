@@ -3,7 +3,7 @@
 /**
  * CloudCanvasScene — the portfolio `cloudCanvas` variant: the image globe as a
  * project showcase. Mounts the reusable CloudCanvasView with the locked preset
- * (CLOUD_CANVAS_PORTFOLIO_CONFIG, tuned in app/lab/cloud-canvas) and real project
+ * (CLOUD_CANVAS_PORTFOLIO_CONFIG, tuned in app/lab/cloud-canvas on branch `dev`) and real project
  * imagery, filling the shared [data-portfolio] section.
  *
  * Loaded via next/dynamic({ ssr:false }) — the 2D canvas + image decode are

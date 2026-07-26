@@ -116,9 +116,6 @@ type Plan = {
  * while running, and is skipped under reduced-motion (see intro-state).
  * Measures the DOM and converts to the scene's world units (perspective
  * camera) so the glass lines up with the hero.
- *
- * Dev query hooks: ?intro=force|skip · ?introslow=N (N× slower) · ?intropos=P
- * (freeze at progress 0..1).
  */
 export default function Intro() {
   // Captured ONCE at mount (useState initializer, not a live read): the welcome
@@ -510,12 +507,6 @@ export default function Intro() {
       },
     });
 
-    // Dev hook: ?introslow=N runs the timeline N× slower for inspection.
-    const slow = Number(
-      new URLSearchParams(window.location.search).get("introslow"),
-    );
-    if (slow > 1) tl.timeScale(1 / slow);
-
     // Absolute beats (seconds) so positions never drift off a callback ref.
     const REVEAL = 0.85;
     const HOLD = 0.45;
@@ -652,29 +643,8 @@ export default function Intro() {
       );
     }
 
-    // Dev hook: ?intropos=P (0..1) freezes the timeline at progress P for a
-    // stable inspection frame (no timing races). No failsafe while frozen.
-    const posParam = new URLSearchParams(window.location.search).get("intropos");
-    if (posParam !== null) {
-      tl.progress(Math.min(1, Math.max(0, Number(posParam)))).pause();
-      // The frozen view is demand-mode on the shared canvas — tell the scene the
-      // pose just landed so it burst-paints NOW (the mount-timed bursts can be
-      // consumed before a slow compile→ready→seek chain gets here).
-      window.dispatchEvent(new Event("intro:frozen-seek"));
-      return () => {
-        tl.kill();
-        window.removeEventListener("scroll", pinTop);
-        gsap.killTweensOf(animObj);
-        gsap.killTweensOf(rockObjs);
-        gsap.killTweensOf(tileObjs);
-        if (wordmark) gsap.killTweensOf(wordmark);
-        lenisRef.current?.start();
-      };
-    }
-
     // Safety: never strand the hero hidden if the timeline is interrupted.
-    // Scaled by the dev slow factor so it doesn't fire mid-intro under slow-mo.
-    const failsafe = window.setTimeout(reveal, 6000 * (slow > 1 ? slow : 1));
+    const failsafe = window.setTimeout(reveal, 6000);
 
     return () => {
       tl.kill();

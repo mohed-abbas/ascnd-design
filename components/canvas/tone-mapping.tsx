@@ -5,7 +5,7 @@ import type * as THREE from "three";
 
 /**
  * Per-view tone-mapping switch — the mechanism proven in the Phase-0 spike
- * (app/lab/canvas-spike/tone-mapping.tsx), generalized for the production host.
+ * (app/lab/canvas-spike/tone-mapping.tsx, branch `dev`), generalized for the production host.
  *
  * Tone mapping is a RENDERER-level flag, but different views need different
  * values on ONE shared renderer (intro glass → NoToneMapping; clouds → ACES).

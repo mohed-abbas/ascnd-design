@@ -25,18 +25,13 @@ const REDUCE_MOTION = "(prefers-reduced-motion: reduce)";
  * strokeDashoffset wipes 1→0 so the line draws on smoothly — no per-frame
  * length maths, no "racing" head.
  *
- * TWO SCROLL MODES, switchable per-visit with the ?tl= query param (the house
- * A/B pattern — cf. ?intro / ?tier / ?noclouds) while the team picks one:
- *   ?tl=scrub — no pin: the draw advances as the stage travels the viewport
- *     (start/end in SCRUB_START/SCRUB_END below).
- *   ?tl=pin (DEFAULT — the team's pick) — the section pins to the viewport
- *     and PIN_DISTANCE of scroll drives the draw (plus a PIN_HOLD beat on the
- *     finished composition) before it releases. The stage caps its width to
- *     the viewport height (timeline.tsx) so the whole composition fits a
- *     single viewport while pinned, CENTERED — with a straight lead-in
- *     prepended to the spine (see LEAD-IN below) so the line still starts at
- *     the viewport's left margin.
- * Flip DEFAULT_MODE to change what ships without a param.
+ * SCROLL BINDING — the section PINS to the viewport and PIN_DISTANCE of scroll
+ * drives the draw (plus a PIN_HOLD beat on the finished composition) before it
+ * releases. The stage caps its width to the viewport height (timeline.tsx) so
+ * the whole composition fits a single viewport while pinned, CENTERED — with a
+ * straight lead-in prepended to the spine (see LEAD-IN below) so the line still
+ * starts at the viewport's left margin. (Picked over an unpinned travel-scrub
+ * in the 2026-07-24 A/B.)
  *
  * What THIS section adds on top of that shared approach:
  *   • the ascnd mark rides the draw-head as the "pen" (moved to
@@ -78,14 +73,9 @@ const DRAW_EASE = "power1.inOut";
 const DRAW_AT = 0.35; // the draw starts a beat after the heading begins
 const SAMPLES = 600; // path samples used to place each dot/card on the head
 
-// ── Scroll binding (team A/B — see header) ──────────────────────────────────
-// Under scrub, timeline "seconds" above become scroll PROPORTIONS — the
-// relative pacing (heading → draw → endnote) is unchanged, scroll just owns
-// the playhead.
-type ScrollMode = "scrub" | "pin";
-const DEFAULT_MODE: ScrollMode = "pin"; // what ships without a ?tl= param (team pick, 2026-07-24)
-const SCRUB_START = "top 75%"; // same entry line the old once-trigger used
-const SCRUB_END = "bottom bottom"; // pen lands as the stage fills the viewport
+// ── Scroll binding (see header) ─────────────────────────────────────────────
+// Timeline "seconds" above become scroll PROPORTIONS — the relative pacing
+// (heading → draw → endnote) is unchanged, scroll just owns the playhead.
 const PIN_START = "center center"; // stage centered; with the height-capped stage (timeline.tsx) the composition fits the viewport, the symmetric py padding hanging evenly off both edges
 const PIN_DISTANCE = "+=200%"; // scroll length driving the draw while pinned
 const PIN_HOLD = 0.6; // beat of dead scroll on the finished composition before the pin releases
@@ -95,11 +85,6 @@ export default function TimelineReveal() {
     const stage = document.querySelector<HTMLElement>("[data-tl-stage]");
     if (!stage) return;
     if (window.matchMedia(REDUCE_MOTION).matches) return;
-
-    // ?tl=pin | ?tl=scrub picks the scroll mode for this visit (team A/B).
-    const qMode = new URLSearchParams(window.location.search).get("tl");
-    const mode: ScrollMode =
-      qMode === "pin" || qMode === "scrub" ? qMode : DEFAULT_MODE;
 
     const maskPath = stage.querySelector<SVGPathElement>("[data-tl-mask]");
     const pen = stage.querySelector<SVGElement>("[data-tl-pen]");
@@ -314,31 +299,22 @@ export default function TimelineReveal() {
     const build = () => {
       if (cancelled) return;
       ctx = gsap.context(() => {
-        // SCRUBBED master timeline — scroll owns the playhead in both modes.
-        // Pin mode pins the whole <section> (not the stage) so the section's
-        // vertical padding rides along. pinSpacing must be set EXPLICITLY:
-        // the sections are direct children of the flex-column <body>
-        // (layout.tsx), and ScrollTrigger silently defaults pinSpacing to
-        // false inside flex parents — which let the next section scroll
-        // straight over the pinned stage.
+        // SCRUBBED master timeline — scroll owns the playhead. We pin the whole
+        // <section> (not the stage) so the section's vertical padding rides
+        // along. pinSpacing must be set EXPLICITLY: the sections are direct
+        // children of the flex-column <body> (layout.tsx), and ScrollTrigger
+        // silently defaults pinSpacing to false inside flex parents — which let
+        // the next section scroll straight over the pinned stage.
         const tl = gsap.timeline({
-          scrollTrigger:
-            mode === "pin"
-              ? {
-                  trigger: stage.closest<HTMLElement>("[data-timeline]") ?? stage,
-                  start: PIN_START,
-                  end: PIN_DISTANCE,
-                  pin: true,
-                  pinSpacing: true,
-                  anticipatePin: 1,
-                  scrub: true,
-                }
-              : {
-                  trigger: stage,
-                  start: SCRUB_START,
-                  end: SCRUB_END,
-                  scrub: true,
-                },
+          scrollTrigger: {
+            trigger: stage.closest<HTMLElement>("[data-timeline]") ?? stage,
+            start: PIN_START,
+            end: PIN_DISTANCE,
+            pin: true,
+            pinSpacing: true,
+            anticipatePin: 1,
+            scrub: true,
+          },
         });
 
         // Heading words blur-rise (SplitText), sub a beat later.
@@ -496,11 +472,9 @@ export default function TimelineReveal() {
           );
         }
 
-        // Pin mode: a beat of dead scroll on the finished composition, so the
-        // pin doesn't release the instant the pen lands.
-        if (mode === "pin") {
-          tl.to({}, { duration: PIN_HOLD }, DRAW_AT + DRAW_DURATION);
-        }
+        // A beat of dead scroll on the finished composition, so the pin doesn't
+        // release the instant the pen lands.
+        tl.to({}, { duration: PIN_HOLD }, DRAW_AT + DRAW_DURATION);
 
         // day-1 button: an INFINITE loop, separate from the once main timeline.
         // The text change is the subscribe card's PER-CHARACTER roll — the
@@ -912,7 +886,7 @@ export default function TimelineReveal() {
       // sections' triggers also build behind fonts.ready in their own effects
       // (order not guaranteed), so any built before this one measured the
       // un-spaced layout — re-measure them all once the pin exists.
-      if (mode === "pin") ScrollTrigger.refresh();
+      ScrollTrigger.refresh();
     };
 
     // Defer until fonts are ready so SplitText measures real glyph metrics.

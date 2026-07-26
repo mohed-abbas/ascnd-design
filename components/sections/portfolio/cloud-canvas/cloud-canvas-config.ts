@@ -2,7 +2,7 @@
  * CloudCanvas — the tunable config surface (the "config we import").
  *
  * This is the single source of truth for how the image globe looks and moves. The
- * lab sandbox (app/lab/cloud-canvas) edits a live CloudCanvasConfig with on-screen
+ * lab sandbox (app/lab/cloud-canvas, branch `dev`) edits a live CloudCanvasConfig with on-screen
  * controls and can COPY the result as JSON; you paste a tuned object back here as a
  * named preset, and the portfolio `cloudCanvas` variant imports it — so the scene
  * ships a frozen preset while the lab stays free to explore.
@@ -198,7 +198,7 @@ export const DEFAULT_CLOUD_CANVAS_CONFIG: CloudCanvasConfig = {
 
 /**
  * The LOCKED look the portfolio `cloudCanvas` variant ships — tuned in the lab
- * (app/lab/cloud-canvas) and pasted here. Re-tune in the lab and replace this
+ * (app/lab/cloud-canvas, branch `dev`) and pasted here. Re-tune in the lab and replace this
  * object to change the production globe; the scene imports exactly this.
  */
 export const CLOUD_CANVAS_PORTFOLIO_CONFIG: CloudCanvasConfig = {

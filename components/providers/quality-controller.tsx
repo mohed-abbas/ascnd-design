@@ -13,7 +13,7 @@ import {
   stepDownTier,
   subscribeQuality,
 } from "@/lib/perf/quality-store";
-import { TIER_ORDER, type TierName } from "@/lib/perf/tiers";
+import { type TierName } from "@/lib/perf/tiers";
 import { INTRO_REVEAL_EVENT, introWillPlay } from "@/components/sections/intro/intro-state";
 
 // The intro (MTM compile + Text3D geometry build) is a bounded, one-time GPU
@@ -22,14 +22,6 @@ import { INTRO_REVEAL_EVENT, introWillPlay } from "@/components/sections/intro/i
 // event never fires — arm on a failsafe timer instead.
 const WATCHDOG_SETTLE_MS = 800;
 const WATCHDOG_FAILSAFE_MS = 8000;
-
-function parseTierParam(): TierName | null {
-  if (typeof window === "undefined") return null;
-  const raw = new URLSearchParams(window.location.search).get("tier");
-  return (TIER_ORDER as readonly string[]).includes(raw ?? "")
-    ? (raw as TierName)
-    : null;
-}
 
 /**
  * Boots the adaptive-quality system (docs/performance-audit.md §6, Phase 2).
@@ -40,11 +32,10 @@ function parseTierParam(): TierName | null {
  *   3. pick the starting tier                   → quality-store.initQuality
  *   4. arm the frame-time watchdog AFTER the intro → frame-watchdog.ts
  *
- * CALIBRATION AFFORDANCES (a capable machine never trips the watchdog, so you
- * need to drive tiers by hand to eyeball medium/low):
- *   • `?tier=high|medium|low` pins a tier (freezes the watchdog) for A/B.
- *   • In dev, `window.__quality` exposes { tier, refreshHz, config, force,
- *     stepDown } and every tier change is logged to the console.
+ * CALIBRATION AFFORDANCE (a capable machine never trips the watchdog, so you
+ * need to drive tiers by hand to eyeball medium/low): in DEV ONLY,
+ * `window.__quality` exposes { tier, refreshHz, config, force, stepDown } and
+ * every tier change is logged to the console. Stripped from production builds.
  */
 export default function QualityController() {
   useEffect(() => {
@@ -52,12 +43,7 @@ export default function QualityController() {
     const cleanups: Array<() => void> = [];
 
     const isDev = process.env.NODE_ENV !== "production";
-    const override = parseTierParam();
     const gpu = detectGpuStrength();
-
-    // Apply a forced tier SYNCHRONOUSLY (before refresh detection resolves) so
-    // the intro glass — which snapshots the tier at mount — sees it.
-    if (override) forceTier(override);
 
     if (isDev) {
       cleanups.push(
@@ -86,14 +72,12 @@ export default function QualityController() {
     detectRefreshRate().then((hz) => {
       if (cancelled) return;
 
-      // Records refreshHz (needed for the fps cap) and picks the starting tier —
-      // leaves the tier pinned if `override` forced one above.
+      // Records refreshHz (needed for the fps cap) and picks the starting tier.
       initQuality(hz, gpu);
 
       if (isDev) {
         console.info(
-          `[quality] boot: gpu=${gpu} refreshHz=${getRefreshHz()} tier=${getTierName()}` +
-            (override ? " (forced via ?tier)" : "")
+          `[quality] boot: gpu=${gpu} refreshHz=${getRefreshHz()} tier=${getTierName()}`
         );
       }
 

@@ -30,21 +30,18 @@ import {
   useSharedView,
   type SharedViewControls,
 } from "@/components/canvas/use-shared-view";
-import {
-  setPlaneDprOverride,
-  type PlaneName,
-} from "@/components/canvas/view-registry";
+import { type PlaneName } from "@/components/canvas/view-registry";
 
 /**
  * Volumetric cloud field (Three.js / R3F + drei <Clouds>).
  *
- * This is the /lab/clouds reference cloud ported into the global background:
+ * This is the /lab/clouds reference cloud (branch `dev`) ported into the global background:
  * lit drei <Cloud>s on a <MeshLambertMaterial>, framed from a 3/4 above-front
  * camera. Lighting is a white directional key + ambient (PALETTES[mode].cloud) —
  * chosen over the lab's positioned spotlights so every cloud is lit identically
  * wherever it's placed (uniformly white, no position tint) and so theme modes
  * (evening/night) drop in as light-colour swaps. The look was tuned in
- * /lab/clouds and baked below (no leva here). Each hero cloud is anchored to a
+ * /lab/clouds (branch `dev`) and baked below. Each hero cloud is anchored to a
  * screen spot via NDC (top-right corner + the two rock bases) by <CloudPlacement>.
  *
  * RENDERING HOST (Phase 4, docs/canvas-consolidation-plan.md): this file no longer
@@ -85,7 +82,7 @@ import {
  * clouds' own watchdog + canvas-remount key are gone.
  */
 
-// Shared cloud look (tuned in /lab/clouds; the dev leva panel is gone). Size,
+// Shared cloud look (tuned in /lab/clouds on branch `dev`; no panel here). Size,
 // seed and placement are per-cloud in the specs. `speed` is small + non-zero so
 // the puffs slowly morph (lively, not churning); the CONTINUOUS-30 paint policy
 // (default export) advances that morph at ~30 fps. `segments` (the fill-rate
@@ -100,8 +97,8 @@ import {
 // Flip to true to bring the billow back at MORPH_FPS.
 const MORPH_CLOUDS = false;
 
-// (speed lives on the <Cloud> prop, derived from the toggle + ?morphfps hook
-// inside CloudView — see cloudSpeed there.)
+// (speed lives on the <Cloud> prop, derived from the toggle inside CloudView —
+// see cloudSpeed there.)
 const CLOUD = {
   opacity: 0.8,
   fade: 10,
@@ -892,33 +889,13 @@ export default function CloudView({
     if (onScreen) requestBurst(2);
   }, [onScreen, requestBurst]);
 
-  // Dev A/B hooks (2026-07-19 morph-cost tuning): ?morphfps=N overrides the
-  // still-billow cadence; ?reardpr=N pins the REAR plane's dpr. Client-only
-  // module (dynamic ssr:false), so reading location here is safe.
-  const dev = useMemo(() => {
-    if (typeof window === "undefined") return { morphFps: null as number | null, rearDpr: null as number | null };
-    const q = new URLSearchParams(window.location.search);
-    const m = Number(q.get("morphfps"));
-    const d = Number(q.get("reardpr"));
-    return {
-      morphFps: m > 0 ? Math.min(m, 60) : null,
-      rearDpr: d > 0 ? Math.min(d, 1.5) : null,
-    };
-  }, []);
-  useEffect(() => {
-    if (plane !== "rear" || dev.rearDpr === null) return;
-    setPlaneDprOverride("rear", dev.rearDpr);
-    return () => setPlaneDprOverride("rear", null);
-  }, [plane, dev.rearDpr]);
-
   // With the morph off (MORPH_CLOUDS false) the shapes are frozen, so there is
   // nothing to paint while still: the view stays DEMAND everywhere and repaints
   // ride markDirty alone (scroll rigs at the "scroll" cap, theme tween, reveal,
-  // placement). Still clouds = zero paints. ?morphfps=N re-enables the billow
-  // for A/B without flipping the constant.
-  const morphOn = MORPH_CLOUDS || dev.morphFps !== null;
+  // placement). Still clouds = zero paints.
+  const morphOn = MORPH_CLOUDS;
   const mode = morphOn && onScreen ? "continuous" : "demand";
-  const fpsCap = scrolling || !morphOn ? "scroll" : (dev.morphFps ?? MORPH_FPS);
+  const fpsCap = scrolling || !morphOn ? "scroll" : MORPH_FPS;
 
   // The two theme lights — <ThemeRig> tweens their colour/intensity on a mode
   // change. Initialised to the CURRENT mode's palette so the first paint is
@@ -944,7 +921,7 @@ export default function CloudView({
   const sectionRefs = useRef<(Group | null)[]>([]);
 
   // speed follows the morph toggle (drei scales morph phase AND rotation by it,
-  // so 0 = fully frozen shapes); the ?morphfps hook re-enables it for A/B.
+  // so 0 = fully frozen shapes).
   const cloudSpeed = morphOn ? 0.1 : 0;
   const cloudBody = useCallback(
     (c: CloudSpec) => (

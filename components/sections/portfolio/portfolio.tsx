@@ -10,7 +10,7 @@
  *
  * Ported standalone from the lab/portfolio-V2 variant selector (which also
  * carried the depth-gallery / carousel / cloudline designs); only the globe
- * came across. Tune presets live in the /lab/cloud-canvas sandbox; the locked
+ * came across. Tune presets live in the /lab/cloud-canvas sandbox (branch `dev`); the locked
  * portfolio preset (CLOUD_CANVAS_PORTFOLIO_CONFIG) is applied by CloudCanvasScene.
  *
  * Slots between Testimonials and Pricing. Stays TRANSPARENT with z-index at

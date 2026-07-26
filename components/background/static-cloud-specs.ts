@@ -5,7 +5,7 @@ import { WHYSTAY_PIN_EXTRA } from "@/components/sections/why-stay/why-stay-data"
 // as a positioned <img> and drives its scroll drift with GSAP/ScrollTrigger.
 // THIS FILE IS THE TUNING SURFACE: add/move/resize clouds here, no component
 // changes needed. Sprites are baked from the live WebGL clouds by
-// /lab/cloud-sprites into public/clouds/sprites/.
+// /lab/cloud-sprites (branch `dev`) into public/clouds/sprites/.
 //
 // Coordinates are viewport percentages of the CLOUD'S CENTRE — x in vw from
 // the left edge, y in vh from the top — so a cloud lands at the same screen
@@ -173,7 +173,7 @@ export const STATIC_CLOUDS: StaticCloudSpec[] = [
 // DOM-sprite mirror of the WebGL scenes (cloud-specs.ts CLOUD_SCENES) — same
 // per-route split, so the fallback never bleeds one page's clouds onto another.
 // /pricing starts EMPTY (the fallback renders nothing there) rather than borrowing
-// the homepage arrangement; bake its own sprites at /lab/cloud-sprites and list
+// the homepage arrangement; bake its own sprites at /lab/cloud-sprites (branch `dev`) and list
 // them here when the page's clouds are designed. Unmapped routes fall back to the
 // home set, matching the WebGL selector.
 export const STATIC_CLOUD_SCENES: Record<string, StaticCloudSpec[]> = {

@@ -50,7 +50,7 @@ useTexture.preload("/rocks/right-rock.avif");
 for (const n of [2, 3, 4, 5, 6, 7, 8, 9]) useTexture.preload(`/shots/shot${n}.avif`);
 
 /**
- * The welcome-intro WebGL stage. Reuses the proven /lab/glass setup — PERSPECTIVE
+ * The welcome-intro WebGL stage. Reuses the proven /lab/glass setup (branch `dev`) — PERSPECTIVE
  * camera (z=10, fov=45, the cloud-canvas convention) at a small world scale, so
  * the liquid glass refracts/disperses richly (a flat-on orthographic view of huge
  * letters just shows the backdrop straight through and looks solid).
@@ -173,6 +173,19 @@ export type IntroSceneProps = {
 
 const FONT = "/fonts/product-sans-medium.typeface.json";
 
+/**
+ * Device-pixel ratio for the INTRO phase (KNOWN TRAP #3).
+ *
+ * Measured 2026-07-18 with per-context draw-call instrumentation on an M-series
+ * 120Hz MacBook: the glass's MAIN-PASS fragments at canvas resolution — NOT the
+ * MTM FBO the tiers tune — were the intro's boulder, and dpr × MSAA cost is
+ * multiplicative. So the intro runs at dpr 1 (the moving refractive glass hides
+ * the softness), then releases to the plane's [1,1.5] ceiling for the crisp
+ * steady conveyor. MSAA is a PLANE-level context flag, not a per-view one — the
+ * knob lives in components/canvas/plane-config.ts (front.antialias:false).
+ */
+const INTRO_DPR = 1;
+
 // Camera + rock depth, exported so <Intro> can compensate its DOM→world rock
 // placement: the planes sit slightly BEHIND the glass (so it refracts them), and
 // a point at ROCK_Z projects a touch toward screen centre vs the z=0 mapping
@@ -200,11 +213,11 @@ const VIEW_WORLD_H = 8.284;
  * specular glints, which reads as glossy glass even under the telephoto camera
  * (a head-on view barely sweeps a broad HDR, but placed glints still catch).
  *
- * Exported so /lab/glass renders the EXACT same shine — the lab stays a faithful
- * preview, and passes Leva-driven intensities here for live tuning. The defaults
- * ARE the production values, so the intro calls `<GlassEnvironment />` bare.
- * `frames` defaults to 1, so the cubemap is rendered once (cheap); the lab passes
- * `Infinity` so slider changes re-bake live.
+ * Exported so the /lab/glass sandbox (branch `dev`) renders the EXACT same
+ * shine — it stays a faithful preview and passes tuning intensities here. The
+ * defaults ARE the production values, so the intro calls `<GlassEnvironment />`
+ * bare. `frames` defaults to 1, so the cubemap is rendered once (cheap); the lab
+ * passes `Infinity` so slider changes re-bake live.
  */
 export type GlassEnvProps = {
   /** scene.environmentIntensity — overall reflection strength. */
@@ -1045,35 +1058,6 @@ export default function IntroScene({
   // group-translation pattern as the clouds), so the arc tracks the page 1:1.
   const fieldRef = useRef<Group>(null);
 
-  // Intro-phase cost (measured 2026-07-18, frozen ?intropos=0.5 frames with
-  // per-context draw-call instrumentation on an M-series 120Hz MacBook): the
-  // glass's MAIN-PASS fragments at canvas resolution — NOT the MTM FBO the tiers
-  // tune — were the intro's boulder, and dpr × MSAA cost is multiplicative. So
-  // the intro runs at dpr 1 (driven through the host's per-plane dpr override,
-  // below) with MSAA off. On the shared context MSAA is now a PLANE-level flag
-  // (components/canvas/plane-config.ts front.antialias:false) — not per view.
-  //
-  // Dev A/B hooks (same query-param pattern as ?intropos):
-  //   ?introaa=1  — was: force MSAA on. Now a no-op + warning (plane-level flag).
-  //   ?introdpr=N — override the INTRO-phase dpr (clamped by the plane's ≤1.5 cap).
-  //   ?noglass    — mount the scene WITHOUT the MTM glass (rocks/tiles/ready
-  //                 gate untouched), pricing the transmission pass wholesale.
-  //   ?intropos=P — <Intro> freezes the timeline at P; the scene is static, so
-  //                 it must burst-paint the frozen pose then idle (never paint
-  //                 continuously). `frozen` forces demand mode below.
-  const dev = useMemo(() => {
-    if (typeof window === "undefined")
-      return { aa: false, introDpr: 1, glass: true, frozen: false };
-    const q = new URLSearchParams(window.location.search);
-    const dpr = Number(q.get("introdpr"));
-    return {
-      aa: q.get("introaa") === "1",
-      introDpr: dpr > 0 ? Math.min(dpr, 2) : 1,
-      glass: !q.has("noglass"),
-      frozen: q.has("intropos"),
-    };
-  }, []);
-
   // Stable paint-control wrappers. useSharedView RETURNS the controls, but the
   // scene `children` are an ARGUMENT to that same call, so they can't close over
   // the returned object. Route through a ref pointed at the (stable) controls
@@ -1126,49 +1110,18 @@ export default function IntroScene({
   // through the host's per-plane override exactly where the standalone canvas
   // flipped its own dpr. Released (null) at handoff and on unmount.
   useEffect(() => {
-    setPlaneDprOverride("front", introActive ? dev.introDpr : null);
-  }, [introActive, dev.introDpr]);
+    setPlaneDprOverride("front", introActive ? INTRO_DPR : null);
+  }, [introActive]);
   useEffect(() => () => setPlaneDprOverride("front", null), []);
-
-  // ?introaa (KNOWN TRAP #3): antialias is a CONTEXT-creation flag — one value
-  // for the whole shared FRONT context, not switchable per view. The dev A/B
-  // hook degrades to a warning that points at where the real knob now lives.
-  useEffect(() => {
-    if (dev.aa)
-      console.warn(
-        "[intro] ?introaa now gates the FRONT plane context; edit components/canvas/plane-config.ts (front.antialias). No-op here.",
-      );
-  }, [dev.aa]);
-
-  // ?intropos freeze (KNOWN TRAP #7): the timeline is paused at a fixed progress
-  // and the scene never changes again. Force demand mode (below) and burst-paint
-  // across a window that outlasts the compile→ready→seek chain, so the frozen
-  // pose lands and then the view IDLES (no continuous painting). Dev-only.
-  useEffect(() => {
-    if (!dev.frozen) return;
-    requestBurst(8);
-    const timers = [200, 600, 1200, 2000, 3200].map((ms) =>
-      window.setTimeout(() => requestBurst(4), ms),
-    );
-    // The authoritative repaint: intro.tsx dispatches this right after the
-    // tl.progress(P).pause() seek, so the frozen pose paints even when a slow
-    // compile→ready→seek chain outlives every mount-timed burst above.
-    const onSeek = () => requestBurst(4);
-    window.addEventListener("intro:frozen-seek", onSeek);
-    return () => {
-      timers.forEach((t) => window.clearTimeout(t));
-      window.removeEventListener("intro:frozen-seek", onSeek);
-    };
-  }, [dev.frozen, requestBurst]);
 
   // Paint policy (KNOWN TRAP #4). Continuous "heavy" while the welcome or the
   // conveyor is actively animating AND the hero is on screen — the host pump
   // paces it (60 on a fast panel, display-rate ≤60Hz), and scroll repaints ride
   // along for free. Demand "scroll" otherwise, so a scrolled-away hero idles to
-  // zero and a scroll re-entry rides the display. Frozen inspection is always
-  // demand (bursts only). Registration is upsert-able, so flipping these on a
-  // React state change just updates the descriptor — no remount, no lost burst.
-  const active = !dev.frozen && (introActive || conveyor) && !heroGone;
+  // zero and a scroll re-entry rides the display. Registration is upsert-able,
+  // so flipping these on a React state change just updates the descriptor — no
+  // remount, no lost burst.
+  const active = (introActive || conveyor) && !heroGone;
   const mode = active ? "continuous" : "demand";
   const fpsCap = active ? "heavy" : "scroll";
 
@@ -1208,18 +1161,14 @@ export default function IntroScene({
           {introActive && (
             <>
               <Rocks rocks={rocks} rockEntry={rockEntry} />
-              {/* ?noglass (dev A/B) skips ONLY the glass — the rocks, lights and
-                  ready gate still run so the intro flows normally around it. */}
-              {dev.glass && (
-                <Glass
-                  anim={anim}
-                  glassSize={glassSize}
-                  glassGeomScale={glassGeomScale}
-                  restY={restY}
-                  font={font}
-                  markDirty={markDirty}
-                />
-              )}
+              <Glass
+                anim={anim}
+                glassSize={glassSize}
+                glassGeomScale={glassGeomScale}
+                restY={restY}
+                font={font}
+                markDirty={markDirty}
+              />
               <directionalLight position={[3, 5, 6]} intensity={1.2} />
               <ambientLight intensity={0.4} />
               <SceneReady onReady={stableOnReady} />
@@ -1252,7 +1201,7 @@ export default function IntroScene({
         {/* Local studio shine (see GlassEnvironment) — no network, so the glints
             are present on frame 1 instead of popping in late. Glass-only, so it
             rides the intro phase and unmounts with the glass. */}
-        {introActive && dev.glass && (
+        {introActive && (
           <GlassEnvironment
             environmentIntensity={1.85}
             frontFill={0.5}
@@ -1278,7 +1227,6 @@ export default function IntroScene({
       glassGeomScale,
       restY,
       font,
-      dev,
       anim,
       markDirty,
       stableOnReady,

@@ -596,20 +596,13 @@ export default function TestimonialRocksView({
 
   const active = inView || revealing;
   const mode = active ? "continuous" : "demand";
-  // Dev A/B hook (2026-07-19 morph-cost tuning): ?rocksfps=N overrides the
-  // steady cap so the rocks-vs-cloud paint interplay can be measured live.
-  const devFps = useMemo(() => {
-    if (typeof window === "undefined") return null;
-    const n = Number(new URLSearchParams(window.location.search).get("rocksfps"));
-    return n > 0 ? Math.min(n, 60) : null;
-  }, []);
   // Steady 30 (ROCKS_STEADY_FPS — the slow orbit reads the same and stops
   // colliding with the section-cloud morph ticks); "heavy" (≤60) while any rock
   // is hovered so the dodge spring rides the fast cadence. The reveal fly-in
   // also runs at "heavy" (revealing) so the entrance stays crisp.
   const anyHovered = useSyncExternalStore(rockHover.subscribe, rockHover.any, () => false);
   const fpsCap: FpsCap =
-    devFps ?? (anyHovered || revealing ? "heavy" : ROCKS_STEADY_FPS);
+    anyHovered || revealing ? "heavy" : ROCKS_STEADY_FPS;
 
   const children: ReactNode = useMemo(() => <Scene />, []);
 

@@ -8,8 +8,8 @@ import { ArrowUp } from "./icons";
  * Back-to-top control — a 52px glass disc parked directly under the navbar pill.
  *
  * Rendered BY navbar.tsx (not layout.tsx) so it exists exactly where the navbar
- * does: it's positioned relative to the pill, and on the /lab routes — which
- * render no navbar — a lone floating button under nothing would be noise.
+ * does: it's positioned relative to the pill, so a route without a navbar would
+ * otherwise show a lone floating button under nothing.
  *
  * PLACEMENT mirrors navbar.tsx's geometry, so the two read as one stack:
  *   • Desktop — the nav frame is `right-[33px] top-[62.4%]`, 365 tall, centred

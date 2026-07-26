@@ -175,8 +175,7 @@ export default function RootLayout({
               sibling of the fixed sky layers (never an ancestor with a
               filter/backdrop-filter), and inside LenisProvider so its ticker-end
               advance pump rides the one shared GSAP ticker. With no views
-              registered — every route but the /lab demo today — it renders
-              nothing and creates no GL context. */}
+              registered it renders nothing and creates no GL context. */}
           <SharedCanvasHost />
           {children}
           {/* Custom cursor — last child so it paints on top (its glass lens
