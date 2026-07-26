@@ -12,9 +12,12 @@ import {
   INTRO_SCENE_READY_EVENT,
   INTRO_START_EVENT,
   introHasRevealed,
-  introPending,
+  welcomePending,
 } from "./intro-state";
-import { CAMERA_Z, ROCK_Z, TILE_Z } from "./intro-scene";
+// From the LEAF depths module, never from ./intro-scene — a runtime value
+// import there is a static edge that drags three/drei into <Hero>'s bundle and
+// defeats the dynamic() split below. See intro-depths.ts.
+import { CAMERA_Z, ROCK_Z, TILE_Z } from "./intro-depths";
 import {
   SHOT_BASE,
   SHOT_FRAME_RADIUS,
@@ -126,7 +129,10 @@ export default function Intro() {
   // running timeline. SSR-safe: the initializer returns false on the server
   // (introWillPlay() window-guards), and the first client render is null either
   // way (no plan yet), so hydration output always matches.
-  const [shouldPlay] = useState(() => introPending());
+  // welcomePending(), NOT introPending(): on phones an intro sequence is still
+  // owed (the loader runs it and fires the reveal), but the WebGL glass scene
+  // must not mount — see intro-state.ts welcomeWillPlay().
+  const [shouldPlay] = useState(() => welcomePending());
   const [dismissed, setDismissed] = useState(false);
   const play = shouldPlay && !dismissed;
 

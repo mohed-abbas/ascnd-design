@@ -136,6 +136,32 @@ export default function DesignShotsReveal() {
       }
     }
 
+    // Idle the conveyor when the hero is off-screen (heavy-effect contract #2,
+    // CLAUDE.md). The loop is `repeat: -1` and writes transform + opacity to 8
+    // rotors on EVERY frame, so ungated it kept painting through the entire
+    // 15,000px page scroll for the rest of the session. It used to be a rare
+    // path — only no-WebGL visitors reached it, because the WebGL welcome
+    // normally owns this collage and leaves the DOM one hidden forever. Phones
+    // now take it as the DEFAULT (the glass welcome no longer plays there, see
+    // intro-state.ts welcomeWillPlay), which is exactly the device that can
+    // least afford an unthrottled per-frame writer competing with touch scroll.
+    // IntersectionObserver, not ScrollTrigger: the gate is pure visibility and
+    // shouldn't add another trigger to the scroll-event pass.
+    let visibilityIo: IntersectionObserver | null = null;
+    function gateOnVisibility() {
+      visibilityIo = new IntersectionObserver(
+        (entries) => {
+          const visible = entries[0]?.isIntersecting ?? true;
+          // Only the infinite conveyor is gated — pausing mid-BLOOM would
+          // strand the tiles half-formed, and the bloom is a one-shot that
+          // finishes long before the hero can be scrolled away.
+          for (const t of tweens) if (t.repeat() === -1) t.paused(!visible);
+        },
+        { rootMargin: "0px" },
+      );
+      visibilityIo.observe(root!);
+    }
+
     function startRotation() {
       if (cancelled) return;
       // p loops forever at constant speed (ease none) → seamless. At p=0 every
@@ -153,6 +179,7 @@ export default function DesignShotsReveal() {
       // One-shot fade (not derived from the looping p, so it never resets at the
       // loop seam) to settle the far tiles to their translucent value.
       tweens.push(gsap.to(state, { fade: 1, duration: FADE_IN, ease: "power1.inOut" }));
+      gateOnVisibility();
     }
 
     // Bloom from the center outward (scale + opacity on the inner wrapper), then
@@ -215,6 +242,7 @@ export default function DesignShotsReveal() {
         window.removeEventListener(INTRO_START_EVENT, onStart);
         window.removeEventListener(INTRO_REVEAL_EVENT, beginOnce);
         window.clearTimeout(failsafe);
+        visibilityIo?.disconnect();
         tweens.forEach((t) => t.kill());
       };
     }
@@ -225,6 +253,7 @@ export default function DesignShotsReveal() {
 
     return () => {
       cancelled = true;
+      visibilityIo?.disconnect();
       tweens.forEach((t) => t.kill());
     };
   }, []);

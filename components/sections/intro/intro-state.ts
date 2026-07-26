@@ -70,6 +70,10 @@ export const INTRO_LAST_RESORT_MS =
 export const INTRO_GO_EVENT = "ascnd:intro-go";
 
 const REDUCE_MOTION = "(prefers-reduced-motion: reduce)";
+// Same breakpoint the other heavy-feature gates use (cloud-layer.tsx,
+// testimonial-rocks.tsx, cursor.tsx) — keep the string identical so a phone
+// resolves every WebGL feature the same way.
+const SMALL_SCREEN = "(max-width: 768px)";
 
 /**
  * Cheap WebGL-capability probe (same idea as cloud-layer.tsx). The intro's rocks
@@ -172,6 +176,54 @@ export function introHasRevealed(): boolean {
  */
 export function introPending(): boolean {
   return introWillPlay() && !revealed;
+}
+
+/**
+ * Does the WEBGL GLASS welcome play — as opposed to the loader-led intro
+ * sequence above? This is the narrower of the two gates, and the split exists
+ * for phones.
+ *
+ * `introWillPlay()` answers "is an intro sequence owed, so should the hero hold
+ * its cascade until INTRO_REVEAL?" — nine consumers read it that way and none of
+ * them care WHO fires the reveal. This answers the separate question "does the
+ * three.js glass scene mount at all?", and only <Intro> reads it.
+ *
+ * Phones say no. The welcome is the sole reason a WebGL context exists on
+ * mobile (the volumetric clouds, the testimonial GLB rocks and the custom
+ * cursor are all already gated off at this same breakpoint), and it doesn't
+ * end when the dock does: the scene PERSISTS for the session as the tile
+ * conveyor, so a fixed full-viewport GL canvas keeps repainting behind the
+ * hero for as long as the hero is on screen. On a phone that repaint competes
+ * with the compositor for every touch-scroll frame — measured at ~5.4 GL draw
+ * calls per frame at the hero. Skipping it removes WebGL from mobile entirely.
+ *
+ * With this false but `introWillPlay()` still true, <IntroLoader> runs its own
+ * self-timed show and fires INTRO_REVEAL itself when its cover lifts — so the
+ * hero/rocks/clouds cascade in behind the loader exactly as they do on desktop,
+ * just without the glass. INTRO_GO's only listener is <Intro>, so firing it into
+ * an absent component is a harmless no-op.
+ */
+function computeWelcomeWillPlay(): boolean {
+  if (!introWillPlay()) return false;
+  if (window.matchMedia(SMALL_SCREEN).matches) return false;
+  return true;
+}
+
+let welcomeCached: boolean | undefined;
+
+/** Resolved once per page load, like introWillPlay(). */
+export function welcomeWillPlay(): boolean {
+  if (welcomeCached === undefined) welcomeCached = computeWelcomeWillPlay();
+  return welcomeCached;
+}
+
+/**
+ * Is the GLASS welcome still owed this document load? What <Intro> mounts on —
+ * the welcome-specific twin of introPending(), so an SPA return to the homepage
+ * can't replay it.
+ */
+export function welcomePending(): boolean {
+  return welcomeWillPlay() && !revealed;
 }
 
 /** Did this document's initial load happen on the homepage? <IntroLoader> uses

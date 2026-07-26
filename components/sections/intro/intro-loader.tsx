@@ -15,6 +15,7 @@ import {
   INTRO_SCENE_READY_EVENT,
   introHasRevealed,
   introPending,
+  welcomeWillPlay,
 } from "./intro-state";
 
 // Layout effect on the client so the no-welcome mount decision lands BEFORE
@@ -87,12 +88,28 @@ const HOLD_LIMIT_MS = INTRO_LAST_RESORT_MS + 2000;
 const CAP_HYDRATED = 0.35;
 const CAP_CHUNK = 0.7;
 
+// ── The no-glass path (phones; see intro-state.ts welcomeWillPlay) ──
+// With no WebGL scene to warm, the milestones the bar normally rides
+// (INTRO_CHUNK_READY / INTRO_SCENE_READY) never fire, so the cover must time
+// itself or it would hold until the HOLD_LIMIT_MS wedge net (47s). It still
+// shows for a real beat rather than blinking: `document.fonts.ready` IS a
+// genuine milestone here — the hero cascade waits on it too (hero-reveal.tsx),
+// so covering it is the difference between a composed entrance and a visible
+// font swap. Shorter min-show than the WebGL path because there is no heavy
+// chunk behind it to justify the longer hold.
+const NO_GLASS_MIN_SHOW_MS = 1600;
+const NO_GLASS_CAP_HYDRATED = 0.6;
+const NO_GLASS_CAP_FONTS = 0.9;
+
 export default function IntroLoader() {
   // `dismissing` fades the cover out; `done` unmounts it once the fade settles.
   // Both start false → visible on load.
   const [dismissing, setDismissing] = useState(false);
   const [done, setDone] = useState(false);
   const fillRef = useRef<HTMLSpanElement>(null);
+  // Set on the no-glass path (below): this loader is the whole intro, so it —
+  // not <Intro> — is what fires INTRO_REVEAL when the cover lifts.
+  const ownsReveal = useRef(false);
 
   useIso(() => {
     const dismiss = () => setDismissing(true);
@@ -113,6 +130,68 @@ export default function IntroLoader() {
       }
       const raf = requestAnimationFrame(dismiss);
       return () => cancelAnimationFrame(raf);
+    }
+
+    // ── The no-glass path: an intro is owed, but no WebGL scene will mount ──
+    // Phones. The loader is the WHOLE intro here, so it also owns the handoff:
+    // nothing else will ever fire INTRO_REVEAL, and the hero / rocks / clouds /
+    // design-shots are all parked waiting for it. Self-timed against the two
+    // things that are genuinely still loading (fonts, and the minimum show),
+    // then it lifts and fires the reveal from onTransitionEnd below.
+    if (!welcomeWillPlay()) {
+      ownsReveal.current = true;
+      const fill = fillRef.current;
+      let creep: gsap.core.Tween | undefined;
+      const advance = (cap: number, duration: number) => {
+        if (!fill) return;
+        creep?.kill();
+        creep = gsap.to(fill, { scaleX: cap, duration, ease: "power2.out" });
+      };
+      if (fill) {
+        // Same handoff as the milestone path: continue from wherever the CSS
+        // crawl reached instead of snapping back.
+        const m = getComputedStyle(fill).transform.match(/matrix\(([\d.]+)/);
+        fill.style.animation = "none";
+        gsap.set(fill, { scaleX: m ? Number(m[1]) : 0, transformOrigin: "left center" });
+        advance(NO_GLASS_CAP_HYDRATED, 1.2);
+      }
+
+      let minElapsed = false;
+      let fontsReady = false;
+      let dismissed = false;
+      let landTimer: number | undefined;
+      const maybeDismiss = () => {
+        if (dismissed || !minElapsed || !fontsReady) return;
+        dismissed = true;
+        advance(1, 0.25);
+        landTimer = window.setTimeout(dismiss, BAR_LAND_MS);
+      };
+      const minTimer = window.setTimeout(() => {
+        minElapsed = true;
+        maybeDismiss();
+      }, NO_GLASS_MIN_SHOW_MS);
+      // Never block on a font that fails to load: resolve the milestone either
+      // way, so a blocked/offline font file can't strand the cover.
+      let cancelled = false;
+      document.fonts.ready.then(() => {
+        if (cancelled) return;
+        fontsReady = true;
+        advance(NO_GLASS_CAP_FONTS, 0.6);
+        maybeDismiss();
+      });
+      const fontsFailsafe = window.setTimeout(() => {
+        if (cancelled || fontsReady) return;
+        fontsReady = true;
+        maybeDismiss();
+      }, 4000);
+
+      return () => {
+        cancelled = true;
+        window.clearTimeout(minTimer);
+        window.clearTimeout(fontsFailsafe);
+        if (landTimer !== undefined) window.clearTimeout(landTimer);
+        creep?.kill();
+      };
     }
 
     // ── The milestone-driven bar ──
@@ -191,8 +270,16 @@ export default function IntroLoader() {
       }`}
       onTransitionEnd={() => {
         if (!dismissing) return;
+        // No-glass path (phones): nothing else will ever fire the reveal, so
+        // release the parked hero/rocks/clouds/collage here — the cover has
+        // finished fading, so their cascade begins on clean sky exactly as the
+        // glass dock would have started it.
+        if (ownsReveal.current && !introHasRevealed()) {
+          window.dispatchEvent(new Event(INTRO_REVEAL_EVENT));
+        }
         // Faded out — hand off. <Intro> starts its timeline on the now-clean sky;
-        // the scene warmed up under the cover, so there's no stall.
+        // the scene warmed up under the cover, so there's no stall. A no-op when
+        // <Intro> never mounted (its only listener).
         window.dispatchEvent(new Event(INTRO_GO_EVENT));
         setDone(true);
       }}

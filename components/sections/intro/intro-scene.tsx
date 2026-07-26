@@ -33,6 +33,7 @@ import {
   type SharedViewControls,
 } from "@/components/canvas/use-shared-view";
 import { FRONT_INDEX } from "@/components/canvas/indices";
+import { CAMERA_Z, ROCK_Z, TILE_Z } from "./intro-depths";
 import { setPlaneDprOverride } from "@/components/canvas/view-registry";
 import {
   SHOT_BASE,
@@ -186,18 +187,11 @@ const FONT = "/fonts/product-sans-medium.typeface.json";
  */
 const INTRO_DPR = 1;
 
-// Camera + rock depth, exported so <Intro> can compensate its DOM→world rock
-// placement: the planes sit slightly BEHIND the glass (so it refracts them), and
-// a point at ROCK_Z projects a touch toward screen centre vs the z=0 mapping
-// <Intro> measures with. <Intro> scales the rock coords by (CAMERA_Z - ROCK_Z) /
-// CAMERA_Z so they project to exactly the measured DOM rect — flush to the edges.
-export const CAMERA_Z = 40;
-export const ROCK_Z = -0.3;
-// Tiles sit just behind the glass (so it refracts them) and a hair in FRONT of
-// the rocks. <Intro> compensates its DOM→world tile placement by TILE_DEPTH, the
-// same projection trick the rocks use, so a tile lands pixel-exact on the DOM
-// shot it crossfades to.
-export const TILE_Z = -0.2;
+// Camera + plane depths live in the LEAF module intro-depths.ts, shared with
+// <Intro>. They must NOT be declared (or re-exported) here: <Intro> needs them
+// at measure time, and importing a runtime value from this file puts three/drei
+// into <Hero>'s static graph, undoing the dynamic() code-split. See
+// intro-depths.ts for the full rationale.
 
 // The scene's visible height at the z=0 plane. The telephoto fov is chosen so
 // this is exactly 8.284 (matching <Intro>'s wpp = 8.284/innerHeight), so the
