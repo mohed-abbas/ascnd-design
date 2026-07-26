@@ -136,12 +136,34 @@ function buildPinTimelineCss(clouds: StaticCloudSpec[]): string {
 
     const { extra, at } = c.pin;
     const flow = c.flow ?? DEFAULT_FLOW;
-    // Section height with the pin's own spacer excluded — offsetHeight of the
-    // section element itself, matching what the GSAP path measured.
-    const total = vh + extra + section.offsetHeight;
+
+    // ⚠️ MEASURE THE PIN-SPACER, NEVER THE SECTION.
+    // ScrollTrigger pins by setting the section to `position: fixed` and
+    // leaving a `.pin-spacer` behind to hold its place in flow. A fixed
+    // element's getBoundingClientRect() is viewport-relative, so the usual
+    // `rect.top + scrollY` idiom does NOT give its document position while the
+    // pin is engaged — it drifts by however far into the pin you are, measured
+    // at up to ~2100px here (the full pin distance).
+    //
+    // That matters because this runs on every ScrollTrigger.refresh(), and a
+    // refresh can perfectly well land while the visitor is inside the pin. When
+    // it did, `start` was overstated, the whole range slid down the page past
+    // pills, and the why-stay clouds were still mid-drift over working-with —
+    // showing up there as a second set of clouds on top of its own two. Which
+    // is precisely the "clouds double when I scroll back up" report.
+    //
+    // The spacer is never fixed and never moves, so it is always safe to
+    // measure. Its height already includes the pin distance, so it also gives
+    // `total` without having to re-add `extra`.
+    const spacer =
+      section.parentElement?.classList.contains("pin-spacer")
+        ? section.parentElement
+        : null;
+    const box = spacer ?? section;
+    const total = vh + (spacer ? spacer.offsetHeight : extra + section.offsetHeight);
     const pAt = (vh + at * extra) / total;
     // Document offset at which the GSAP trigger's "top bottom" start fires.
-    const start = section.getBoundingClientRect().top + window.scrollY - vh;
+    const start = box.getBoundingClientRect().top + window.scrollY - vh;
 
     // progress 0 → 1 over exactly [start, start + total], matching the trigger.
     const y0 = (pAt * flow * vh) / 100;
