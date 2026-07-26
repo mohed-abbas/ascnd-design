@@ -84,6 +84,78 @@ const timelineName = (selector: string) =>
  * every animation is a plain literal transform tween the compositor is
  * guaranteed to run off-main-thread.
  */
+/**
+ * Compositor rules for the PIN clouds — measured, so this cannot be a pure
+ * function of the spec like the one below.
+ *
+ * These were the last sprites left on the main thread, and on a phone they were
+ * the worst thing on the page: `position: fixed` elements whose `y` is written
+ * from a scroll handler while the page itself pans on the compositor. At
+ * walking pace the lag is a pixel or two and invisible; in a fling the browser
+ * coalesces scroll events down to ~10–15Hz, so the clouds visibly STEP at that
+ * rate against a perfectly smooth page. Reported, accurately, as "they feel
+ * like they're at less than 10fps when I scroll fast".
+ *
+ * The file's original reasoning for keeping them on GSAP is sound as far as it
+ * goes: their span is entrance + pin + exit, and a `view()` timeline on the
+ * section would stall mid-pin because a pinned section stops moving. But that
+ * argument only rules out view() — and it turns out nothing here needs it. The
+ * GSAP formula is
+ *
+ *     y = (pAt − progress) × flow × vh / 100 ,  progress = (scroll − start) / total
+ *
+ * which is LINEAR IN SCROLL. So it is exactly a field cloud with a computed
+ * slope and a non-zero offset, and `scroll(root)` — the same primitive the
+ * field clouds already run on, off the main thread, at any scroll speed —
+ * expresses it perfectly:
+ *
+ *     y(progress) = (pAt − progress) × flow × vh / 100
+ *
+ * so the two endpoints are simply progress 0 and progress 1, and
+ * `animation-range: <start>px <end>px` places them at the same scroll offsets
+ * the trigger used.
+ *
+ * ⚠️ THE RANGE IS LOAD-BEARING, not a detail. A ScrollTrigger is BOUNDED — past
+ * its end the tween holds its final value. Mapping these to the field clouds'
+ * open 0–FIELD_RANGE_PX range instead (the first version of this) let them keep
+ * drifting across the whole document at ~1.1px per px of scroll, so the
+ * why-stay clouds sailed up into working-with and appeared there as a second
+ * set of clouds on top of its own two. `animation-range` + `fill: both` clamps
+ * outside the span exactly as the trigger did.
+ *
+ * `start` and `total` are layout-dependent, so this is recomputed whenever
+ * ScrollTrigger refreshes (see the effect below).
+ */
+function buildPinTimelineCss(clouds: StaticCloudSpec[]): string {
+  const rules: string[] = [];
+  const vh = window.innerHeight;
+  for (const c of clouds) {
+    if (!c.pin || !c.trigger) continue;
+    const section = document.querySelector<HTMLElement>(c.trigger);
+    if (!section) continue;
+
+    const { extra, at } = c.pin;
+    const flow = c.flow ?? DEFAULT_FLOW;
+    // Section height with the pin's own spacer excluded — offsetHeight of the
+    // section element itself, matching what the GSAP path measured.
+    const total = vh + extra + section.offsetHeight;
+    const pAt = (vh + at * extra) / total;
+    // Document offset at which the GSAP trigger's "top bottom" start fires.
+    const start = section.getBoundingClientRect().top + window.scrollY - vh;
+
+    // progress 0 → 1 over exactly [start, start + total], matching the trigger.
+    const y0 = (pAt * flow * vh) / 100;
+    const y1 = ((pAt - 1) * flow * vh) / 100;
+
+    rules.push(
+      `@keyframes sc-${c.key} { from { transform: translateY(${y0.toFixed(1)}px); } to { transform: translateY(${y1.toFixed(1)}px); } }`,
+      // ⚠️ shorthand first — `animation:` resets timeline/range longhands.
+      `.sc-${c.key} { animation: sc-${c.key} 1ms linear both; animation-timeline: scroll(root); animation-range: ${start.toFixed(0)}px ${(start + total).toFixed(0)}px; }`,
+    );
+  }
+  return rules.join("\n");
+}
+
 function buildScrollTimelineCss(clouds: StaticCloudSpec[]): string {
   const rules: string[] = [];
   for (const c of clouds) {
@@ -134,6 +206,9 @@ export default function StaticCloudLayer({
     () => (compositor ? buildScrollTimelineCss(clouds) : ""),
     [compositor, clouds],
   );
+  // Pin-cloud rules are MEASURED, so unlike the static rules above they live in
+  // state and are rebuilt whenever the layout they were measured against moves.
+  const [pinCss, setPinCss] = useState("");
 
   // ——— Compositor wiring: name each section's view timeline and hoist the
   // names to <body> so the fixed sprites (not descendants of the sections)
@@ -157,6 +232,26 @@ export default function StaticCloudLayer({
     return () => {
       tagged.forEach((s) => s.style.removeProperty("view-timeline-name"));
       document.body.style.removeProperty("timeline-scope");
+    };
+  }, [compositor, clouds]);
+
+  // ——— Pin clouds on the compositor: measure, then re-measure whenever the
+  // page geometry they were derived from changes. ScrollTrigger.refresh() is
+  // the right signal (the pin itself re-measures there, and lenis-provider
+  // already debounces it behind a DOM-height watchdog), plus an orientation /
+  // real-resize pass. Deliberately NOT hooked to plain scroll: the whole point
+  // is that scrolling touches nothing here.
+  useEffect(() => {
+    if (!compositor) return;
+    if (!clouds.some((c) => c.pin)) return;
+    gsap.registerPlugin(ScrollTrigger);
+    const rebuild = () => setPinCss(buildPinTimelineCss(clouds));
+    rebuild();
+    ScrollTrigger.addEventListener("refresh", rebuild);
+    window.addEventListener("resize", rebuild);
+    return () => {
+      ScrollTrigger.removeEventListener("refresh", rebuild);
+      window.removeEventListener("resize", rebuild);
     };
   }, [compositor, clouds]);
 
@@ -194,10 +289,13 @@ export default function StaticCloudLayer({
       ScrollTrigger.addEventListener("refresh", onRefresh);
     }
 
-    // SECTION clouds (fallback only) + PIN clouds (always).
+    // SECTION + PIN clouds — fallback browsers only now. Pin clouds used to be
+    // unconditional here ("no view() timeline can express a pinned span"), but
+    // they run on scroll(root) instead (buildPinTimelineCss), so where the
+    // compositor path exists it owns every cloud and this loop does nothing.
     for (const c of clouds) {
       if (!c.trigger) continue;
-      if (compositor && !c.pin) continue; // compositor owns section clouds
+      if (compositor) continue;
       const section = document.querySelector<HTMLElement>(c.trigger);
       const el = imgRefs.current.get(c.key);
       if (!section || !el) continue;
@@ -304,7 +402,7 @@ export default function StaticCloudLayer({
           alt=""
           draggable={false}
           decoding="async"
-          className={compositor && !c.pin ? `w-full sc-${c.key}` : "w-full"}
+          className={compositor ? `w-full sc-${c.key}` : "w-full"}
           style={imgStyle}
         />
       </div>
@@ -314,7 +412,7 @@ export default function StaticCloudLayer({
   // content, front above the rock bases / intro canvas.
   return (
     <>
-      {compositor && <style>{css}</style>}
+      {compositor && <style>{`${css}\n${pinCss}`}</style>}
       <div aria-hidden style={reveal} className="pointer-events-none fixed inset-0 -z-10">
         {renderClouds("sky")}
       </div>

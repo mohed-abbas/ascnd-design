@@ -79,7 +79,17 @@ export default function Portfolio() {
           also pins the canvas to exactly 100dvh, which the tuned preset depends
           on — see cloud-canvas-scene.tsx for why a taller canvas would rescale
           the sphere instead of clearing it. */}
-      <div className="relative h-dvh w-full">
+      {/* max-md:h-svh — the band must NOT be dynamically sized on a phone.
+          `dvh` tracks the URL bar, so scrolling (especially UPWARD, which is
+          what re-reveals the bar) changed this band's height mid-scroll, the
+          ResizeObserver on the canvas fired, and engine.resize() reassigned
+          canvas.width — which CLEARS the backing store. Every URL-bar movement
+          therefore cost at least one blank frame, read as the tiles flashing
+          and juddering the whole way up. `svh` is the SMALL viewport height:
+          fixed, URL-bar-independent, so the band never resizes and the canvas
+          is never reallocated during a scroll. Desktop keeps dvh (no URL bar,
+          and dvh == svh there anyway). */}
+      <div className="relative h-dvh w-full max-md:h-svh">
         {/* Top row — filter tabs only; the heading lives at the globe's core. */}
         <div className="pointer-events-none relative z-10 flex w-full flex-col items-center pt-[10dvh] max-md:px-6">
           <div
