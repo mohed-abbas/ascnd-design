@@ -8,6 +8,7 @@ import type {
   ReactNode,
 } from "react";
 import { AURA, GLOW_OPACITY, SWEEP_DURATION } from "./aura";
+import AnchorLink from "./anchor-link";
 
 /**
  * The site's CTA button — factored out of the two hero CTAs (hero-text.tsx,
@@ -250,6 +251,27 @@ export default function Button({
   );
 
   if (props.href !== undefined) {
+    // A hash href is the one case that MUST be intercepted: left to the browser
+    // it does an instant jump, which both skips the site's scroll feel and
+    // fights the global Lenis instance driving the page. That interception
+    // already exists in exactly one place — <AnchorLink> — so route through it
+    // rather than growing a second copy here. Plain routes and external URLs
+    // have nothing to intercept and keep the bare <a>.
+    if (props.href.includes("#")) {
+      const { href, ...anchorProps } = props;
+      return (
+        <AnchorLink
+          ref={rootRef as React.RefObject<HTMLAnchorElement>}
+          href={href}
+          className={rootCls}
+          {...anchorProps}
+        >
+          {aura}
+          <span className="relative">{children}</span>
+        </AnchorLink>
+      );
+    }
+
     return (
       <a
         ref={rootRef as React.RefObject<HTMLAnchorElement>}

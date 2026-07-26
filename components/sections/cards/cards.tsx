@@ -19,6 +19,10 @@ import { CARD_COPY } from "./cards-data";
 export default function Cards() {
   return (
     <section
+      // `id` (not just the data-attribute) because this is a NAVIGATION target:
+      // the hero's "explore more" CTA glides here. data-cards stays the styling/
+      // query hook — ids are for anchors, so a link can never depend on one.
+      id="cards"
       data-cards
       className="relative min-h-dvh w-full overflow-hidden max-md:flex max-md:flex-col max-md:items-center max-md:gap-[40px] max-md:py-[80px]"
     >

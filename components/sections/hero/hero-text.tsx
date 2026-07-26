@@ -38,7 +38,10 @@ export default function HeroText() {
           data-reveal-order={5}
           className="inline-flex max-md:w-full"
         >
-          <Button variant="solid" href="#plans" className="max-md:w-full">
+          {/* "#cards" — the three-card "how it works" row, the first thing to
+              show someone who wants to see more. It was "#plans", an id that
+              exists on no page, so the CTA did nothing at all. */}
+          <Button variant="solid" href="#cards" className="max-md:w-full">
             explore more
           </Button>
         </span>

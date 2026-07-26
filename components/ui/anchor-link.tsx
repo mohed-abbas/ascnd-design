@@ -44,13 +44,22 @@ export default function AnchorLink({
   children,
   className,
   onClick,
+  ref,
   ...rest
 }: {
   href: string;
   children: ReactNode;
   className?: string;
   onClick?: (e: MouseEvent<HTMLAnchorElement>) => void;
-} & Omit<React.ComponentPropsWithoutRef<"a">, "href" | "onClick">) {
+  /**
+   * Forwarded to the underlying <a>. React 19 passes `ref` as an ordinary prop
+   * to function components, so no forwardRef wrapper is needed — but the props
+   * type has to name it, since ComponentPropsWithoutRef deliberately omits it.
+   * <Button> needs this: its hover aura reconciles against
+   * `root.matches(":hover")` on the real element.
+   */
+  ref?: React.Ref<HTMLAnchorElement>;
+} & Omit<React.ComponentPropsWithoutRef<"a">, "href" | "onClick" | "ref">) {
   const pathname = usePathname();
   const lenis = useLenis();
 
@@ -87,7 +96,13 @@ export default function AnchorLink({
   }
 
   return (
-    <Link href={href} className={className} onClick={handleClick} {...rest}>
+    <Link
+      href={href}
+      className={className}
+      onClick={handleClick}
+      ref={ref}
+      {...rest}
+    >
       {children}
     </Link>
   );

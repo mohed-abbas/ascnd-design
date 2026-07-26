@@ -27,9 +27,9 @@ import FinalCtaReveal from "./final-cta-reveal";
  * no-JS / reduced-motion show the full CTA); the driver only hides + plays once
  * it knows it'll animate.
  *
- * Button actions are intentionally left unwired (real <button>s, no handler) —
- * "choose a plan" → pricing and "book a 15-min intro call" → Cal.com get wired
- * when those integrations land (see CLAUDE.md's Stripe / Cal.com note).
+ * "choose a plan" glides to the Pricing section (#plans). "book a 15-min intro
+ * call" is still unwired — it waits on Cal.com, and until that lands it has no
+ * destination on this route (see CLAUDE.md's Stripe / Cal.com note).
  */
 export default function FinalCta() {
   return (
@@ -73,7 +73,10 @@ export default function FinalCta() {
           data-final-cta-actions
           className="flex items-center gap-[16px] max-md:w-full max-md:max-w-[360px] max-md:flex-col max-md:gap-[12px]"
         >
-          <Button variant="solid" className="max-md:w-full">
+          {/* #plans is the Pricing section — present on BOTH routes, so this
+              glides in-page whether the CTA is reached from the homepage or
+              from /pricing. */}
+          <Button variant="solid" href="#plans" className="max-md:w-full">
             choose a plan
           </Button>
           <Button variant="clear" className="max-md:w-full">

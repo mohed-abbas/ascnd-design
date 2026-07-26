@@ -28,6 +28,11 @@ import { FIXED_SPRINT, SUBSCRIPTION, type Plan } from "./pricing-data";
 export default function Pricing() {
   return (
     <section
+      // NAVIGATION target for every "see plans" / "choose a plan" CTA (pills,
+      // final-cta). This section renders on BOTH routes, so #plans resolves
+      // same-page on the homepage and on /pricing alike — no cross-route hop.
+      // data-pricing stays the styling/query hook; ids are for anchors.
+      id="plans"
       data-pricing
       // Desktop content-driven (no min-h-dvh) with 25dvh viewport-proportional
       // padding — matches the full-screen tagline/cards breathing room, so the

@@ -93,8 +93,13 @@ export default function Pills() {
           <PillsHeading />
 
           {/* Primary CTA — the site's shared solid Button (white gradient +
-              hover aura), exactly the surface this "see plans" node describes. */}
-          <Button variant="solid">see plans</Button>
+              hover aura), exactly the surface this "see plans" node describes.
+              #plans is the Pricing section, which renders on this route, so the
+              click glides there through Lenis (button.tsx routes hash hrefs
+              through AnchorLink). */}
+          <Button variant="solid" href="#plans">
+            see plans
+          </Button>
         </div>
       </div>
     </section>
