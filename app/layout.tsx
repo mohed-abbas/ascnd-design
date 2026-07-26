@@ -110,12 +110,29 @@ export default function RootLayout({
             H2: "credentials mode does not match" → double download): drei's
             useFont → THREE FileLoader fetches with mode "cors" / credentials
             "same-origin", which is exactly what crossOrigin="anonymous" makes
-            this preload request. */}
+            this preload request.
+
+            `media` is what keeps this off phones. The welcome scene is gated by
+            intro-state.ts on `(max-width: 768px)` and `prefers-reduced-motion`,
+            so on a phone nothing ever consumes this file and the preload was a
+            pure wasted download plus an unused-preload console warning.
+
+            It has to be an ATTRIBUTE rather than a runtime check because this is
+            a Server Component: it cannot know the viewport, and moving the tag
+            into a client component would push it past hydration and lose the
+            head start this preload exists to buy. A media query on a preload is
+            evaluated by the PRELOAD SCANNER during HTML parse — the browser
+            simply never issues the request when it doesn't match — so desktop
+            keeps the identical early fetch and mobile pays nothing. Keep this
+            query in lockstep with intro-state.ts's SMALL_SCREEN/REDUCE_MOTION.
+            (Its hasWebGL() gate has no media-query equivalent; a desktop with
+            WebGL disabled still fetches this, as it did before.) */}
         <link
           rel="preload"
           href="/fonts/product-sans-medium.typeface.json"
           as="fetch"
           crossOrigin="anonymous"
+          media="(min-width: 769px) and (prefers-reduced-motion: no-preference)"
         />
         {/* The bare cliff cut-outs are NOT hand-preloaded here anymore: the DOM
             <Rock> (rock.tsx) is `priority`, so next/image already emits an
@@ -127,13 +144,21 @@ export default function RootLayout({
             crossOrigin="anonymous" (a CORS image request) — so the preload
             must say so too, or it never matches (audit H2). Gated with the
             cloud layer itself (lib/flags.ts) — an unconsumed preload is a
-            wasted download + console warning. */}
+            wasted download + console warning.
+
+            …and gated by `media` on the SAME two conditions cloud-layer.tsx
+            uses to decide whether to mount the canvas at all (SMALL_SCREEN +
+            REDUCE_MOTION), for the same reason as the typeface above: on a
+            phone the volumetric canvas never mounts, so this sprite had no
+            consumer and was downloaded for nothing. Keep the query in step with
+            cloud-layer.tsx. */}
         {FLAGS.clouds && (
           <link
             rel="preload"
             href="/textures/cloud-puff.png"
             as="image"
             crossOrigin="anonymous"
+            media="(min-width: 769px) and (prefers-reduced-motion: no-preference)"
           />
         )}
         {/* Always open at the hero on a reload. Two separate browser behaviours
