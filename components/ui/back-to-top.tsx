@@ -88,16 +88,18 @@ export default function BackToTop() {
       // the tab order, hidden from AT).
       aria-hidden={!visible}
       tabIndex={visible ? 0 : -1}
-      // No backdrop-blur on a coarse pointer, and `invisible` (not just
-      // opacity-0) while hidden. This control is `fixed` and on screen for
-      // almost the whole page, so on a phone its backdrop-filter had to
-      // resample the moving page behind it on every scroll frame — and because
-      // it stays mounted at opacity-0, it was doing that even while invisible.
-      // `visibility: hidden` takes it out of compositing entirely; the opacity
-      // transition still runs, since visibility animates discretely and flips
-      // at the start of the fade-in. The white/10 fill plus the inset sheen
-      // carry the glass read on their own at this size.
-      className={`fixed right-[55px] top-[calc(62.4%_+_87px)] z-[900] flex size-[52px] items-center justify-center rounded-full border border-white/30 bg-white/10 text-white shadow-[inset_0_0_28.3px_0_rgba(255,255,255,0.25)] backdrop-blur-[10px] transition-[opacity,transform] duration-300 ease-out hover:bg-white/20 pointer-coarse:backdrop-blur-none max-md:bottom-[20px] max-md:right-[20px] max-md:top-auto ${
+      // The backdrop-blur runs on every input type, phones included — same
+      // deliberate call as the navbar capsule and the portfolio filter pill:
+      // this is `fixed`, so on a phone the filter resamples the moving page
+      // behind it every scroll frame, and that cost is accepted for the glass.
+      //
+      // `invisible` (not just opacity-0) while hidden is the part that stays,
+      // and it now matters more: kept mounted for its transition, the disc was
+      // compositing that blur layer even while unseen. `visibility: hidden`
+      // takes it out of compositing entirely, so the cost is only paid once
+      // the control is actually on screen. The opacity transition still runs —
+      // visibility animates discretely and flips at the start of the fade-in.
+      className={`fixed right-[55px] top-[calc(62.4%_+_87px)] z-[900] flex size-[52px] items-center justify-center rounded-full border border-white/30 bg-white/10 text-white shadow-[inset_0_0_28.3px_0_rgba(255,255,255,0.25)] backdrop-blur-[10px] transition-[opacity,transform] duration-300 ease-out hover:bg-white/20 max-md:bottom-[20px] max-md:right-[20px] max-md:top-auto ${
         visible
           ? "pointer-events-auto visible translate-y-0 opacity-100"
           : "pointer-events-none invisible translate-y-[10px] opacity-0"
