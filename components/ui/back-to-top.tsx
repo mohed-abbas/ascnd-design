@@ -88,10 +88,19 @@ export default function BackToTop() {
       // the tab order, hidden from AT).
       aria-hidden={!visible}
       tabIndex={visible ? 0 : -1}
-      className={`fixed right-[55px] top-[calc(62.4%_+_87px)] z-[900] flex size-[52px] items-center justify-center rounded-full border border-white/30 bg-white/10 text-white shadow-[inset_0_0_28.3px_0_rgba(255,255,255,0.25)] backdrop-blur-[10px] transition-[opacity,transform] duration-300 ease-out hover:bg-white/20 max-md:bottom-[20px] max-md:right-[20px] max-md:top-auto ${
+      // No backdrop-blur on a coarse pointer, and `invisible` (not just
+      // opacity-0) while hidden. This control is `fixed` and on screen for
+      // almost the whole page, so on a phone its backdrop-filter had to
+      // resample the moving page behind it on every scroll frame — and because
+      // it stays mounted at opacity-0, it was doing that even while invisible.
+      // `visibility: hidden` takes it out of compositing entirely; the opacity
+      // transition still runs, since visibility animates discretely and flips
+      // at the start of the fade-in. The white/10 fill plus the inset sheen
+      // carry the glass read on their own at this size.
+      className={`fixed right-[55px] top-[calc(62.4%_+_87px)] z-[900] flex size-[52px] items-center justify-center rounded-full border border-white/30 bg-white/10 text-white shadow-[inset_0_0_28.3px_0_rgba(255,255,255,0.25)] backdrop-blur-[10px] transition-[opacity,transform] duration-300 ease-out hover:bg-white/20 pointer-coarse:backdrop-blur-none max-md:bottom-[20px] max-md:right-[20px] max-md:top-auto ${
         visible
-          ? "pointer-events-auto translate-y-0 opacity-100"
-          : "pointer-events-none translate-y-[10px] opacity-0"
+          ? "pointer-events-auto visible translate-y-0 opacity-100"
+          : "pointer-events-none invisible translate-y-[10px] opacity-0"
       }`}
     >
       <ArrowUp className="h-[16px] w-[14px]" />

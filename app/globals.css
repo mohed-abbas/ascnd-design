@@ -404,8 +404,12 @@ html[data-custom-cursor="on"] * {
 /* Tagline "supersize" reveal (air.inc-style) — scrubbed per line via --p (0→1,
    set on the line by tagline-reveal.tsx and inherited down to each character's
    [data-tfill]). Defaults to 1 so SSR / no-JS / reduced-motion render the
-   finished headline. Two compositor-only channels off one variable (the line
-   stays in place):
+   finished headline. Two channels off one variable (the line stays in place).
+   ⚠️ NEITHER is compositor-animatable, despite the will-change hints below: an
+   animated `filter` re-runs its convolution and an animated `mask-image` whose
+   gradient STOPS move re-rasterises — both on every frame the scrub advances.
+   Affordable on a desktop GPU, not on a phone; see the coarse-pointer override
+   after the rules.
      • blur — clears from the resting 0.43vw (design value) to crisp
      • fill — a bright [data-tfill] clone (one per character) is wiped in
               bottom→top over the dim base through a progress-driven gradient
@@ -423,6 +427,27 @@ html[data-custom-cursor="on"] * {
   -webkit-mask-image: linear-gradient(transparent var(--top), #000 var(--bottom));
   mask-image: linear-gradient(transparent var(--top), #000 var(--bottom));
   will-change: mask;
+}
+
+/* Phones: drop the BLUR channel, keep the fill wipe and the per-character
+   roll-up (a plain transform, genuinely compositor-safe).
+
+   Of the two costly channels the blur is far the worse: it is a gaussian pass
+   over an entire supersize display line, re-run every frame for the whole
+   scrub. And this scrub starts at `top 65%` — i.e. it is already running while
+   the hero is still on screen, which is exactly where "scroll down from the
+   hero and it stutters" was reported. `will-change: filter` goes with it, so
+   the line stops holding a promoted layer it no longer paints into.
+
+   The reveal keeps its shape: the words still roll up and ink in, they simply
+   arrive sharp instead of resolving out of a haze. Keyed on (pointer: coarse)
+   to match the JS gates rather than on width, so a touchscreen laptop with a
+   trackpad keeps the full effect. */
+@media (pointer: coarse) {
+  [data-trise] {
+    filter: none;
+    will-change: auto;
+  }
 }
 
 /* Honour reduced-motion: stay armed (so the class can still gate JS), but show

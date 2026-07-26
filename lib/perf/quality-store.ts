@@ -26,6 +26,36 @@ function emit() {
   for (const l of listeners) l();
 }
 
+/**
+ * Is the primary input a finger? Memoised — the caps below are read inside
+ * frame loops, so this must not touch matchMedia per call.
+ *
+ * The tier system has NO viewport or input signal, and that gap lands hardest
+ * exactly where it hurts. Both common phones resolve to tier `high`: iOS
+ * reports renderer "Apple GPU" (no /apple m\d/ match in gpu-tier.ts), exposes
+ * no navigator.deviceMemory and 6 cores, so classifyFromContext falls through
+ * to `unknown` — which pickInitialTier deliberately treats as capable — while
+ * a flagship Adreno matches `strong` outright. Both then land on `high`, where
+ * heavyEffectFpsCap() returned 0 (uncapped) below 70Hz and scrollRepaintFpsCap()
+ * returned 0 unconditionally.
+ *
+ * The consequence was that every throttle written to protect these paths was
+ * inert on the devices that needed them — makeCappedInvalidate on the why-stay
+ * reel, and the portfolio globe's ticker. The frame-time watchdog would
+ * eventually demote a struggling device, but only after the jank it exists to
+ * prevent has already been felt, and mounted features lock their tier anyway.
+ * Gating on the input type fixes it at the source instead of guessing GPUs.
+ */
+let coarsePointer: boolean | undefined;
+function isCoarsePointer(): boolean {
+  if (coarsePointer === undefined) {
+    coarsePointer =
+      typeof window !== "undefined" &&
+      window.matchMedia("(pointer: coarse)").matches;
+  }
+  return coarsePointer;
+}
+
 /** Pick the starting tier from (refresh rate × GPU). Conservative: unknown → high. */
 export function pickInitialTier(hz: number, gpu: GpuStrength): TierName {
   if (gpu === "weak") return hz >= 90 ? "low" : "medium";
@@ -94,6 +124,7 @@ export function getRefreshHz(): number {
  * NOT for scroll-linked repaints — those use scrollRepaintFpsCap() below.
  */
 export function heavyEffectFpsCap(): number {
+  if (isCoarsePointer()) return 30;
   return refreshHz > 70 || currentTier !== "high" ? 60 : 0;
 }
 
@@ -110,6 +141,11 @@ export function heavyEffectFpsCap(): number {
  * the GPU backpressure the old blanket 60 cap was protecting against.
  */
 export function scrollRepaintFpsCap(): number {
+  // 60, never 0, on a phone — but never 30 either. These repaints are welded to
+  // content that scrolls at the panel's native rate, so capping them too far
+  // below it makes the weld visibly stagger; 60 halves the work on a 120Hz
+  // phone while staying in step with the scroller.
+  if (isCoarsePointer()) return 60;
   return currentTier !== "high" ? 60 : 0;
 }
 

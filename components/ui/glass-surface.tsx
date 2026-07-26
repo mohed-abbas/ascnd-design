@@ -228,6 +228,24 @@ const GlassSurface: React.FC<GlassSurfaceProps> = ({
       return false;
     }
 
+    // Coarse pointer → take the same CSS fallback, whatever the engine claims.
+    // The SVG path is a feImage(data-URI) + feDisplacementMap running as a
+    // BACKDROP filter, so it re-evaluates whenever anything behind it moves.
+    // Its consumer is the why-stay pill, and the pinned reel writes --reel-y
+    // right behind it for 2100px of scroll — so on Android (the only mobile
+    // engine that reaches this branch; iOS is excluded above as WebKit) every
+    // one of those writes dragged a full displacement pass with it. That is
+    // why the section reads as markedly worse on Android than on iOS, and the
+    // throttle meant to bound it, makeCappedInvalidate, is a no-op on phones
+    // because they resolve to tier `high` where scrollRepaintFpsCap() is 0.
+    //
+    // Making Android take the branch iOS already takes costs nothing in
+    // consistency — mobile then renders one recipe — and removes the cost
+    // outright rather than merely capping it.
+    if (window.matchMedia("(pointer: coarse)").matches) {
+      return false;
+    }
+
     const div = document.createElement("div");
     div.style.backdropFilter = `url(#${filterId})`;
 
