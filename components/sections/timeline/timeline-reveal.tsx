@@ -4,6 +4,7 @@ import { useEffect, useLayoutEffect } from "react";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { SplitText } from "gsap/SplitText";
+import { initTimelineMicro } from "./timeline-micro";
 import { DOTS, PATH_D } from "./timeline-path";
 
 gsap.registerPlugin(ScrollTrigger, SplitText);
@@ -14,6 +15,10 @@ const useIsomorphicLayoutEffect =
   typeof window !== "undefined" ? useLayoutEffect : useEffect;
 
 const REDUCE_MOTION = "(prefers-reduced-motion: reduce)";
+// The same breakpoint timeline.tsx switches the composition on, and the string
+// every other heavy-feature gate on the site uses (cloud-layer.tsx,
+// intro-state.ts) so a phone resolves them all identically.
+const SMALL_SCREEN = "(max-width: 768px)";
 
 /**
  * "your first month, plotted" scroll reveal — BOUND TO SCROLL (scrubbed). The
@@ -85,6 +90,13 @@ export default function TimelineReveal() {
     const stage = document.querySelector<HTMLElement>("[data-tl-stage]");
     if (!stage) return;
     if (window.matchMedia(REDUCE_MOTION).matches) return;
+    // Below md the stage is display:none and <TimelineMobile/> renders instead
+    // (timeline.tsx). Everything past this point drives nodes that only exist
+    // on the stage — the spine mask, the pen, the beat cards — and the pin
+    // would be measuring a zero-height box, so bail exactly as reduced-motion
+    // does and let the mobile layout stand in its resting (finished) state.
+    // Keep this breakpoint in step with the `md:` in timeline.tsx.
+    if (window.matchMedia(SMALL_SCREEN).matches) return;
 
     const maskPath = stage.querySelector<SVGPathElement>("[data-tl-mask]");
     const pen = stage.querySelector<SVGElement>("[data-tl-pen]");
@@ -100,26 +112,12 @@ export default function TimelineReveal() {
     );
     if (!maskPath || !pen || !dotEls.length) return;
 
-    // In-card micro-animation targets (any may be absent).
+    // The day-5 delivery badge is the one in-card element the SCRUBBED timeline
+    // owns (it stamps as the draw-head reaches day 5), so it stays here. The
+    // four infinite micro-loops live in timeline-micro.ts and are started at the
+    // end of build() — they're keyed to no scroll position, so they had no
+    // business being tangled up with the pin.
     const stampEl = stage.querySelector<HTMLElement>("[data-tl-stamp]");
-    const cellEls = gsap.utils.toArray<HTMLElement>(
-      stage.querySelectorAll("[data-tl-cell]"),
-    );
-    const refreshSpin = stage.querySelector<SVGElement>("[data-tl-refresh-spin]");
-    const refreshCheck = stage.querySelector<SVGElement>("[data-tl-refresh-check]");
-    const refreshAura = stage.querySelector<HTMLElement>("[data-tl-refresh-aura]");
-    const boardLoading = stage.querySelector<HTMLElement>("[data-tl-board-loading]");
-    const boardDone = stage.querySelector<HTMLElement>("[data-tl-board-done]");
-    const boardSpinner = stage.querySelector<SVGElement>("[data-tl-board-spinner]");
-    const progLabel = stage.querySelector<HTMLElement>("[data-tl-prog-label]");
-    const progFull = stage.querySelector<HTMLElement>("[data-tl-prog-full]");
-    const progBox = stage.querySelector<HTMLElement>("[data-tl-prog-box]");
-    const progLabelInner = stage.querySelector<HTMLElement>(
-      "[data-tl-prog-label-inner]",
-    );
-    const progFullInner = stage.querySelector<HTMLElement>(
-      "[data-tl-prog-full-inner]",
-    );
 
     // ── LEAD-IN: extend the spine back to the viewport's left margin. ──
     // The height-capped stage is CENTERED (timeline.tsx), so a gutter opens on
@@ -274,26 +272,14 @@ export default function TimelineReveal() {
     const startPct = toPct(startPt.x + TX, startPt.y + TY);
     pen.style.left = `${startPct.x + footOffX}%`;
     pen.style.top = `${startPct.y + footOffY}%`;
-    // Micro-animation resets (reduced-motion returned above, so finished-state
-    // markup stays put there). The refresh tick + aura are hidden via class.
-    // The banked-calendar cells rest at their design states (the bank pulse is
-    // a transient highlight, so nothing is parked hidden).
+    // The day-5 badge parks hidden (reduced-motion returned above, so the
+    // finished-state markup stays put there). The four micro-loops park their
+    // own targets in timeline-micro.ts.
     if (stampEl) gsap.set(stampEl, { autoAlpha: 0, scale: 0.6 });
-    // day-1 board starts on the loading state (spinner + "creating your board");
-    // the done row is the resting default, so flip them for the animation.
-    if (boardLoading) gsap.set(boardLoading, { autoAlpha: 1 });
-    if (boardDone) gsap.set(boardDone, { autoAlpha: 0 });
-    // day-2 first pill rests on the "UI/UX" label (progress row hidden).
-    if (progLabel) gsap.set(progLabel, { autoAlpha: 1 });
-    if (progFull) gsap.set(progFull, { autoAlpha: 0 });
 
     let ctx: gsap.Context | undefined;
     let split: SplitText | undefined;
-    let bankSplit: SplitText | undefined;
-    let boardIO: IntersectionObserver | undefined;
-    let progIO: IntersectionObserver | undefined;
-    let refreshIO: IntersectionObserver | undefined;
-    let cellIO: IntersectionObserver | undefined;
+    let stopMicro: (() => void) | undefined;
     let cancelled = false;
 
     const build = () => {
@@ -475,412 +461,13 @@ export default function TimelineReveal() {
         // A beat of dead scroll on the finished composition, so the pin doesn't
         // release the instant the pen lands.
         tl.to({}, { duration: PIN_HOLD }, DRAW_AT + DRAW_DURATION);
-
-        // day-1 button: an INFINITE loop, separate from the once main timeline.
-        // The text change is the subscribe card's PER-CHARACTER roll — the
-        // outgoing row fades out and the incoming row's letters roll up one by one
-        // (yPercent 110→0, staggered), the ✓ springing in. A dotted spinner spins
-        // continuously (own tween, smooth). An IntersectionObserver pauses it all
-        // off-screen (idle to zero).
-        if (boardSpinner && boardLoading && boardDone) {
-          const chars1 = gsap.utils.toArray<HTMLElement>(
-            boardLoading.querySelectorAll("[data-char]"),
-          );
-          const chars2 = gsap.utils.toArray<HTMLElement>(
-            boardDone.querySelectorAll("[data-char]"),
-          );
-          const boardCheck = boardDone.querySelector<SVGElement>("[data-tl-board-check]");
-
-          const STAGGER = 0.03;
-          const ROLL = 0.5;
-          const FADE = 0.3;
-          const CREATING = 2.0; // "creating" dwell
-          const DONE_HOLD = 1.6; // "board created" dwell
-          const tail = (n: number) => ROLL + Math.max(0, n - 1) * STAGGER;
-          const tA = CREATING; // swap → created
-          const tB = tA + 0.2 + tail(chars2.length) + DONE_HOLD; // swap → creating
-
-          // Continuous spinner — its own smooth tween (repeats 0→360 seamlessly),
-          // so it never stalls between cycles. ~0.9 rev/s.
-          const spin = gsap.to(boardSpinner, {
-            rotation: 360,
-            duration: 1.15,
-            ease: "none",
-            repeat: -1,
-            paused: true,
-          });
-
-          const loop = gsap.timeline({ repeat: -1, paused: true });
-          loop
-            .set(boardLoading, { autoAlpha: 1 }, 0)
-            .set(boardDone, { autoAlpha: 0 }, 0)
-            .set(chars1, { yPercent: 0 }, 0)
-            .set(chars2, { yPercent: 110 }, 0)
-            .set(boardCheck, { scale: 0 }, 0)
-            // creating dwell (0 → tA), then swap to "board created":
-            .to(boardLoading, { autoAlpha: 0, duration: FADE, ease: "power2.in" }, tA)
-            .set(boardDone, { autoAlpha: 1 }, tA + 0.18)
-            .to(
-              chars2,
-              { yPercent: 0, duration: ROLL, ease: "power3.out", stagger: STAGGER },
-              tA + 0.2,
-            )
-            .fromTo(
-              boardCheck,
-              { scale: 0 },
-              { scale: 1, duration: 0.34, ease: "back.out(3)" },
-              tA + 0.22,
-            )
-            // created dwell, then swap back to "creating your board":
-            .to(boardDone, { autoAlpha: 0, duration: FADE, ease: "power2.in" }, tB)
-            .set(chars1, { yPercent: 110 }, tB + 0.001)
-            .set(boardLoading, { autoAlpha: 1 }, tB + 0.18)
-            .to(
-              chars1,
-              { yPercent: 0, duration: ROLL, ease: "power3.out", stagger: STAGGER },
-              tB + 0.2,
-            );
-          boardIO = new IntersectionObserver(
-            ([entry]) => {
-              if (entry.isIntersecting) {
-                loop.play();
-                spin.play();
-              } else {
-                loop.pause();
-                spin.pause();
-              }
-            },
-            { threshold: 0 },
-          );
-          boardIO.observe(boardLoading);
-        }
-
-        // day-2 first pill: an INFINITE loop, separate from the once main
-        // timeline. The "UI/UX" category tag holds for 2s, then the chip WIDENS
-        // to fit the longer copy and the text rolls PER-CHARACTER to "35%
-        // completed" (the same subscribe-card roll); it holds, then shrinks +
-        // rolls back — forever. An IntersectionObserver idles it off-screen.
-        if (progLabel && progFull && progBox && progLabelInner && progFullInner) {
-          const charsLabel = gsap.utils.toArray<HTMLElement>(
-            progLabel.querySelectorAll("[data-char]"),
-          );
-          const charsFull = gsap.utils.toArray<HTMLElement>(
-            progFull.querySelectorAll("[data-char]"),
-          );
-
-          // Measure both rows' natural widths and express them in cqw (px ÷ stage
-          // width × 100) so the chip stays correct when the composition rescales.
-          const stageW = stage.getBoundingClientRect().width || 1;
-          const toCqw = (px: number) => (px / stageW) * 100;
-          const labelW = toCqw(progLabelInner.getBoundingClientRect().width);
-          const fullW = toCqw(progFullInner.getBoundingClientRect().width);
-          const w = { v: labelW };
-          const setW = () => {
-            progBox.style.width = `${w.v}cqw`;
-          };
-          setW(); // pin the resting width so the box no longer auto-sizes
-
-          const STAGGER = 0.03;
-          const ROLL = 0.5;
-          const FADE = 0.3;
-          const GROW = 0.4; // width tween — runs BEFORE the text rolls, so it never overflows
-          const SWAP_GAP = 0.42; // fade-out/grow → roll-in offset
-          const LABEL_HOLD = 2.0; // "UI/UX" dwell before flipping
-          const FULL_HOLD = 1.6; // "35% completed" dwell
-          const tail = (n: number) => ROLL + Math.max(0, n - 1) * STAGGER;
-          const tA = LABEL_HOLD; // swap → 35% completed
-          const tB = tA + SWAP_GAP + tail(charsFull.length) + FULL_HOLD; // swap → UI/UX
-
-          const progLoop = gsap.timeline({ repeat: -1, paused: true });
-          progLoop
-            .set(w, { v: labelW }, 0)
-            .set(progLabel, { autoAlpha: 1 }, 0)
-            .set(progFull, { autoAlpha: 0 }, 0)
-            .set(charsLabel, { yPercent: 0 }, 0)
-            .set(charsFull, { yPercent: 110 }, 0)
-            // label dwell (0 → tA), then fade out + widen, then roll "35% completed" in:
-            .to(progLabel, { autoAlpha: 0, duration: FADE, ease: "power2.in" }, tA)
-            .to(w, { v: fullW, duration: GROW, ease: "power2.inOut", onUpdate: setW }, tA)
-            .set(progFull, { autoAlpha: 1 }, tA + SWAP_GAP - 0.02)
-            .to(
-              charsFull,
-              { yPercent: 0, duration: ROLL, ease: "power3.out", stagger: STAGGER },
-              tA + SWAP_GAP,
-            )
-            // progress dwell, then fade the wide text out FIRST, and only shrink
-            // once it's gone — otherwise the still-visible (fading) "35%
-            // completed" is wider than the narrowing box and its afterimage spills
-            // out of the pill. Roll "UI/UX" back in after the shrink.
-            .to(progFull, { autoAlpha: 0, duration: FADE, ease: "power2.in" }, tB)
-            .to(
-              w,
-              { v: labelW, duration: GROW, ease: "power2.inOut", onUpdate: setW },
-              tB + FADE,
-            )
-            .set(charsLabel, { yPercent: 110 }, tB + FADE)
-            .set(progLabel, { autoAlpha: 1 }, tB + FADE + SWAP_GAP - 0.02)
-            .to(
-              charsLabel,
-              { yPercent: 0, duration: ROLL, ease: "power3.out", stagger: STAGGER },
-              tB + FADE + SWAP_GAP,
-            );
-          progIO = new IntersectionObserver(
-            ([entry]) => {
-              if (entry.isIntersecting) progLoop.play();
-              else progLoop.pause();
-            },
-            { threshold: 0 },
-          );
-          progIO.observe(progLabel);
-        }
-
-        // day-12: an INFINITE loop, separate from the once main timeline. The
-        // refresh icon spins "in progress" ~2s, then cross-fades to a green tick
-        // as the rainbow aura ignites ("done"), holds, then resets to the spinner
-        // and repeats — forever. A continuous spin tween keeps the icon turning
-        // smoothly; an IntersectionObserver idles it all off-screen.
-        if (refreshSpin && refreshCheck) {
-          const SPIN_HOLD = 2.0; // "in progress" dwell
-          const POP = 0.4; // tick spring-in
-          const FADE = 0.25;
-          const DONE_HOLD = 1.6; // "done" dwell on the tick + aura
-          const tA = SPIN_HOLD; // swap → tick
-          const tB = tA + POP + DONE_HOLD; // swap → spinner
-
-          // Continuous spin — its own smooth tween (0→360 repeats seamlessly), so
-          // the icon never stalls between cycles. ~1 rev/s (matches the old spin).
-          const spin = gsap.to(refreshSpin, {
-            rotation: 360,
-            duration: 1.0,
-            ease: "none",
-            repeat: -1,
-            paused: true,
-          });
-
-          const refreshLoop = gsap.timeline({ repeat: -1, paused: true });
-          refreshLoop
-            .set(refreshSpin, { autoAlpha: 1 }, 0)
-            .set(refreshCheck, { autoAlpha: 0, scale: 0.5 }, 0);
-          if (refreshAura) refreshLoop.set(refreshAura, { autoAlpha: 0 }, 0);
-          // in-progress dwell (0 → tA), then swap to the tick + aura:
-          refreshLoop
-            .to(refreshSpin, { autoAlpha: 0, duration: 0.2 }, tA)
-            .fromTo(
-              refreshCheck,
-              { autoAlpha: 0, scale: 0.5 },
-              { autoAlpha: 1, scale: 1, duration: POP, ease: "back.out(2)" },
-              tA,
-            );
-          if (refreshAura) refreshLoop.to(refreshAura, { autoAlpha: 1, duration: 0.4 }, tA);
-          // done dwell, then swap back to the spinner:
-          refreshLoop.to(
-            refreshCheck,
-            { autoAlpha: 0, duration: FADE, ease: "power2.in" },
-            tB,
-          );
-          if (refreshAura)
-            refreshLoop.to(refreshAura, { autoAlpha: 0, duration: FADE, ease: "power2.in" }, tB);
-          refreshLoop.set(refreshSpin, { autoAlpha: 1 }, tB + 0.18);
-
-          refreshIO = new IntersectionObserver(
-            ([entry]) => {
-              if (entry.isIntersecting) {
-                refreshLoop.play();
-                spin.play();
-              } else {
-                refreshLoop.pause();
-                spin.pause();
-              }
-            },
-            { threshold: 0 },
-          );
-          refreshIO.observe(refreshSpin);
-        }
-
-        // day-23: an INFINITE loop, separate from the once main timeline. The
-        // whole banking run resets to empty and each day "banks" in turn from
-        // day 1 (top-left) — smoothly brightening from white/50 to solid white
-        // and STAYING solid — so the fill sweeps the grid in a boustrophedon
-        // snake (row 1 →, row 2 ←, row 3 →) while a connector line draws through
-        // the cells in lockstep. It flows through all 17 days (1 → 17), the
-        // paused-days signs land, the "11 days banked" caption blur-rises in,
-        // the full board holds, then everything gently resets and replays. An
-        // IntersectionObserver idles it off-screen.
-        const bankDom = gsap.utils.toArray<HTMLElement>(
-          stage.querySelectorAll("[data-tl-bankable]"),
-        );
-        const bankTrail = stage.querySelector<SVGPathElement>("[data-tl-bank-trail]");
-        // The paused-days signs (days 18-28) — hidden until the fill lands.
-        const pauseEls = gsap.utils.toArray<SVGElement>(
-          stage.querySelectorAll("[data-tl-pause]"),
-        );
-        // The "11 days banked" caption (label words + trailing check) — held
-        // back further still: it captions the board only once the paused-days
-        // signs have finished landing, rising word by word like the section
-        // headings (SplitText is loaded anyway for the main heading).
-        const bankLabel = stage.querySelector<HTMLElement>("[data-tl-bank-label]");
-        const bankCheck = stage.querySelector<SVGElement>("[data-tl-bank-check]");
-        const labelTargets: Element[] = [];
-        if (bankLabel) {
-          bankSplit = new SplitText(bankLabel, { type: "words" });
-          labelTargets.push(...bankSplit.words);
-        }
-        if (bankCheck) labelTargets.push(bankCheck);
-        // Snake order (boustrophedon): group the muted cells into rows by their
-        // vertical position, then reverse every other row so the fill — and the
-        // trail line — flow row-to-row without diagonal jump-backs.
-        const bankRects = bankDom.map((el) => ({ el, r: el.getBoundingClientRect() }));
-        bankRects.sort((a, b) => a.r.top - b.r.top);
-        const bankRows: { el: HTMLElement; r: DOMRect }[][] = [];
-        for (const it of bankRects) {
-          const row = bankRows[bankRows.length - 1];
-          if (row && Math.abs(row[0].r.top - it.r.top) < it.r.height * 0.5) row.push(it);
-          else bankRows.push([it]);
-        }
-        const bankCells: HTMLElement[] = [];
-        bankRows.forEach((row, ri) => {
-          row.sort((a, b) => a.r.left - b.r.left);
-          if (ri % 2 === 1) row.reverse();
-          bankCells.push(...row.map((o) => o.el));
-        });
-
-        if (bankCells.length) {
-          const MUTED = "rgba(255,255,255,0.5)";
-          const SOLID = "rgba(255,255,255,1)";
-          const FILL = 0.5; // per-cell brighten
-          const STEP = 0.3; // gap between successive fills (overlaps → a flowing wave)
-          const HOLD_FULL = 3.2; // dwell on the full board (signs + caption need ~1.9s of it; the finished board then holds ~1.3s)
-          const RESET = 0.5; // gentle dim back to muted before replaying
-          const PAUSE_IN = 0.4; // each paused-days sign's fade
-          const PAUSE_STAGGER = 0.06;
-          const lastFillEnd = (bankCells.length - 1) * STEP + FILL;
-          // When the LAST paused-days sign has fully landed — the caption's cue.
-          const pauseDone =
-            lastFillEnd +
-            (pauseEls.length
-              ? PAUSE_IN + (pauseEls.length - 1) * PAUSE_STAGGER
-              : 0);
-
-          // Pin an explicit rgba resting colour so GSAP tweens rgba→rgba. The
-          // Tailwind `bg-white/50` class computes to an oklab/color-mix value
-          // GSAP can't parse, which made each cell blink transparent (the muted
-          // day "disappearing" and leaving a gap in the row) when its tween
-          // began. With a clean rgba start the fill just fades in place.
-          gsap.set(bankCells, { backgroundColor: MUTED });
-          // The paused-days signs stay hidden until the fill completes; the
-          // caption stays hidden until the signs have landed.
-          if (pauseEls.length) gsap.set(pauseEls, { autoAlpha: 0 });
-          if (labelTargets.length) gsap.set(labelTargets, { autoAlpha: 0 });
-          // The STATIC row-1 divider (the resting design's stand-in for the
-          // banked-run connector, timeline.tsx) stays hidden for the whole
-          // animated session — the drawn [data-tl-bank-trail] replaces it, and
-          // left visible it reads as a line through days that haven't banked.
-          const bankDivider = stage.querySelector<HTMLElement>(
-            "[data-tl-bank-divider]",
-          );
-          if (bankDivider) gsap.set(bankDivider, { autoAlpha: 0 });
-
-          const bankLoop = gsap.timeline({
-            repeat: -1,
-            repeatDelay: 0.6, // beat between passes
-            paused: true,
-          });
-          // The connector line draws in step with the fill (proxy → dashoffset,
-          // the same technique as the spine, so pathLength math stays reliable).
-          if (bankTrail) {
-            const td = { o: 1 };
-            const setTrail = () => {
-              bankTrail.style.strokeDashoffset = String(td.o);
-            };
-            // The draw LAGS the fill by one cell-fill: it starts once day 1 has
-            // fully banked (t = FILL) and ends with the last day (lastFillEnd).
-            // The cell-to-cell path distances are uniform, so with ease "none"
-            // the head crosses each gap while the next cell brightens and lands
-            // on it exactly as it completes — the line never pokes into days
-            // that haven't banked yet (starting at 0 had it running a gap ahead).
-            bankLoop
-              .set(bankTrail, { autoAlpha: 1 }, 0)
-              .set(td, { o: 1 }, 0)
-              .add(setTrail, 0)
-              .to(
-                td,
-                { o: 0, duration: lastFillEnd - FILL, ease: "none", onUpdate: setTrail },
-                FILL,
-              )
-              .to(bankTrail, { autoAlpha: 0, duration: RESET, ease: "power2.inOut" }, lastFillEnd + HOLD_FULL);
-          }
-          // Fill each cell in turn; they persist solid (no settle-back).
-          bankCells.forEach((cell, i) => {
-            bankLoop.to(
-              cell,
-              { backgroundColor: SOLID, duration: FILL, ease: "power2.out" },
-              i * STEP,
-            );
-          });
-          // Once the fill lands on the last banked day, the paused-days signs
-          // (18-28) fade in in turn — the "…and then you pause" beat — and fade
-          // back out on reset so the next pass replays clean.
-          if (pauseEls.length) {
-            bankLoop
-              .set(pauseEls, { autoAlpha: 0 }, 0)
-              .to(
-                pauseEls,
-                {
-                  autoAlpha: 1,
-                  duration: PAUSE_IN,
-                  ease: "power2.out",
-                  stagger: PAUSE_STAGGER,
-                },
-                lastFillEnd,
-              )
-              .to(
-                pauseEls,
-                { autoAlpha: 0, duration: RESET, ease: "power2.inOut" },
-                lastFillEnd + HOLD_FULL,
-              );
-          }
-          // …and only THEN the "11 days banked" caption — the same word-by-word
-          // blur-rise the section headings use (the check trails as the final
-          // "word"), fading out with everything else on reset. No clearProps:
-          // the loop repeats, and the fromTo re-seeds the parked state each pass.
-          if (labelTargets.length) {
-            bankLoop
-              .fromTo(
-                labelTargets,
-                { yPercent: 40, autoAlpha: 0, filter: "blur(8px)" },
-                {
-                  yPercent: 0,
-                  autoAlpha: 1,
-                  filter: "blur(0px)",
-                  duration: 0.7,
-                  ease: "power3.out",
-                  stagger: 0.06,
-                },
-                pauseDone,
-              )
-              .to(
-                labelTargets,
-                { autoAlpha: 0, duration: RESET, ease: "power2.inOut" },
-                lastFillEnd + HOLD_FULL,
-              );
-          }
-          // Hold the full grid, then ease the whole run back to muted to replay.
-          bankLoop.to(
-            bankCells,
-            { backgroundColor: MUTED, duration: RESET, ease: "power2.inOut" },
-            lastFillEnd + HOLD_FULL,
-          );
-
-          cellIO = new IntersectionObserver(
-            ([entry]) => {
-              if (entry.isIntersecting) bankLoop.play();
-              else bankLoop.pause();
-            },
-            { threshold: 0 },
-          );
-          cellIO.observe(bankCells[0]);
-        }
       }, stage);
+
+      // The four in-card infinite loops (timeline-micro.ts). Started here, after
+      // fonts.ready, because the progress chip MEASURES both of its labels to
+      // tween its own width between them — measuring against a fallback face
+      // pins the chip to the wrong size for the session.
+      stopMicro = initTimelineMicro(stage);
 
       // The pin's spacer pushes everything below the section down. The other
       // sections' triggers also build behind fonts.ready in their own effects
@@ -895,17 +482,9 @@ export default function TimelineReveal() {
 
     return () => {
       cancelled = true;
-      boardIO?.disconnect();
-      progIO?.disconnect();
-      refreshIO?.disconnect();
-      cellIO?.disconnect();
-      progBox?.style.removeProperty("width");
-      stage
-        .querySelector<SVGPathElement>("[data-tl-bank-trail]")
-        ?.style.removeProperty("stroke-dashoffset");
+      stopMicro?.();
       ctx?.revert();
       split?.revert();
-      bankSplit?.revert();
       // Drop the synchronous parks so the finished layout shows if we never built.
       // Restore the un-extended path (the lead-in rewrite, if it happened).
       maskPath.setAttribute("d", PATH_D);
@@ -918,22 +497,9 @@ export default function TimelineReveal() {
         clearProps: "transform,opacity,visibility,fillOpacity",
       });
       gsap.set(hidden, { clearProps: "opacity,visibility,transform,filter" });
-      // Restore the micro-animation targets (opacity clears revert the tick/aura
-      // to their class-hidden state).
-      const micro = [
-        stampEl,
-        refreshSpin,
-        refreshCheck,
-        refreshAura,
-        boardLoading,
-        boardDone,
-        boardSpinner,
-        progLabel,
-        progFull,
-        ...cellEls,
-      ].filter((el): el is HTMLElement | SVGElement => el != null);
-      if (micro.length)
-        gsap.set(micro, { clearProps: "opacity,visibility,transform,backgroundColor" });
+      // The day-5 badge back to its resting markup; the micro-loops' own targets
+      // are restored by stopMicro() above.
+      if (stampEl) gsap.set(stampEl, { clearProps: "opacity,visibility,transform" });
     };
   }, []);
 

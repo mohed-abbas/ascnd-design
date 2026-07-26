@@ -1,6 +1,7 @@
 import Image from "next/image";
 import type { ReactNode } from "react";
 import TimelineAura from "./timeline-aura";
+import TimelineMicroMount from "./timeline-micro-mount";
 import TimelineReveal from "./timeline-reveal";
 import { AscndMark, Check, Pause, Refresh, Spinner } from "./timeline-icons";
 import {
@@ -8,6 +9,7 @@ import {
   BANKED_GRID,
   BANKED_LABEL,
   beat,
+  BEATS,
   type Cell,
   DESIGNS_IN_REVIEW,
   HEADING,
@@ -80,7 +82,7 @@ export default function Timeline() {
           to cross the left gutter (the path's own start already bleeds 43
           frame-px off the stage edge). SSR / no-JS / reduced-motion show the
           un-extended path. */}
-      <div className="@container mx-auto w-[min(100%,153.97dvh)]">
+      <div className="@container mx-auto hidden w-[min(100%,153.97dvh)] md:block">
         {/* --tl-u is the TYPE unit, and the one knob for how big the words are.
             1cqw is the artwork's own unit (1% of stage width, 15.12px at the
             1512 design width), so type authored in it scales perfectly with the
@@ -115,14 +117,27 @@ export default function Timeline() {
                                   inverts. Without a ceiling a phone would ask
                                   for 3.9 and every beat would collide.
 
-            Below md the unit drops back to plain 1cqw — the composition is a
-            390px-wide miniature of a 1512px frame there (~3px type), a layout
-            problem this floor can't fix and would only fragment.
+            Below md this stage is NOT RENDERED AT ALL (max-md:hidden on the
+            wrapper above) — see <TimelineMobile/> below. The winding 1512×982
+            composition at 390px was a 0.258 miniature: measured, body copy came
+            out at 4.1px and the endnote at 3.6px. No type floor can fix that,
+            because the geometry it has to fit inside shrank with it.
+
+            --tl-g is the GEOMETRY unit, the counterpart to --tl-u. Widget
+            internals (pill radii, hairlines, calendar cells, grid gaps) were
+            authored in raw `cqw`; they are now `calc(<figma factor> *
+            var(--tl-g))`, and here --tl-g IS 1cqw — so `calc(4.101*var(--tl-g))`
+            is exactly the `4.101cqw` it replaced and desktop output is
+            unchanged, identically, at every width. The indirection exists so the
+            mobile layout can reuse the very same widget components with --tl-g
+            pinned to 15.12px (the design's own 1cqw at the 1512 frame), which
+            renders each widget at its true Figma pixel size instead of at a
+            fraction of a phone's width.
 
             The heading is the one size that stays on raw cqw (see below). */}
         <div
           data-tl-stage
-          className="relative aspect-[1512/982] w-full [--tl-u:1cqw] md:[--tl-u:clamp(1cqw,18px,1.36cqw)]"
+          className="relative aspect-[1512/982] w-full [--tl-g:1cqw] [--tl-u:1cqw] md:[--tl-u:clamp(1cqw,18px,1.36cqw)]"
         >
           {/* ── The dotted spine + its dots (one shared 1512×982 grid). ── */}
           {/* overflow-visible: the lead-in extension renders LEFT of the
@@ -427,8 +442,271 @@ export default function Timeline() {
           <TimelineReveal />
         </div>
       </div>
+
+      {/* The phone composition — same five beats, straightened. */}
+      <TimelineMobile />
     </section>
   );
+}
+
+/**
+ * The below-md timeline: the same journey read as a vertical list.
+ *
+ * WHY A SEPARATE COMPOSITION rather than a responsive one. The desktop artwork
+ * is a single aspect-locked 1512×982 stage with every beat absolutely placed at
+ * a `%` coordinate on that grid, threaded by one hand-authored SVG spine. There
+ * is no arrangement of those coordinates that survives a 390px viewport: the
+ * stage becomes 390×253, and everything inside it — type, cards, calendar,
+ * spine — is multiplied by 0.258 together. Measured on the shipped build, the
+ * subhead rendered at 4.1px and the endnote at 3.6px. The composition isn't
+ * mis-sized on a phone; it's the wrong composition for one.
+ *
+ * So the phone gets the straight version of the same idea: one vertical dotted
+ * spine down the left, a checkpoint dot per beat, and each beat's card stacked
+ * in reading order. Day 1 → day 23 top to bottom, which is the same journey the
+ * winding line describes, in the direction a phone already scrolls.
+ *
+ * WHAT IT REUSES. Every widget — CardText, TaskPill, Chip, ProgressChip,
+ * BankedCalendar, the delivery still — is the SAME component the desktop stage
+ * renders, not a copy. That works because their internals are expressed in the
+ * two unit variables and nothing else: --tl-u for type, --tl-g for geometry.
+ * Setting --tl-g to 15.12px (the design's own 1cqw at the 1512 frame) makes each
+ * widget render at exactly its authored Figma size — 17px calendar cells, 0.5px
+ * hairlines, a 38px task pill — instead of at a fraction of the phone's width.
+ * --tl-u:18px is the same value the desktop clamp targets, so the words are the
+ * size they were always meant to be.
+ *
+ * NO PIN, NO SCRUB. TimelineReveal early-returns below md (it drives the spine
+ * mask, the pen and the beat cards, all of which only exist on the stage), so
+ * this renders in the resting state — which is already the designed finished
+ * state, the one SSR / no-JS / reduced-motion have always shown. That also
+ * means the phone never meets this section's 200%-scroll pin, which is the
+ * single largest structural risk in a touch scroll.
+ */
+function TimelineMobile() {
+  return (
+    <div
+      // --tl-g at the design's own 1cqw, --tl-u at the size the desktop clamp
+      // targets. Both are inherited by every widget below.
+      className="px-6 [--tl-g:15.12px] [--tl-u:18px] md:hidden"
+    >
+      {/* @container + data-tl-mobile: timeline-micro.ts uses this element as
+          both its query scope and the box the progress chip's width is measured
+          against — it writes that width in `cqw`, so the element it measures
+          has to be the one `cqw` resolves to. On desktop the stage plays the
+          same role.
+          ⚠️ It must carry NO PADDING. `cqw` resolves against a container's
+          CONTENT box while the function measures getBoundingClientRect() (the
+          border box); on the stage the two are identical because it has none,
+          so any padding here would silently scale the progress chip by the
+          ratio between them. The gutter lives on the parent instead. */}
+      <div
+        data-tl-mobile
+        className="@container mx-auto flex w-full max-w-[372px] flex-col gap-[34px]"
+      >
+        {/* Header — the section heading takes the site's shared display token
+            here rather than the stage's cqw size, so it matches every other
+            heading on the page instead of the artwork it no longer sits in. */}
+        <div className="flex flex-col gap-[10px] text-white">
+          <h2 className="text-display leading-[1.1] tracking-[-0.03em]">
+            <span className="font-light">{HEADING.lead}</span>
+            <span className="font-instrument">{HEADING.accent}</span>
+          </h2>
+          <p className="text-[calc(1.058*var(--tl-u))] tracking-[0.02em] text-white/85">
+            {HEADING.sub}
+          </p>
+        </div>
+
+        {/* The spine, the beats, and the mark that CAPS the spine — one
+            positioning context, so the dots and the mark place against the
+            same left edge.
+
+            The dotted line is its own absolutely-positioned element rather than
+            a left border on the <ol>, for one reason: a border spans its
+            element's entire height, so the line ran past the last beat and
+            stopped in empty sky with the mark floating below it. Here it ENDS
+            at the mark — the same relationship the drawn spine has on desktop,
+            where the mark IS the pen that finishes the line. `bottom-[10px]` is
+            half the endnote row's line box, i.e. the mark's vertical centre.
+            1.5px white/85 dashed matches the drawn spine's stroke. */}
+        <div className="relative pl-[26px]">
+          <span
+            aria-hidden
+            className="absolute bottom-[10px] left-0 top-0 border-l-[1.5px] border-dashed border-white/85"
+          />
+
+          <ol className="m-0 flex list-none flex-col gap-[30px]">
+            {BEATS.map((b) => (
+              <li key={b.key} className="relative flex flex-col gap-[10px]">
+                {/* Checkpoint dot, sitting ON the spine and level with the day
+                    label's first line. Arithmetic, not taste: the <li> content
+                    edge is the wrapper's 26px padding right of the spine's outer
+                    edge, and the spine's centreline is 0.75px inside that, so
+                    the dot's CENTRE belongs at -25.25px. `left` places its left
+                    edge, so subtract half of its 9px → -29.75px. */}
+                <span
+                  aria-hidden
+                  className="absolute -left-[29.75px] top-[7px] size-[9px] rounded-full bg-white ring-[1.5px] ring-white"
+                />
+                <CardText k={b.key} />
+                <TimelineMobileWidget k={b.key} />
+              </li>
+            ))}
+          </ol>
+
+          {/* The endnote — the ascnd mark sits ON the spine's terminus, centred
+              on the same 0.75px centreline as the dots (0.75 − half of its 20px
+              − the 26px padding = −35.25px), with the words beside it.
+
+              ROTATED 152.8°, and that number is measured rather than eyeballed.
+              The mark is the PEN: on desktop TimelineReveal turns it to face the
+              direction of travel, with `penRotation = angleAt(len) − endAngle`,
+              so rotation 0 IS the artwork's end tangent — i.e. the glyph is
+              authored pointing along the line's final direction. Sampled off
+              [data-tl-mask] on the live stage, that tangent is −62.8° (up and to
+              the right). This spine travels straight DOWN (+90° in the same
+              screen convention), so the pen has to turn 90 − (−62.8) = 152.8° to
+              hold the identical relationship to its line. */}
+          <p className="relative mt-[30px] flex items-center text-[calc(0.926*var(--tl-u))] leading-[1.2] text-white/90">
+            <AscndMark
+              aria-hidden
+              className="absolute -left-[35.25px] w-[20px] rotate-[152.8deg] text-white"
+            />
+            {AND_UP_WE_GO}
+          </p>
+        </div>
+
+        {/* Drives the same four in-card loops the stage runs (renders null). */}
+        <TimelineMicroMount />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The per-beat widget that hangs under each mobile card — the same bespoke
+ * pieces the desktop beats carry, minus the ones that only make sense in the
+ * artwork (the day-1 board button reads as a real CTA out of context, and the
+ * floating "Designs in review" label has no curve to float on).
+ */
+function TimelineMobileWidget({ k }: { k: Parameters<typeof beat>[0] }) {
+  if (k === "subscribe") {
+    // The board button, carrying BOTH rows and the same data-tl-board-* hooks
+    // the stage's copy has, so timeline-micro.ts drives the identical
+    // loading→done loop here. The done row is the in-markup resting state
+    // (SSR / no-JS / reduced-motion); the loop flips them on start.
+    return (
+      <div className="relative inline-flex items-center justify-center self-start whitespace-nowrap rounded-[calc(2.116*var(--tl-g))] bg-gradient-to-b from-white to-[#efefef] px-[calc(1.323*var(--tl-u))] py-[calc(0.463*var(--tl-u))] text-[calc(1.058*var(--tl-u))] text-[#263138] shadow-[inset_0px_-2px_1px_0px_#f2f2f2,inset_0px_-2px_2px_0px_rgba(0,0,0,0.5)]">
+        <TimelineAura
+          radius="calc(2.116*var(--tl-g))"
+          ring="calc(0.2*var(--tl-g))"
+          spread="calc(0.44*var(--tl-g))"
+          blur="calc(0.62*var(--tl-g))"
+        />
+        <span className="relative flex">
+          {/* loading — in-flow, reserves the (wider) width */}
+          <span
+            data-tl-board-loading
+            className="pointer-events-none flex items-center gap-[calc(0.5*var(--tl-u))] leading-[1.2] opacity-0"
+          >
+            <Spinner
+              data-tl-board-spinner
+              className="size-[calc(1.058*var(--tl-u))] shrink-0"
+            />
+            <span className="inline-block">
+              <RollingText text="creating your board" />
+            </span>
+          </span>
+          {/* done — absolute overlay; resting default */}
+          <span
+            data-tl-board-done
+            className="pointer-events-none absolute inset-0 flex items-center justify-center gap-[calc(0.4*var(--tl-u))] leading-[1.2]"
+          >
+            <Check
+              data-tl-board-check
+              className="size-[calc(1.058*var(--tl-u))] shrink-0 text-[#34c759]"
+            />
+            <span className="inline-block">
+              <RollingText text="board created" />
+            </span>
+          </span>
+        </span>
+      </div>
+    );
+  }
+  if (k === "first-request") {
+    return (
+      <div className="flex flex-col gap-[6px]">
+        <TaskPill label="landing page refresh">
+          <ProgressChip />
+        </TaskPill>
+        <TaskPill label="request anything">
+          <Chip aura={false}>Brand</Chip>
+        </TaskPill>
+      </div>
+    );
+  }
+  if (k === "delivery") {
+    return (
+      <div className="relative aspect-[192/141] w-[192px] max-w-full">
+        <Image
+          src="/timeline/day5-delivery.png"
+          alt="the first delivered design, landed straight on your board"
+          fill
+          sizes="192px"
+          className="rounded-[13px] object-cover"
+        />
+        <span className="absolute -right-[6px] -top-[6px] flex size-[18px] items-center justify-center rounded-full border-[0.5px] border-white/50 bg-gradient-to-b from-black/10 to-black/5 text-white shadow-[inset_0_0_0_999px_rgba(255,255,255,0.12)]">
+          <Check className="size-[13px]" />
+        </span>
+      </div>
+    );
+  }
+  if (k === "revised") {
+    return (
+      <TaskPill label="landing page refresh" padLeft="calc(0.761*var(--tl-g))">
+        {/* Same data-tl-refresh-* hooks as the stage's, so the spin → green
+            tick → aura loop runs here too. Resting on the refresh glyph is the
+            static in-review state; the tick + aura start hidden by class. */}
+        <span
+          data-tl-refresh
+          className="relative grid size-[calc(1.588*var(--tl-u))] place-items-center rounded-full border-[calc(0.079*var(--tl-g))] border-[#ffe8b7] bg-white text-[#737373]"
+        >
+          <span
+            data-tl-refresh-aura
+            className="pointer-events-none absolute inset-0 opacity-0"
+          >
+            <TimelineAura
+              radius="9999px"
+              ring="calc(0.11*var(--tl-g))"
+              spread="calc(0.24*var(--tl-g))"
+              blur="calc(0.34*var(--tl-g))"
+            />
+          </span>
+          <Refresh
+            data-tl-refresh-spin
+            className="col-start-1 row-start-1 size-[calc(1.058*var(--tl-u))]"
+          />
+          <Check
+            data-tl-refresh-check
+            className="col-start-1 row-start-1 size-[calc(1.058*var(--tl-u))] text-[#34c759] opacity-0"
+          />
+        </span>
+      </TaskPill>
+    );
+  }
+  if (k === "pause") {
+    // Pinned to the design card's own width (11.24cqw of the 1512 frame). The
+    // calendar's divider is absolutely placed from the card's left edge for a
+    // card exactly this wide; give it a rounder number and the 7-cell grid —
+    // which centres itself — slides out from under the line.
+    return (
+      <div className="w-[calc(11.24*var(--tl-g))] max-w-full">
+        <BankedCalendar />
+      </div>
+    );
+  }
+  return null;
 }
 
 /**
@@ -487,7 +765,7 @@ function TaskPill({
   // Height rides the TYPE unit, not raw cqw: the row is sized around its label,
   // so a floored label in a stage-scaled pill would outgrow the capsule.
   return (
-    <div className="relative flex h-[calc(2.116*var(--tl-u))] w-full items-center rounded-[4.101cqw] border-[0.033cqw] border-white/60 bg-gradient-to-b from-black/10 to-black/5 shadow-[inset_0_0_0_999px_rgba(255,255,255,0.06)]">
+    <div className="relative flex h-[calc(2.116*var(--tl-u))] w-full items-center rounded-[calc(4.101*var(--tl-g))] border-[calc(0.033*var(--tl-g))] border-white/60 bg-gradient-to-b from-black/10 to-black/5 shadow-[inset_0_0_0_999px_rgba(255,255,255,0.06)]">
       <span
         className="text-[calc(0.728*var(--tl-u))] text-white"
         style={{ paddingLeft: padLeft }}
@@ -507,9 +785,9 @@ function TaskPill({
  */
 function Chip({ children, aura = true }: { children: ReactNode; aura?: boolean }) {
   return (
-    <span className="relative flex items-center justify-center rounded-[2.05cqw] bg-white px-[calc(0.633*var(--tl-u))] py-[calc(0.317*var(--tl-u))] text-[calc(0.661*var(--tl-u))] leading-[1.5] text-[#263138]">
+    <span className="relative flex items-center justify-center rounded-[calc(2.05*var(--tl-g))] bg-white px-[calc(0.633*var(--tl-u))] py-[calc(0.317*var(--tl-u))] text-[calc(0.661*var(--tl-u))] leading-[1.5] text-[#263138]">
       {aura && (
-        <TimelineAura radius="2.05cqw" ring="0.11cqw" spread="0.26cqw" blur="0.36cqw" />
+        <TimelineAura radius="calc(2.05*var(--tl-g))" ring="calc(0.11*var(--tl-g))" spread="calc(0.26*var(--tl-g))" blur="calc(0.36*var(--tl-g))" />
       )}
       <span className="relative">{children}</span>
     </span>
@@ -526,8 +804,8 @@ function Chip({ children, aura = true }: { children: ReactNode; aura?: boolean }
  */
 function ProgressChip() {
   return (
-    <span className="relative flex items-center justify-center rounded-[2.05cqw] bg-white px-[calc(0.633*var(--tl-u))] py-[calc(0.317*var(--tl-u))] text-[calc(0.661*var(--tl-u))] leading-[1.5] text-[#263138]">
-      <TimelineAura radius="2.05cqw" ring="0.11cqw" spread="0.26cqw" blur="0.36cqw" />
+    <span className="relative flex items-center justify-center rounded-[calc(2.05*var(--tl-g))] bg-white px-[calc(0.633*var(--tl-u))] py-[calc(0.317*var(--tl-u))] text-[calc(0.661*var(--tl-u))] leading-[1.5] text-[#263138]">
+      <TimelineAura radius="calc(2.05*var(--tl-g))" ring="calc(0.11*var(--tl-g))" spread="calc(0.26*var(--tl-g))" blur="calc(0.36*var(--tl-g))" />
       {/* The box width animates to fit whichever label shows: TimelineReveal
           measures both rows' natural widths (in cqw, so it stays responsive) and
           tweens the box between them as the text rolls. The label row is in-flow
@@ -566,7 +844,7 @@ function BankedCalendar() {
   // ancestor filter suspends the frost, and it popped back on when clearProps
   // removed it. The veil fades with the card like any other paint.
   return (
-    <div className="relative flex w-full flex-col items-center gap-[0.463cqw] overflow-hidden rounded-[0.7cqw] border-[0.048cqw] border-white bg-gradient-to-b from-black/10 to-black/5 px-[0.7cqw] py-[0.661cqw] shadow-[inset_0_0_0_999px_rgba(255,255,255,0.06)]">
+    <div className="relative flex w-full flex-col items-center gap-[calc(0.463*var(--tl-g))] overflow-hidden rounded-[calc(0.7*var(--tl-g))] border-[calc(0.048*var(--tl-g))] border-white bg-gradient-to-b from-black/10 to-black/5 px-[calc(0.7*var(--tl-g))] py-[calc(0.661*var(--tl-g))] shadow-[inset_0_0_0_999px_rgba(255,255,255,0.06)]">
       {/* Subtle divider behind the grid (746:4445). It lies exactly on row 1's
           centerline — the RESTING design's static stand-in for the banked-run
           connector (days 1-6 rest solid there). TimelineReveal hides it while
@@ -574,7 +852,7 @@ function BankedCalendar() {
           that haven't banked yet; SSR / reduced-motion keep it. */}
       <span
         data-tl-bank-divider
-        className="pointer-events-none absolute left-[1.671cqw] top-[2.663cqw] h-[0.033cqw] w-[7.341cqw] bg-white"
+        className="pointer-events-none absolute left-[calc(1.671*var(--tl-g))] top-[calc(2.663*var(--tl-g))] h-[calc(0.033*var(--tl-g))] w-[calc(7.341*var(--tl-g))] bg-white"
       />
       {/* The "11 days banked" caption. TimelineReveal holds it back until the
           paused-days signs land each loop pass, then blur-rises it in word by
@@ -586,7 +864,7 @@ function BankedCalendar() {
         </span>
         <Check data-tl-bank-check className="size-[calc(0.926*var(--tl-u))]" />
       </div>
-      <div data-tl-grid className="relative flex flex-col items-center gap-[0.322cqw]">
+      <div data-tl-grid className="relative flex flex-col items-center gap-[calc(0.322*var(--tl-g))]">
         {/* The "banked run" connector line (746:4444). It sits behind the cells
             — showing through the gaps like linked nodes — and TimelineReveal
             draws it in sync with the fill, snaking from day 1 (top-left) through
@@ -613,7 +891,7 @@ function BankedCalendar() {
           />
         </svg>
         {BANKED_GRID.map((row, r) => (
-          <div key={r} className="flex gap-[0.322cqw]">
+          <div key={r} className="flex gap-[calc(0.322*var(--tl-g))]">
             {row.map((cell, c) => (
               // The banking run is days 1–17: every non-pause cell in the first
               // three rows. Marking days 1–6 bankable too (not just the muted
@@ -633,12 +911,12 @@ function DayCell({ state, bankable = false }: { state: Cell; bankable?: boolean 
     <div
       data-tl-cell
       data-tl-bankable={bankable ? "" : undefined}
-      className={`flex size-[1.129cqw] items-center justify-center rounded-full ${
+      className={`flex size-[calc(1.129*var(--tl-g))] items-center justify-center rounded-full ${
         state === "solid" ? "bg-white" : state === "muted" ? "bg-white/50" : "bg-white/30"
       }`}
     >
       {state === "pause" && (
-        <Pause data-tl-pause className="size-[1.129cqw] text-white" />
+        <Pause data-tl-pause className="size-[calc(1.129*var(--tl-g))] text-white" />
       )}
     </div>
   );
