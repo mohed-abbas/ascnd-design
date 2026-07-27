@@ -74,6 +74,34 @@ const canUseScrollTimeline = () =>
   CSS.supports("animation-timeline: view()") &&
   CSS.supports("timeline-scope: --t");
 
+/**
+ * The viewport height the CONTENT is laid out against: `100svh`, the SMALL
+ * viewport — the one with the mobile browser chrome expanded. Constant for the
+ * life of an orientation.
+ *
+ * `window.innerHeight` is not that. It tracks the URL bar, and every cloud
+ * offset here is a multiple of it (`flow` and `travel` are expressed in vh), so
+ * re-reading it re-scaled the whole sky's drift the moment the bar moved: with
+ * a flow of ~500 a 10% viewport change is ~0.5vh of instant jump. The sections
+ * stopped doing this when they moved to `svh`; the clouds kept doing it in JS,
+ * which is why they were the only thing left stepping.
+ *
+ * Measured from a probe because there is no `window.smallViewportHeight` to ask.
+ * One forced layout per call, and it's called on mount and on refresh only —
+ * never per scroll update. Falls back to innerHeight if `svh` is unsupported
+ * (nothing in the browserslist target is, but the probe returning 0 shouldn't
+ * park every cloud at the origin).
+ */
+function stableViewportHeight(): number {
+  const probe = document.createElement("div");
+  probe.style.cssText =
+    "position:fixed;top:0;left:0;width:0;height:100svh;visibility:hidden;pointer-events:none";
+  document.documentElement.appendChild(probe);
+  const h = probe.getBoundingClientRect().height;
+  probe.remove();
+  return h || window.innerHeight;
+}
+
 // "[data-cards]" → "--sct-data-cards" — one named timeline per section.
 const timelineName = (selector: string) =>
   `--sct-${selector.replace(/[^a-zA-Z0-9-]/g, "")}`;
@@ -128,7 +156,7 @@ const timelineName = (selector: string) =>
  */
 function buildPinTimelineCss(clouds: StaticCloudSpec[]): string {
   const rules: string[] = [];
-  const vh = window.innerHeight;
+  const vh = stableViewportHeight();
   for (const c of clouds) {
     if (!c.pin || !c.trigger) continue;
     const section = document.querySelector<HTMLElement>(c.trigger);
@@ -202,7 +230,7 @@ function buildScrollTimelineCss(clouds: StaticCloudSpec[]): string {
     const d0 = -2 * at;
     const d1 = 2 * (1 - at);
     rules.push(
-      `@keyframes sc-${c.key} { from { transform: translateY(${y(d0)}vh) scale(${s(d0)}); } to { transform: translateY(${y(d1)}vh) scale(${s(d1)}); } }`,
+      `@keyframes sc-${c.key} { from { transform: translateY(${y(d0)}svh) scale(${s(d0)}); } to { transform: translateY(${y(d1)}svh) scale(${s(d1)}); } }`,
       `.sc-${c.key} { animation: sc-${c.key} 1ms linear both; animation-timeline: ${timelineName(c.trigger)}; }`,
     );
   }
@@ -322,10 +350,17 @@ export default function StaticCloudLayer({
       const el = imgRefs.current.get(c.key);
       if (!section || !el) continue;
 
-      // Viewport height, captured per refresh instead of read per update: the
-      // mobile URL bar changes innerHeight mid-fling, which made the drift
-      // amplitude wobble during the scroll it was sampled in.
-      let vh = window.innerHeight;
+      // Viewport height, captured per refresh instead of read per update, and
+      // read as the STABLE small viewport rather than innerHeight.
+      //
+      // Capturing per refresh was the first half of this fix: innerHeight
+      // changing mid-fling made the drift amplitude wobble during the very
+      // scroll it was sampled in. But it only reduced the frequency of the
+      // problem — the value was still a URL-bar-dependent one, so every refresh
+      // re-scaled the whole sky and the clouds stepped. stableViewportHeight()
+      // removes the dependency instead of re-sampling it, and matches the unit
+      // the sections themselves are now laid out in.
+      let vh = stableViewportHeight();
 
       if (c.pin) {
         // The element's viewport crossing understates a pinned section's real
@@ -347,12 +382,12 @@ export default function StaticCloudLayer({
         const st = ScrollTrigger.create({
           trigger: section,
           start: "top bottom",
-          end: () => `+=${window.innerHeight + extra + section.offsetHeight}`,
+          end: () => `+=${vh + extra + section.offsetHeight}`,
           scrub: true,
           invalidateOnRefresh: true,
           onUpdate: apply,
           onRefresh: (self) => {
-            vh = window.innerHeight;
+            vh = stableViewportHeight();
             apply(self);
           },
         });
@@ -378,7 +413,7 @@ export default function StaticCloudLayer({
         invalidateOnRefresh: true,
         onUpdate: apply,
         onRefresh: (self) => {
-          vh = window.innerHeight;
+          vh = stableViewportHeight();
           apply(self);
         },
       });
@@ -435,10 +470,10 @@ export default function StaticCloudLayer({
   return (
     <>
       {compositor && <style>{`${css}\n${pinCss}`}</style>}
-      <div aria-hidden style={reveal} className="pointer-events-none fixed inset-0 -z-10 min-h-[100lvh]">
+      <div aria-hidden style={reveal} className="pointer-events-none fixed inset-0 -z-10">
         {renderClouds("sky")}
       </div>
-      <div aria-hidden style={reveal} className="pointer-events-none fixed inset-0 z-[61] min-h-[100lvh]">
+      <div aria-hidden style={reveal} className="pointer-events-none fixed inset-0 z-[61]">
         {renderClouds("front")}
       </div>
     </>

@@ -31,22 +31,41 @@ const GRAIN =
 // varless/blank. The solid `bg-[#62abff]` beneath is a last-ditch floor so the
 // sky can never fall through to black. The `mid` stop at 55% keeps the warm
 // `bottom` band reading as a lower-viewport horizon glow for sunrise/sunset.
+// BLEED. The layer extends 10lvh PAST the viewport at both ends (see the render
+// below), so the stops are remapped from 0/55/100 onto that taller box: with a
+// 100lvh viewport the box is 120lvh and the visible slice runs 10→110, i.e.
+// 8.333%→91.667%. Those three numbers are the original 0/55/100 measured in the
+// new box, so the gradient INSIDE the viewport is pixel-identical to before.
+// Past the end stops a CSS gradient clamps to its end colour, which is exactly
+// what the bleed wants: solid --sky-top above, solid --sky-bottom below, each
+// continuing the edge it adjoins.
 const SKY_GRADIENT =
-  "linear-gradient(to bottom, var(--sky-top, #4a9dff) 0%, var(--sky-mid, #62abff) 55%, var(--sky-bottom, #9cc9ff) 100%)";
+  "linear-gradient(to bottom, var(--sky-top, #4a9dff) 8.333%, var(--sky-mid, #62abff) 54.167%, var(--sky-bottom, #9cc9ff) 91.667%)";
 
 export default function Background() {
   return (
     <div
       aria-hidden
-      // `min-h-[100lvh]` on top of inset-0: `lvh` is the LARGE viewport height,
-      // i.e. the viewport with the mobile browser chrome fully retracted. A
-      // fixed element sized only by inset-0 resolves against the layout
-      // viewport, which on iOS does not reliably grow as the URL bar collapses —
-      // leaving a strip along the top/bottom edge where the sky simply isn't
-      // painted and the page canvas shows through instead. Sizing to the LARGEST
-      // the viewport can ever be means there is no such strip at any point in
-      // the chrome's travel. Desktop is unaffected: lvh == vh with no chrome.
-      className="pointer-events-none fixed inset-0 -z-20 min-h-[100lvh] bg-[#62abff]"
+      // BLEEDS 10lvh past the viewport at top AND bottom, rather than sitting
+      // flush at inset-0.
+      //
+      // A fixed layer at inset-0 is only as tall as the LAYOUT viewport, and on
+      // iOS the page is painted edge-to-edge behind the translucent browser
+      // chrome — so the strip under the toolbar isn't covered by this element at
+      // all, and what shows there is the page canvas (body's flat --sky-mid):
+      // no gradient, no grain. Measured off a device screenshot, the strip read
+      // #5ba8fc–#6eb0fd against #a5cdf9 for the real sky directly above it —
+      // i.e. --sky-mid where --sky-bottom belonged. `min-h-[100lvh]` was tried
+      // first and does NOT fix it: the box already resolves to about that, and
+      // the uncovered strip is BELOW it.
+      //
+      // Bleeding past both edges sidesteps the question of exactly how big the
+      // viewport is at any moment: there is simply more sky than viewport in
+      // every direction, so no chrome position can expose the canvas. The
+      // gradient stops above are remapped to keep the visible slice identical,
+      // and the grain child spans the bleed with it. Desktop: the bleed is
+      // off-screen and nothing changes.
+      className="pointer-events-none fixed inset-x-0 top-[-10lvh] bottom-[-10lvh] -z-20 bg-[#62abff]"
       style={{ backgroundImage: SKY_GRADIENT }}
     >
       {/* Grain — 256px seamless noise tile above the fill. Opacity is per-MODE
