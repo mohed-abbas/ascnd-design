@@ -1,5 +1,4 @@
-// Re-import when the why-stay conveyor below is re-enabled.
-// import { WHYSTAY_PIN_EXTRA } from "@/components/sections/why-stay/why-stay-data";
+import { WHYSTAY_PIN_EXTRA } from "@/components/sections/why-stay/why-stay-data";
 
 // Static (sprite) cloud placement data — the mobile/no-WebGL counterpart of
 // cloud-specs.ts. Consumed by static-cloud-layer.tsx, which renders each entry
@@ -137,6 +136,19 @@ export const STATIC_CLOUDS: StaticCloudSpec[] = [
   // shared `flow` keeps them evenly spaced — a continuous streak, so the sky is
   // never empty during the long pin. Sides alternate; y varies so the stream
   // doesn't read as a rigid queue.
+  // HALF-STRENGTH CONVEYOR (fill-rate experiment): 3 clouds instead of 6,
+  // widths trimmed to ≤50vw. The six-cloud conveyor kept 2–3 large translucent
+  // sprites on screen at once ON TOP OF the pinned reel scrub + the glass
+  // pill's per-frame backdrop displacement, and the combined GPU load dropped
+  // frames on phones — visible as the clouds "stepping" (they're the biggest,
+  // fastest-moving thing during the pin). Ats re-welded to 0 / 0.5 / 1 so the
+  // three stay evenly spaced (~135vh apart at flow 500 — at most one on screen
+  // at a time), sides alternating L→R→L. The original six kept below for
+  // restore-as-tuned if the reduced set proves smooth and we want to negotiate
+  // the count back up.
+  { key: "whystay-1", sprite: "whystay-left.webp", layer: "sky", trigger: "[data-whystay]", pin: { extra: WHYSTAY_PIN_EXTRA, at: 0 }, x: 14, y: 42, width: 50 },
+  { key: "whystay-2", sprite: "puff-soft.webp", layer: "sky", trigger: "[data-whystay]", pin: { extra: WHYSTAY_PIN_EXTRA, at: 0.5 }, x: 86, y: 55, width: 46 },
+  { key: "whystay-5", sprite: "puff-small.webp", layer: "sky", trigger: "[data-whystay]", pin: { extra: WHYSTAY_PIN_EXTRA, at: 1 }, x: 16, y: 52, width: 44 },
   // { key: "whystay-1", sprite: "whystay-left.webp", layer: "sky", trigger: "[data-whystay]", pin: { extra: WHYSTAY_PIN_EXTRA, at: 0 / 5 }, x: 14, y: 42, width: 56 },
   // { key: "whystay-2", sprite: "puff-soft.webp", layer: "sky", trigger: "[data-whystay]", pin: { extra: WHYSTAY_PIN_EXTRA, at: 1 / 5 }, x: 86, y: 55, width: 48 },
   // { key: "whystay-3", sprite: "wide-bank.webp", layer: "sky", trigger: "[data-whystay]", pin: { extra: WHYSTAY_PIN_EXTRA, at: 2 / 5 }, x: 12, y: 60, width: 60 },
