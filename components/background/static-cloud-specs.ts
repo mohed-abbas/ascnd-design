@@ -1,4 +1,5 @@
-import { WHYSTAY_PIN_EXTRA } from "@/components/sections/why-stay/why-stay-data";
+// Re-import when the why-stay conveyor below is re-enabled.
+// import { WHYSTAY_PIN_EXTRA } from "@/components/sections/why-stay/why-stay-data";
 
 // Static (sprite) cloud placement data — the mobile/no-WebGL counterpart of
 // cloud-specs.ts. Consumed by static-cloud-layer.tsx, which renders each entry
@@ -136,12 +137,12 @@ export const STATIC_CLOUDS: StaticCloudSpec[] = [
   // shared `flow` keeps them evenly spaced — a continuous streak, so the sky is
   // never empty during the long pin. Sides alternate; y varies so the stream
   // doesn't read as a rigid queue.
-  { key: "whystay-1", sprite: "whystay-left.webp", layer: "sky", trigger: "[data-whystay]", pin: { extra: WHYSTAY_PIN_EXTRA, at: 0 / 5 }, x: 14, y: 42, width: 56 },
-  { key: "whystay-2", sprite: "puff-soft.webp", layer: "sky", trigger: "[data-whystay]", pin: { extra: WHYSTAY_PIN_EXTRA, at: 1 / 5 }, x: 86, y: 55, width: 48 },
-  { key: "whystay-3", sprite: "wide-bank.webp", layer: "sky", trigger: "[data-whystay]", pin: { extra: WHYSTAY_PIN_EXTRA, at: 2 / 5 }, x: 12, y: 60, width: 60 },
-  { key: "whystay-4", sprite: "whystay-small.webp", layer: "sky", trigger: "[data-whystay]", pin: { extra: WHYSTAY_PIN_EXTRA, at: 3 / 5 }, x: 88, y: 38, width: 50 },
-  { key: "whystay-5", sprite: "puff-small.webp", layer: "sky", trigger: "[data-whystay]", pin: { extra: WHYSTAY_PIN_EXTRA, at: 4 / 5 }, x: 16, y: 52, width: 44 },
-  { key: "whystay-6", sprite: "whystay-wide.webp", layer: "sky", trigger: "[data-whystay]", pin: { extra: WHYSTAY_PIN_EXTRA, at: 5 / 5 }, x: 84, y: 62, width: 66 },
+  // { key: "whystay-1", sprite: "whystay-left.webp", layer: "sky", trigger: "[data-whystay]", pin: { extra: WHYSTAY_PIN_EXTRA, at: 0 / 5 }, x: 14, y: 42, width: 56 },
+  // { key: "whystay-2", sprite: "puff-soft.webp", layer: "sky", trigger: "[data-whystay]", pin: { extra: WHYSTAY_PIN_EXTRA, at: 1 / 5 }, x: 86, y: 55, width: 48 },
+  // { key: "whystay-3", sprite: "wide-bank.webp", layer: "sky", trigger: "[data-whystay]", pin: { extra: WHYSTAY_PIN_EXTRA, at: 2 / 5 }, x: 12, y: 60, width: 60 },
+  // { key: "whystay-4", sprite: "whystay-small.webp", layer: "sky", trigger: "[data-whystay]", pin: { extra: WHYSTAY_PIN_EXTRA, at: 3 / 5 }, x: 88, y: 38, width: 50 },
+  // { key: "whystay-5", sprite: "puff-small.webp", layer: "sky", trigger: "[data-whystay]", pin: { extra: WHYSTAY_PIN_EXTRA, at: 4 / 5 }, x: 16, y: 52, width: 44 },
+  // { key: "whystay-6", sprite: "whystay-wide.webp", layer: "sky", trigger: "[data-whystay]", pin: { extra: WHYSTAY_PIN_EXTRA, at: 5 / 5 }, x: 84, y: 62, width: 66 },
 
   // ——— Working-with ———
   { key: "workingwith-l", sprite: "wide-bank.webp", layer: "sky", trigger: "[data-working-with]", x: 8, y: 86, width: 100 },
