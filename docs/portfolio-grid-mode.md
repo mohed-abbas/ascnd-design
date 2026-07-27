@@ -1065,3 +1065,73 @@ cases the flag (rather than the event alone) covers:
   not restart that column;
 - `setFrozen` is idempotent, so a double-close can't thaw a wall that has since
   been legitimately frozen again.
+
+---
+
+## 20. Step 6 is BLOCKED on assets (2026-07-27)
+
+The dedicated grid image preset cannot be built. Its whole value (§18.2) is
+cropping to the WALL's aspect *before* the 900px cap, which restores the 8 tiles
+that currently under-resolve a 380px column at 2× DPR. That requires the
+uncropped originals.
+
+**They are not in the repo.** `portfolio-src/` contains `SOURCES.md` and nothing
+else; git history confirms the PNGs were never committed — the manifest's own
+header says the folder exists "so a tile can be re-cropped without another trip
+through Figma", but only the manifest survived.
+
+Three ways forward, none of them mine to pick:
+
+1. **Re-pull from Figma.** `SOURCES.md` records the file key
+   (`AlJwKmp1F8MmaViAh75vuu`), every node ID and the export scale, so
+   `download_assets` can fetch all 24. This is the real fix.
+2. **Supply the originals** if they still exist on a disk somewhere.
+3. **Ship without the preset** and accept the measured shortfall — invisible
+   except on a retina screen, looking closely.
+
+### 20.1 Why it should probably wait regardless
+
+Even with the originals in hand, generating the preset now would be premature.
+The preset is cropped to the wall's aspects at the wall's sizes, and **both are
+still moving**: step 4 tunes the mask, the gutters and the column width, and
+D8/D11's `tall` form changes the aspect table outright. Generating 24 assets
+against numbers that are about to change is the definition of work that gets
+redone. The preset should be cut ONCE the layout is settled.
+
+Which makes the honest ordering: **step 4 (needs a human) → step 6 → step 7.**
+
+## 21. Self-review of steps 1–5 (2026-07-27)
+
+None of the motion has been seen in a browser, so the code was re-read cold
+looking for defects. Three were real and are fixed; one suspected issue was
+checked and dismissed.
+
+**Fixed — the origin tile can be GONE by close time.** The tile a panel flew
+from is usually a marquee CLONE, and the marquee destroys every clone on each
+rebuild, which a resize behind an open panel triggers. Flying "home" to a
+detached node measures a 0×0 rect at the document origin: the panel would have
+collapsed into the top-left corner. Now `isConnected` is checked and the panel
+fades in place instead — a gentler exit for a case the visitor caused, and
+honest about having lost the tile.
+
+**Fixed — unmounting while open left the wall frozen forever.** The freeze flag
+is module-scoped precisely so it survives a marquee rebuild, which means nothing
+else would ever thaw it: a mode switch with a tile open would have left the wall
+dimmed to 0.3 and permanently motionless on the next visit. GridExpand now
+thaws and restores on unmount.
+
+**Fixed — focus never entered the dialog.** It stayed parked on the tile button,
+which by then is invisible and behind the overlay. Focus now moves to the dialog
+(with `preventScroll` — it is a fixed overlay, and letting the browser scroll to
+it would move the page the return flight is aiming at). Still not a focus TRAP;
+that belongs with the deferred lightbox variant, which is when this becomes a
+real modal.
+
+**Checked and dismissed — the custom cursor.** The expanded panel sits at
+z-120 and the site hides the native cursor (`html[data-custom-cursor="on" ] *`),
+so a panel above the cursor layer would have left no visible pointer at all.
+`cursor-visual.tsx` is `z-[9999]`, comfortably above. Fine.
+
+**Noted, not changed — the navbar floats over the panel** (`z-[999]` vs the
+panel's 120). Arguably right (the nav stays reachable) and arguably wrong (it
+sits on top of the work). A look call for the review pass, not a bug.

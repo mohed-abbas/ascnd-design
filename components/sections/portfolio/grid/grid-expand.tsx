@@ -66,6 +66,7 @@ export default function GridExpand({ projects }: { projects: CloudProject[] }) {
   const [project, setProject] = useState<CloudProject | null>(null);
   const originRef = useRef<HTMLElement | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
   const backdropRef = useRef<HTMLDivElement>(null);
   // Guards the close animation against a second Escape / click landing mid-flight.
   const closing = useRef(false);
@@ -77,33 +78,70 @@ export default function GridExpand({ projects }: { projects: CloudProject[] }) {
     closing.current = true;
 
     const wall = document.querySelector<HTMLElement>("[data-portfolio-grid]");
+
+    const land = () => {
+      origin.style.opacity = "";
+      // Focus returns to where the pointer/keyboard left off — the tile the
+      // visitor opened, not the top of the document.
+      if (origin.isConnected) origin.focus?.({ preventScroll: true });
+      originRef.current = null;
+      setFrozen(false);
+      closing.current = false;
+      setProject(null);
+    };
+
+    gsap.to(backdropRef.current, { opacity: 0, duration: FLIGHT * 0.8 });
+    if (wall) gsap.to(wall, { opacity: 1, duration: FLIGHT, ease: EASE_OPEN });
+
+    // THE ORIGIN CAN BE GONE. It is very often a marquee CLONE, and the marquee
+    // destroys and re-creates every clone on each rebuild — which a resize
+    // behind an open panel triggers. Flying "home" to a detached node measures
+    // a 0×0 rect at the document origin, so the panel would collapse into the
+    // top-left corner instead of returning. Fall back to a fade in place: it is
+    // a different, gentler exit for a case the visitor caused by resizing, and
+    // it is honest about having lost the tile.
+    if (!origin.isConnected) {
+      gsap.to(panel, {
+        opacity: 0,
+        scale: 0.94,
+        duration: FLIGHT * 0.6,
+        ease: "power2.in",
+        onComplete: land,
+      });
+      return;
+    }
+
     // Re-measure: the columns eased to a stop rather than snapping when this
     // opened, so the origin tile kept moving for ~0.4s after the outbound
     // flight began. Returning to the rect captured on the way out would land
     // the tile visibly beside itself.
     const to = origin.getBoundingClientRect();
     const from = panel.getBoundingClientRect();
-    const scale = to.width / from.width;
 
-    gsap.to(backdropRef.current, { opacity: 0, duration: FLIGHT * 0.8 });
-    if (wall) gsap.to(wall, { opacity: 1, duration: FLIGHT, ease: EASE_OPEN });
     gsap.to(panel, {
       x: to.left + to.width / 2 - (from.left + from.width / 2),
       y: to.top + to.height / 2 - (from.top + from.height / 2),
-      scale,
+      scale: to.width / from.width,
       duration: FLIGHT,
       ease: EASE_OPEN,
-      onComplete: () => {
-        origin.style.opacity = "";
-        // Focus returns to where the pointer/keyboard left off — the tile the
-        // visitor opened, not the top of the document.
-        origin.focus?.({ preventScroll: true });
-        originRef.current = null;
-        setFrozen(false);
-        closing.current = false;
-        setProject(null);
-      },
+      onComplete: land,
     });
+  }, []);
+
+  // Unmount while a tile is open — a mode switch, or the section leaving the
+  // tree. Without this the wall stays at WALL_DIM opacity and, worse, stays
+  // FROZEN: the freeze flag is module-scoped precisely so it survives a
+  // marquee rebuild, which means nothing else would ever thaw it and the next
+  // visit to the grid would render a wall that never moves.
+  useEffect(() => {
+    return () => {
+      if (!originRef.current) return;
+      originRef.current.style.opacity = "";
+      originRef.current = null;
+      setFrozen(false);
+      const wall = document.querySelector<HTMLElement>("[data-portfolio-grid]");
+      if (wall) gsap.set(wall, { opacity: 1 });
+    };
   }, []);
 
   // ── Delegated open ────────────────────────────────────────────────────────
@@ -166,6 +204,11 @@ export default function GridExpand({ projects }: { projects: CloudProject[] }) {
     // faded wall as a duplicate.
     origin.style.opacity = "0";
 
+    // Move focus into the panel. preventScroll because the dialog is a fixed
+    // overlay — letting the browser scroll to it would move the page under the
+    // wall, and the return flight aims at a rect measured in that page.
+    dialogRef.current?.focus({ preventScroll: true });
+
     gsap.fromTo(
       backdropRef.current,
       { opacity: 0 },
@@ -191,10 +234,18 @@ export default function GridExpand({ projects }: { projects: CloudProject[] }) {
 
   return createPortal(
     <div
+      ref={dialogRef}
       role="dialog"
       aria-modal="true"
       aria-label={project.name}
-      className="fixed inset-0 z-[120] flex flex-col items-center justify-center gap-[18px]"
+      // tabIndex so focus can be MOVED here on open. Without it the keyboard
+      // stays parked on the tile button that is now invisible and behind the
+      // overlay — Escape would still work, but a screen reader would be
+      // reading the wall while a panel covers it. This is not yet a focus
+      // TRAP (tab can still reach the controls behind); a trap belongs with the
+      // deferred lightbox variant, which is when this becomes a real modal.
+      tabIndex={-1}
+      className="fixed inset-0 z-[120] flex flex-col items-center justify-center gap-[18px] outline-none"
     >
       {/* Click-out. A transparent catcher rather than a tinted sheet: the wall
           itself does the dimming (by receding, not darkening), so this only
