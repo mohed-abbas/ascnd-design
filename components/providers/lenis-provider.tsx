@@ -2,6 +2,7 @@
 
 import { ReactLenis, type LenisRef } from "lenis/react";
 import type Lenis from "lenis";
+import { usePathname } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
@@ -26,6 +27,26 @@ if (typeof window !== "undefined" && !window.__threeClockWarnSilenced) {
 }
 
 /**
+ * easeOutExpo — byte-identical to the `defaultEasing` Lenis auto-fills whenever
+ * `duration` is set without an `easing` (lenis.mjs:373, :435). Pinned here on
+ * purpose rather than left implicit: the scroll curve is a design decision, and
+ * Lenis' defaults in this area have already moved once (`duration` had a default
+ * of 1.2 through 1.0.x and has NONE in 1.3.x, where the default model is
+ * `lerp: 0.1` instead). Naming the curve makes the feel survive an upgrade.
+ */
+const EASE_OUT_EXPO = (t: number) => Math.min(1, 1.001 - Math.pow(2, -10 * t));
+
+/**
+ * GSAP's own lagSmoothing defaults (gsap-core.js:1270-1271), restored on unmount
+ * because we switch them off below. `gsap.ticker.lagSmoothing()` is a pure
+ * SETTER — it returns undefined (typed `: void`), so the current values can't be
+ * read back and there is nothing to snapshot; these constants are the only
+ * honest way to put it back.
+ */
+const LAG_THRESHOLD = 500;
+const LAG_ADJUSTED = 33;
+
+/**
  * Root smooth-scroll provider. Sets up a single global Lenis instance and the
  * industry-standard GSAP integration: Lenis drives ScrollTrigger updates, and
  * GSAP's ticker drives Lenis' rAF (one loop, no competing schedulers).
@@ -42,6 +63,10 @@ export default function LenisProvider({
   children: React.ReactNode;
 }) {
   const lenisRef = useRef<LenisRef>(null);
+  // Drives the route-change reset at the bottom of this file. Re-rendering the
+  // provider on navigation is free: `options` is memoised, so ReactLenis keeps
+  // the one instance.
+  const pathname = usePathname();
 
   /**
    * Is the PRIMARY input a coarse pointer (phone / tablet)? If so, Lenis is
@@ -96,10 +121,18 @@ export default function LenisProvider({
   // nothing scrolls. Memoising keeps one instance.
   //
   // `autoRaf: false` hands the rAF to GSAP's ticker (see effect below).
-  // `duration: 1.8` lengthens the scroll-smoothing time constant (Lenis default
-  // is 1.2) for a heavier, more gliding feel — paired with Lenis' default
-  // easeOutExpo curve, which decelerates long and soft at this duration.
-  const options = useMemo(() => ({ autoRaf: false, duration: 1.8 }), []);
+  //
+  // `duration: 1.8` + easeOutExpo is the heavier, gliding feel: every wheel
+  // impulse retargets a 1.8s eased tween. Note this REPLACES Lenis' default
+  // scroll model rather than tuning it — 1.3.x defaults to `lerp: 0.1`
+  // (framerate-independent damping), and the two are mutually exclusive in
+  // `Animate.advance`, where `duration && easing` wins and `lerp` is never
+  // consulted. The easing is stated explicitly (EASE_OUT_EXPO above) even though
+  // Lenis would fill in the same curve, so the feel is pinned in our own code.
+  const options = useMemo(
+    () => ({ autoRaf: false, duration: 1.8, easing: EASE_OUT_EXPO }),
+    [],
+  );
 
   useEffect(() => {
     gsap.registerPlugin(ScrollTrigger);
@@ -192,12 +225,62 @@ export default function LenisProvider({
     ro.observe(document.body);
 
     return () => {
-      if (update) gsap.ticker.remove(update);
+      if (update) {
+        gsap.ticker.remove(update);
+        // Put lagSmoothing back exactly when we were the ones who switched it
+        // off (the touch branch never touches it). The ticker is a GSAP-wide
+        // singleton that outlives this component, so leaving it at 0 would
+        // silently disable frame-delta clamping for every animation on the page
+        // if the provider is ever unmounted without a reload.
+        gsap.ticker.lagSmoothing(LAG_THRESHOLD, LAG_ADJUSTED);
+      }
       bound?.off("scroll", ScrollTrigger.update);
       ro.disconnect();
       clearTimeout(refreshTid);
     };
   }, [isTouch]);
+
+  // Reset the scroll world on client-side route changes (/ ⇄ /pricing, reached
+  // through <AnchorLink>'s next/link). Next already puts the new route at the
+  // top, but Lenis' smoothing is a SEPARATE animation that survives the
+  // navigation: click a link while the 1.8s glide is still settling and the new
+  // page mounts at 0, then gets yanked back down as Lenis keeps advancing toward
+  // the OLD target. Lenis' own native-scroll sync can't rescue it either —
+  // onNativeScroll ignores events while `isScrolling === "smooth"`
+  // (lenis.mjs:631), which is exactly the state a glide is in.
+  //
+  // `immediate` internally reset()s (lenis.mjs:770-774): it stops the in-flight
+  // animation and re-adopts the real scroll position. `force` clears the
+  // isStopped/isLocked guard at :720 so this still lands if a navigation races
+  // the intro's scroll lock. One hole is left knowingly: scrollTo early-returns
+  // when the target already equals `targetScroll` (:764), so a glide ALREADY
+  // heading to 0 keeps running — harmless, because 0 is where the new route
+  // wants to be anyway.
+  //
+  // The first run is a deliberate no-op. Cold load is owned by the inline script
+  // in layout.tsx (scrollRestoration "manual" + hash strip + scrollTo(0,0)) and
+  // re-zeroed by intro.tsx right before it measures the hero; firing here would
+  // fight all three, and the refresh would run before the page's own triggers
+  // exist. The same-path check keeps that true under a StrictMode double-mount
+  // (off in next.config.ts today, but this shouldn't depend on that).
+  const lastPath = useRef<string | null>(null);
+  useEffect(() => {
+    if (lastPath.current === null || lastPath.current === pathname) {
+      lastPath.current = pathname;
+      return;
+    }
+    lastPath.current = pathname;
+
+    const lenis = lenisRef.current?.lenis;
+    // No instance on touch — the native scroller is already the real one there.
+    if (lenis) lenis.scrollTo(0, { immediate: true, force: true });
+    else window.scrollTo(0, 0);
+
+    // This provider sits in the ROOT LAYOUT, so its effects run after the newly
+    // mounted page's own — the triggers being re-measured already exist.
+    ScrollTrigger.refresh();
+    ScrollTrigger.update();
+  }, [pathname]);
 
   // Touch: render the tree bare. `<ReactLenis root>` emits no host element of
   // its own, so this is the same DOM either way — the only difference is that
