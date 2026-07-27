@@ -4,12 +4,18 @@ import { setMode } from "@/lib/theme/mode-store";
 import { useMode } from "@/lib/theme/use-mode";
 import { THEME_MODES, type ThemeMode } from "@/lib/theme/palette";
 import { MoonIcon, SunIcon, SunriseIcon, SunsetIcon } from "./icons";
+import { useSlidingHighlight } from "./sliding-highlight";
 
 /**
  * Sky-mode switcher — a vertical rail of four time-of-day icons (air.inc-style),
  * one glass capsule in the house style (same recipe as the navbar surface). The
  * active mode's icon is lit; the rest sit dimmed. Clicking a mode calls the
  * shared store; ThemeDriver (sky) + ThemeRig (clouds) do the crossfade.
+ *
+ * The lit disc behind the active icon is ONE element that slides down/up the
+ * rail to the picked mode (useSlidingHighlight) rather than a class that blinks
+ * from slot to slot — so jumping sunrise → night visibly travels past day and
+ * sunset. The navbar's mobile theme column runs the same mechanic.
  *
  * PLACEMENT: pinned to the LEFT edge, vertically centred. air.inc uses the right
  * edge, but our floating navbar already lives there (navbar.tsx, right-[33px],
@@ -41,27 +47,37 @@ if (process.env.NODE_ENV !== "production" && MODE_ITEMS.length !== THEME_MODES.l
 
 export default function ModeSwitcher() {
   const active = useMode();
+  const { groupRef, pillRef } = useSlidingHighlight(active);
 
   return (
     <div
+      ref={groupRef}
       role="group"
       aria-label="Sky mode"
+      // `relative` so it's the pill's offsetParent (see sliding-highlight.tsx).
       className="pointer-events-auto fixed left-[24px] top-1/2 z-[900] flex -translate-y-1/2 flex-col items-center gap-[4px] rounded-full border border-white/30 bg-white/10 p-[6px] shadow-[inset_0_0_28.3px_0_rgba(255,255,255,0.25)] backdrop-blur-[10px] max-md:hidden"
     >
+      {/* The travelling lit disc. First in the DOM so the `relative` buttons
+          paint over it; GSAP owns its box, `opacity-0` is the pre-placement
+          state so it never flashes at the rail's top-left. */}
+      <span
+        ref={pillRef}
+        aria-hidden
+        className="pointer-events-none absolute left-0 top-0 rounded-full bg-white/20 opacity-0"
+      />
       {MODE_ITEMS.map(({ mode, label, Icon }) => {
         const isActive = mode === active;
         return (
           <button
             key={mode}
             type="button"
+            data-highlight={mode}
             onClick={() => setMode(mode)}
             aria-label={label}
             aria-pressed={isActive}
             title={label}
-            className={`flex size-[36px] items-center justify-center rounded-full transition-colors duration-200 ${
-              isActive
-                ? "bg-white/20 text-white"
-                : "text-white/50 hover:text-white/80"
+            className={`relative flex size-[36px] items-center justify-center rounded-full transition-colors duration-200 ${
+              isActive ? "text-white" : "text-white/50 hover:text-white/80"
             }`}
           >
             <Icon className="size-[20px]" />

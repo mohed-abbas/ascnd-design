@@ -5,41 +5,11 @@ import type { SVGProps } from "react";
  * All use `currentColor` so they inherit text color and stay themeable.
  */
 
-/** Hamburger / menu lines used in the condensed pill (nodes 75:346–347). */
-export function MenuLines(props: SVGProps<SVGSVGElement>) {
-  return (
-    <svg
-      viewBox="0 0 17 7"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      xmlns="http://www.w3.org/2000/svg"
-      {...props}
-    >
-      <line x1="0.75" y1="1" x2="16.25" y2="1" />
-      <line x1="4" y1="6" x2="13" y2="6" />
-    </svg>
-  );
-}
-
-/** Close (✕) shown in the pill when the menu is expanded (node 75:381). */
-export function CloseIcon(props: SVGProps<SVGSVGElement>) {
-  return (
-    <svg
-      viewBox="0 0 12 12"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.75"
-      strokeLinecap="round"
-      xmlns="http://www.w3.org/2000/svg"
-      {...props}
-    >
-      <path d="M1 1L11 11" />
-      <path d="M11 1L1 11" />
-    </svg>
-  );
-}
+/* The navbar pill's hamburger (nodes 75:346–347) and ✕ (node 75:381) used to
+   live here as two separate icons. They are now ONE morphing glyph in
+   menu-toggle-icon.tsx — both Figma geometries are preserved there, as the
+   animation's two end states, so the pill can rotate between them instead of
+   hard-cutting. Nothing else ever consumed them. */
 
 /** Check / tick used on the cards' "delivered" and "board ready" pills
  *  (receive-media + subscribe-media, Figma 124:254). Stroked with

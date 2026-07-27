@@ -7,9 +7,11 @@ import { setMode } from "@/lib/theme/mode-store";
 import { useMode } from "@/lib/theme/use-mode";
 import AnchorLink from "./anchor-link";
 import BackToTop from "./back-to-top";
-import { CloseIcon, InstagramSocial, MenuLines, XSocial } from "./icons";
+import { InstagramSocial, XSocial } from "./icons";
 import Logo from "./logo";
+import MenuToggleIcon from "./menu-toggle-icon";
 import { MODE_ITEMS } from "./mode-switcher";
+import { useSlidingHighlight } from "./sliding-highlight";
 
 // The link list is SHARED with the footer's utility bar (lib/nav-links.ts) —
 // they're the same nav rendered twice, and separate literals let them drift.
@@ -84,6 +86,10 @@ function closedState(nav: HTMLElement) {
 export default function Navbar() {
   const [open, setOpen] = useState(false);
   const activeMode = useMode();
+  // Same travelling disc as the desktop rail (mode-switcher.tsx), for the
+  // in-panel theme column below md.
+  const { groupRef: modeGroupRef, pillRef: modePillRef } =
+    useSlidingHighlight(activeMode);
   const navRef = useRef<HTMLElement>(null);
   const surfaceRef = useRef<HTMLDivElement>(null);
   const tlRef = useRef<gsap.core.Timeline | null>(null);
@@ -241,26 +247,35 @@ export default function Navbar() {
             can preview modes with the panel open. Hidden on desktop (`hidden`),
             where the left rail owns this. */}
         <div
+          ref={modeGroupRef}
           data-menu-item
           role="group"
           aria-label="Sky mode"
           className="absolute right-[28px] top-[80px] hidden flex-col items-center gap-[6px] opacity-0 max-md:flex"
         >
+          {/* Travelling lit disc — see mode-switcher.tsx. On desktop this whole
+              column is `display:none`, so it measures 0×0 and simply isn't
+              there; crossing to a mobile width re-fits it via the hook's
+              ResizeObserver. */}
+          <span
+            ref={modePillRef}
+            aria-hidden
+            className="pointer-events-none absolute left-0 top-0 rounded-full bg-white/20 opacity-0"
+          />
           {MODE_ITEMS.map(({ mode, label, Icon }) => {
             const isActive = mode === activeMode;
             return (
               <button
                 key={mode}
                 type="button"
+                data-highlight={mode}
                 onClick={() => setMode(mode)}
                 aria-label={label}
                 aria-pressed={isActive}
                 title={label}
                 tabIndex={open ? 0 : -1}
-                className={`flex size-[36px] items-center justify-center rounded-full transition-colors duration-200 ${
-                  isActive
-                    ? "bg-white/20 text-white"
-                    : "text-white/50 hover:text-white/80"
+                className={`relative flex size-[36px] items-center justify-center rounded-full transition-colors duration-200 ${
+                  isActive ? "text-white" : "text-white/50 hover:text-white/80"
                 }`}
               >
                 <Icon className="size-[20px]" />
@@ -316,11 +331,11 @@ export default function Navbar() {
         className="pointer-events-auto absolute right-[22px] top-1/2 z-10 flex h-[149px] w-[52px] -translate-y-1/2 flex-col items-center justify-between pb-[22px] pt-[18px] text-white max-md:left-1/2 max-md:right-auto max-md:top-auto max-md:bottom-0 max-md:h-[52px] max-md:w-[140px] max-md:-translate-x-1/2 max-md:translate-y-0 max-md:flex-row max-md:justify-between max-md:gap-0 max-md:px-[26px] max-md:py-0"
       >
         <Logo className="size-[30px]" />
-        {open ? (
-          <CloseIcon className="size-[13px]" />
-        ) : (
-          <MenuLines className="h-[7px] w-[17px]" />
-        )}
+        {/* One glyph that rotates hamburger ⇄ ✕ (menu-toggle-icon.tsx). Always
+            mounted at the lines' 17×7 footprint — the ✕ overflows the box
+            rather than resizing it, so the icon no longer shifts in this
+            justify-between column as it changes shape. */}
+        <MenuToggleIcon open={open} className="h-[7px] w-[17px]" />
       </button>
     </nav>
 

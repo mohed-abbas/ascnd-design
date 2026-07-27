@@ -43,6 +43,7 @@
  * (No "see all work" button: the section is the whole body of work.)
  */
 import { useState } from "react";
+import { useSlidingHighlight } from "@/components/ui/sliding-highlight";
 import CloudCanvasScene from "./cloud-canvas-scene";
 import {
   PROJECT_FILTERS,
@@ -51,6 +52,7 @@ import {
 
 export default function Portfolio() {
   const [filter, setFilter] = useState<CloudFilter>("all");
+  const { groupRef, pillRef } = useSlidingHighlight(filter);
 
   return (
     // ASYMMETRIC padding, and the only section that can't just take `py-section`
@@ -93,6 +95,7 @@ export default function Portfolio() {
         {/* Top row — filter tabs only; the heading lives at the globe's core. */}
         <div className="pointer-events-none relative z-10 flex w-full flex-col items-center pt-[10dvh] max-md:px-6">
           <div
+            ref={groupRef}
             role="group"
             aria-label="Filter projects by type"
             // The backdrop-blur runs on every input type, phones included. It
@@ -103,20 +106,29 @@ export default function Portfolio() {
             // off its own compositor layer. That was a *candidate* fix for the
             // tile flashing and was never confirmed to be the cause — and the
             // pill needs the glass. Restored: the cost is accepted knowingly.
-            className="pointer-events-auto flex items-center gap-[2px] rounded-full border border-white/30 bg-white/10 p-[4px] shadow-[inset_0_0_18px_0_rgba(255,255,255,0.25)] backdrop-blur-[10px]"
+            // `relative` so it's the pill's offsetParent (sliding-highlight.tsx).
+            className="pointer-events-auto relative flex items-center gap-[2px] rounded-full border border-white/30 bg-white/10 p-[4px] shadow-[inset_0_0_18px_0_rgba(255,255,255,0.25)] backdrop-blur-[10px]"
           >
+            {/* The travelling selection pill — ONE element that slides (and
+                resizes, the labels differ in width) to the picked tab instead of
+                the highlight blinking between slots. First in the DOM so the
+                `relative` buttons paint over it. */}
+            <span
+              ref={pillRef}
+              aria-hidden
+              className="pointer-events-none absolute left-0 top-0 rounded-full bg-white/25 opacity-0"
+            />
             {PROJECT_FILTERS.map(({ value, label }) => {
               const isActive = value === filter;
               return (
                 <button
                   key={value}
                   type="button"
+                  data-highlight={value}
                   onClick={() => setFilter(value)}
                   aria-pressed={isActive}
-                  className={`rounded-full px-5 py-[7px] text-[14px] lowercase leading-none transition-colors duration-300 max-md:px-3.5 max-md:text-[13px] ${
-                    isActive
-                      ? "bg-white/25 text-white"
-                      : "text-white/60 hover:text-white/90"
+                  className={`relative rounded-full px-5 py-[7px] text-[14px] lowercase leading-none transition-colors duration-300 max-md:px-3.5 max-md:text-[13px] ${
+                    isActive ? "text-white" : "text-white/60 hover:text-white/90"
                   }`}
                 >
                   {label}
