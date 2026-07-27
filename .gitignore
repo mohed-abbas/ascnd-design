@@ -53,3 +53,14 @@ next-env.d.ts
 # Figma node IDs + export scales, so the ignored pixels can always be re-pulled.
 portfolio-src/*
 !portfolio-src/SOURCES.md
+
+# Local-only drops that a `git add -A` has already swept into a commit twice.
+# Neither is referenced by any code:
+#   • cursor-trail-main/ — a vendored Vite/GLSL experiment. If it ever ships it
+#     should be a deliberate fork under components/, per the heavy-effect
+#     contract in CLAUDE.md, not a raw drop at the repo root.
+#   • public/portfolio/cloud-backup/ — 24 grey placeholder SVGs, the
+#     pre-real-work tiles the project registry says are gone.
+# Ignored rather than deleted: the files are the owner's to remove.
+/cursor-trail-main/
+/public/portfolio/cloud-backup/
