@@ -650,3 +650,141 @@ Tile heights are the authored aspects (§8.1), NOT a uniform cell:
    D8 later: this expanded panel is where the FULL-LENGTH shot lives —
    the wall shows the crop, the expand reveals the long screenshot.
 ```
+
+---
+
+## 15. Final view — what the finished mode looks like
+
+Wireframes of the END STATE, drawn 2026-07-27. Everything below is the grid
+mode as specified by D1–D9; the globe is unchanged and reached through the
+switcher.
+
+### 15.1 Desktop, at rest (the money shot)
+
+```
+ ╔═════════════════════════════════════════════════════════════════════╗
+ ║   ☁                          ╭───────────────────╮            ☁     ║
+ ║        ☁                     │ ascnd    ≡  menu  │                  ║  fixed sky
+ ║                              ╰───────────────────╯      ☁           ║  (#62abff
+ ║                                                                     ║  + grain
+ ║                    stuff we've  𝑠𝘩𝑖𝑝𝑝𝑒𝑑                              ║  + clouds)
+ ║                    ▲ DOM <h2> in grid mode — the globe paints this   ║
+ ║                      in-canvas at its core; grid has no canvas.      ║
+ ║                      OPEN ITEM (§12).                                ║
+ ║                                                                     ║
+ ║      ╭──────────────────────────────────╮  ╭──────────────────╮     ║
+ ║      │ all │ web │ brandings │ misc     │  │  globe  │  grid  │     ║
+ ║      ╰──────────────────────────────────╯  ╰──────────────────╯     ║
+ ║        filter tabs (existing, shared)        mode switcher (D6)     ║
+ ║                                                                     ║
+ ║  ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░  ║ ← D7 mask
+ ║  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒  ║   0 → 1
+ ║  │  emerald   │   │  crypkit   │   └────────────┘   │  phone fin │  ║   over 12%
+ ║  │  poster    │   └────────────┘   ┌────────────┐   │            │  ║
+ ║  └────────────┘   ┌────────────┐   │            │   │            │  ║
+ ║  ┌────────────┐   │            │   │  emerald   │   └────────────┘  ║
+ ║  │  kalinka   │   │ phone fit  │   │ telehealth │   ┌────────────┐  ║
+ ║  └────────────┘   │            │   │            │   │            │  ║
+ ║  ┌────────────┐   │            │   └────────────┘   │  tablet    │  ║
+ ║  │            │   └────────────┘   ┌────────────┐   │            │  ║
+ ║  │  monitor   │   ┌────────────┐   │            │   └────────────┘  ║
+ ║  │            │   │  medlink   │   │  cloth tag │   ┌────────────┐  ║
+ ║  └────────────┘   └────────────┘   │            │   │  fashion   │  ║
+ ║  ┌────────────┐   ┌────────────┐   └────────────┘   └────────────┘  ║
+ ║  │            │   │            │   ┌────────────┐   ┌────────────┐  ║
+ ║  │  laptop    │   │ circle mark│   │  ops dash  │   │            │  ║
+ ║  │            │   │            │   └────────────┘   │ emerald ask│  ║
+ ║  │            │   └────────────┘   ┌────────────┐   │            │  ║
+ ║  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒  ║ ← 1 → 0
+ ║  ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░  ║   from 88%
+ ║       ↓ 34px/s      ↑ 29px/s       ↓ 31px/s       ↑ 27px/s          ║
+ ║      col 1         col 2          col 3          col 4              ║
+ ╚═════════════════════════════════════════════════════════════════════╝
+
+  Read the SEAMS, not the tiles: every column's tile boundaries fall on
+  different lines, because heights are the authored aspects (§8.1) and
+  nothing is padded to match. That is the whole masonry effect.
+  Adjacent columns run opposite directions at ±15% speed variance, so the
+  wall never resolves into a readable pattern.
+```
+
+### 15.2 Desktop, pointer over column 3 (D4)
+
+```
+ ║  ┌────────────┐   ┌────────────┐   ┌────────────┐   ┌────────────┐  ║
+ ║  │  kalinka   │   │            │   │  emerald   │   │  tablet    │  ║
+ ║  └────────────┘   │ phone fit  │   │ telehealth │   │            │  ║
+ ║  ┌────────────┐   │            │   │            │   └────────────┘  ║
+ ║  │  monitor   │   └────────────┘   └────────────┘   ┌────────────┐  ║
+ ║       ↓             ↑                  ■                ↑          ║
+ ║    still moving  still moving    timeScale → 0     still moving    ║
+ ║                                  over ~0.4s                        ║
+ ║                                  (an eased stop reads as attention;║
+ ║                                   a hard .pause() reads as a stall)║
+```
+
+### 15.3 Desktop, tile expanded (D5)
+
+```
+ ╔═════════════════════════════════════════════════════════════════════╗
+ ║      ╭──────────────────────────────────╮  ╭──────────────────╮     ║
+ ║      │ all │ web │ brandings │ misc     │  │  globe  │  grid  │     ║
+ ║      ╰──────────────────────────────────╯  ╰──────────────────╯     ║
+ ║ ░▒▓███████████████████████████████████████████████████████████▓▒░   ║
+ ║ ▓███ wall dimmed + PAUSED behind ████████████████████████████████   ║
+ ║ ██     ┌───────────────────────────────────────────────┐      ███   ║
+ ║ ██     │                                               │      ███   ║
+ ║ ██     │                                               │      ███   ║
+ ║ ██     │              medlink                          │      ███   ║
+ ║ ██     │              the tile, Flipped from its       │      ███   ║
+ ║ ██     │              exact position in the wall       │      ███   ║
+ ║ ██     │                                               │      ███   ║
+ ║ ██     │                                               │      ███   ║
+ ║ ██     └───────────────────────────────────────────────┘      ███   ║
+ ║ ▓█████████████████████████████████████████████████████████████▓▒░   ║
+ ║          esc / click-out closes · focus returns to the tile         ║
+ ╚═════════════════════════════════════════════════════════════════════╝
+
+  D8, last: this panel is where the FULL-LENGTH shot lives — the wall
+  shows the crop, the expand reveals the long screenshot.
+  Deferred alternative (§10): the same click opening a lightbox with the
+  project name + link instead of an in-place Flip.
+```
+
+### 15.4 Mobile — grid is the DEFAULT here (D2)
+
+```
+      ╔═══════════════════════╗
+      ║  ☁       ╭─────────╮  ║
+      ║          │ ascnd ≡ │  ║
+      ║          ╰─────────╯  ║
+      ║   stuff we've shipped ║
+      ║  ╭─────────────────╮  ║   filters wrap /
+      ║  │ all │web│brand… │  │   scroll horizontally
+      ║  ╰─────────────────╯  ║
+      ║  ╭─────────────────╮  ║
+      ║  │  globe  │ grid  │  ║ ← switcher stays
+      ║  ╰─────────────────╯  ║
+      ║ ░░░░░░░░░░░░░░░░░░░░  ║
+      ║  ┌───────┐ ┌───────┐  ║
+      ║  │kalinka│ │       │  ║
+      ║  └───────┘ │ phone │  ║
+      ║  ┌───────┐ │  fit  │  ║
+      ║  │       │ │       │  ║
+      ║  │emerald│ └───────┘  ║
+      ║  │ poster│ ┌───────┐  ║
+      ║  │       │ │ tablet│  ║
+      ║  └───────┘ │       │  ║
+      ║  ┌───────┐ └───────┘  ║
+      ║  │monitor│ ┌───────┐  ║
+      ║  │       │ │medlink│  ║
+      ║  └───────┘ └───────┘  ║
+      ║ ░░░░░░░░░░░░░░░░░░░░  ║
+      ║     ↓         ↑       ║
+      ╚═══════════════════════╝
+
+   no hover on touch → columns simply keep drifting; tap = expand.
+   NO drag-to-scrub: it would recreate the gesture conflict the globe
+   had to concede (touch-action: pan-y), and the grid's advantage here
+   is that it asks nothing of the visitor.
+```
