@@ -12,10 +12,23 @@ import type { CloudProject, ProjectForm } from "../cloud-canvas/cloud-canvas-dat
  * Tile aspect (width ÷ height) per authored form.
  *
  * These are the globe's own SLOT_SIZE ratios (cloud-canvas-engine.ts), NOT new
- * numbers: every source in public/portfolio/cloud/ has already been cropped to
- * one of them by scripts/optimize-portfolio-images.mjs, so the wall inherits
- * framings that were art-directed once. A tile whose CSS aspect disagreed with
- * its crop would letterbox or re-crop the shot a second time.
+ * numbers — the wall and the sphere frame the same project identically.
+ *
+ * ⚠️ The sources are NOT pre-cut to these ratios, and an earlier version of this
+ * comment claimed they were. Measured, public/portfolio/cloud/ arrives as 1.779
+ * (×6), 1.333 (×8), 1.000 (×5), 0.667 (×4) and a single 0.767: only
+ * emerald-poster-help sits on a slot aspect, and it is the ONE entry in the
+ * optimize script's CROPS map (an off-centre focus the runtime can't express —
+ * a centred cut there bisects the wordmark). Every other tile is cropped at
+ * DRAW time: the engine calls drawImageCover, and the wall's `object-cover` is
+ * that same centre-crop expressed in CSS.
+ *
+ * So the ratio below is a crop INSTRUCTION, not a description of the file —
+ * which is also why nothing here can letterbox. The cost of that is resolution,
+ * not framing: a 4:3 source cropped into the portrait slot keeps only 0.767 of
+ * its width, so 8 of 24 tiles under-resolve a 380px column at 2× DPR. That is
+ * the measured case for §9's dedicated grid preset, and it is independent of
+ * any byte argument.
  *
  *   landscape 164×104 → 1.577   (the shortest tile)
  *   square    126×126 → 1.000

@@ -367,10 +367,14 @@ first, then add:
   the globe's 24-image batch decode; after this it pays for grid sources. Verify
   the phone is not made to pay for *both* — that is what §5's mount contract is
   for, and it is worth checking in a real profile, not just by reading.
-- `public/portfolio/cloud-backup/` is sitting untracked in the working tree
-  (~100K). Per `CLAUDE.md` (*"an asset nothing references is a bug, not an
-  archive"*), it should be deleted or moved outside the repo before this work
-  adds a second image directory next to it.
+- `public/portfolio/cloud-backup/` — 24 grey placeholder SVGs (a `<rect
+  fill="#9a9a9a"/>` and a two-digit label), the pre-real-work placeholders the
+  registry header says are gone. Nothing references them. Per `CLAUDE.md` (*"an
+  asset nothing references is a bug, not an archive"*) they should be deleted or
+  moved outside the repo. **They and the unrelated vendored `cursor-trail-main/`
+  were accidentally committed to this branch by a `git add -A` in `504ffc1` and
+  un-tracked again in a follow-up; both are back to untracked-on-disk, which is
+  how the session found them. They are still the user's to delete.**
 
 ## 13. Implementation order
 
@@ -927,3 +931,64 @@ above it.
 - **Rebuild key** is `filter:columnCount`. A filter change or a breakpoint
   change replaces the columns wholesale, and both the cloned nodes and the
   measured advances belong to the old wall.
+
+---
+
+## 18. Image pipeline findings (measured 2026-07-27)
+
+### 18.1 Grid tiles keep Next's optimizer — do NOT add `unoptimized`
+
+`design-shots.tsx` opts out of the optimizer for a stated reason (Next's re-encode
+softened fine mockup text). The wall carries the same kind of content — UI
+screenshots with small type — so the question had to be asked rather than
+assumed. It was measured, and **the design-shots premise does not transfer.**
+
+There, the source is a lossless ~1024² PNG shown at roughly native size, so
+Next's pass is a *pure* lossy re-encode. Here the master is already lossy WebP
+(q82, ≤900px) displayed at ~380 CSS px. Comparing both pipelines at the same
+760px raster by mean-|Laplacian| edge energy:
+
+| tile | master | AVIF q75 | WebP q75 |
+|---|---|---|---|
+| operations-dashboard | 5.74 | 5.57 (−3%) | 4.53 (−21%) |
+| medlink | 6.36 | 6.15 (−3%) | 4.99 (−22%) |
+| tasktrox-webapp | 8.50 | 7.93 (−7%) | 6.28 (−26%) |
+| kalinka | 9.54 | 9.10 (−5%) | 7.30 (−23%) |
+
+`next.config.ts` sets `formats: ["image/avif", "image/webp"]`, so AVIF is what
+nearly everyone gets: a 3–7% loss. The 21–26% softening is the legacy-WebP
+fallback only. Bytes for the whole 24-tile set: master 838K · 828px AVIF 685K
+(−18%) · 640px 541K (−35%) · **384px 256K (−69%)** — and the big win lands on
+mobile, which is exactly where D2 makes the grid the default.
+
+`unoptimized` is also all-or-nothing: `get-img-props.js` returns
+`srcSet: undefined, sizes: undefined` on that branch, so opting out would cost
+the responsive srcset entirely and hand every device the 900px master.
+
+**Decision: keep the optimizer.** Accept 3–7% edge-energy loss on the AVIF path
+for 35–69% fewer bytes where this mode is the default — and note that
+`unoptimized` could not buy the crispness back anyway, for the reason below.
+
+### 18.2 Why §9's grid preset is now justified by measurement, not taste
+
+After `object-cover`, **8 of 24 tiles are already source-limited at a 380px
+column on a 2× display**, and the best tile has only 1.18× headroom:
+
+```
+phone-mockup-fitness   900×675 → portrait box → 518 usable   (0.68× of a 760px raster)
+emerald-mark / -mind / -ohio, laptop-, phone-finance → 600    (0.79×)
+emerald-poster-help 672 · monitor-mockup 675                  (0.88–0.89×)
+16:9 landscape tiles → 798 (1.05×)   ·   everything else 900   (1.18×)
+```
+
+The globe's 900px long-side cap leaves a 2:3 portrait only 600px wide, and a 4:3
+source cropped into the portrait slot only 518px. Cropping to the WALL's aspect
+*before* the 900 cap is what the preset buys. That is a resolution argument,
+independent of the byte argument above, and it is the real reason step 6 exists.
+
+### 18.3 `sizes` verified
+
+The declared `(max-width: 768px) 45vw, (max-width: 1600px) 23vw, 380px` is
+correct as an upper bound: at 1440px the 4-column layout computes to 330px vs a
+declared 331px; at 1600px, 370 vs 368; above that the `max-w-[380px]` cap holds.
+Sparse filters only widen columns up to that same cap, so it stays safe.

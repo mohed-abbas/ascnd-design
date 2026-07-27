@@ -10,7 +10,8 @@
  *     section's tabs filter the globe by this; "all" shows everything.
  *   • `name` — shown in the focus/hover label (added in a later pass).
  *
- * The images live in public/portfolio/cloud/ (≤520px WebP — run
+ * The images live in public/portfolio/cloud/ (≤900px WebP — 520 was tried and
+ * was too low; the arithmetic is in scripts/optimize-portfolio-images.mjs. Run
  * `npm run optimize:portfolio` after dropping new ones in). Keep filenames
  * URL-clean (no spaces). Order here is the order tiles are laid onto the
  * formation — reorder entries to reshuffle neighbours.
@@ -38,6 +39,47 @@ export interface CloudProject {
   type: ProjectType;
   /** Tile slot shape — used when the config's layout is "manual". */
   form: ProjectForm;
+  /**
+   * Grid-mode overrides — how the masonry wall is allowed to diverge from the
+   * globe (docs/portfolio-grid-mode.md §9). **Nothing reads this yet**: it
+   * lands empty, absent on all 24 entries, so the deferred full-length work
+   * (D8, built last) becomes a field to fill in rather than a type change that
+   * touches every consumer of CloudProject.
+   *
+   * A separate block instead of overloading the fields above, because the
+   * top-level `form` is coupled to SLOT_SIZE in cloud-canvas-engine.ts AND to
+   * SLOT_ASPECT in scripts/optimize-portfolio-images.mjs — reshaping a tile for
+   * the wall by editing it would silently re-crop that same tile on the sphere.
+   *
+   * The case it exists for (§8.2): `brandings` is six projects and nearly all
+   * portrait, so its wall is two columns of one repeating silhouette. Reshaping
+   * a couple of them is the second lever after dropping columns, and it must
+   * not disturb the slot they hold on the globe.
+   */
+  grid?: {
+    /**
+     * Slot shape for the wall only; falls back to the top-level `form`. Still
+     * the same three shapes today — D11 holds the taller `tall` form back to
+     * D8, and this widens with `ProjectForm` when it lands.
+     */
+    form?: ProjectForm;
+    /**
+     * A different file for the wall, for when the globe's crop is the wrong
+     * framing at wall size. Those belong under `public/portfolio/grid/` as
+     * their own output preset, never as a re-tune of MAX_SIDE in
+     * scripts/optimize-portfolio-images.mjs — that constant is hand-coupled to
+     * the engine's FAST_MAX_SIDE, and raising it bills every globe visitor for
+     * bytes they never see.
+     */
+    src?: string;
+    /**
+     * Columns spanned. Reserved for D8; unused today. Every tile being span 1
+     * is what lets the wall ship ONE `sizes` value per breakpoint (§8.1), so
+     * the first span-2 tile also buys a second image preset — part of why it
+     * is last.
+     */
+    span?: 1 | 2;
+  };
 }
 
 /** The filter tabs, in display order. Labels are UI copy (house lowercase). */
