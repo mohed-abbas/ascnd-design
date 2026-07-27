@@ -788,3 +788,49 @@ switcher.
    had to concede (touch-action: pan-y), and the grid's advantage here
    is that it asks nothing of the visitor.
 ```
+
+---
+
+## 16. Reference check — the Pinterest screenshot (2026-07-27)
+
+A real Pinterest wall was shared to confirm the intended look. It is the right
+layout reference: uniform column width, heights from each image's own aspect,
+seams that never line up. Four deltas are deliberate and should not be
+"corrected" toward the reference without a decision:
+
+| | Pinterest reference | this grid |
+|---|---|---|
+| aspect spread | ~2.5–3:1 (tall pins run 1:2 → 2:3) | **2:1** — landscape 241px → portrait 495px in a 380px column (§8.1) |
+| motion | static wall | columns drift in opposite directions (D3) |
+| ground | white cards on a white page | tiles float over the live sky + clouds |
+| edges | runs edge to edge | dissolves into sky, top and bottom (D7) |
+
+### 16.1 Why we do NOT chase the full Pinterest spread
+
+**Height × motion is the constraint the reference doesn't have.** A 1:2 tile in
+a 380px column is 760px tall — most of a viewport — and at ~30px/s it dominates
+its column for the better part of half a minute. Static walls don't pay that.
+Cap the tallest grid form near **0.6** (≈633px at a 380px column) rather than
+matching Pinterest's extremes.
+
+**Content sets the ceiling anyway.** Posters and device mockups are already
+portrait and can be re-cropped taller for the grid-only preset (that is what the
+`grid?.form` override and the separate output directory in §9 are for). Web
+designs are landscape screenshots — cropping one to 2:3 destroys it. So the
+realistic end state is: web work reads as the wide anchors, branding and
+mockups as the tall ones. Livelier than §15's drawing, calmer than the
+reference. That is on-brand, not a compromise.
+
+### 16.2 Consequence for the build order
+
+If more variety is wanted, the **`tall` slot** should land in pass 1 — it is one
+row in the aspect table. That is separate from **D8's full-length designs** (new
+long-form artwork revealed by the expand), which stay last. Splitting the two
+was implicit before; it is explicit now.
+
+### 16.3 Open look call
+
+Do grid tiles carry the globe's **glass-matted frame**, or bare rounded corners?
+Over a white page bare works (the reference); over the live sky, bare images
+risk reading as stickers. The frame also keeps the two modes speaking the same
+visual language. Recommendation: frame. Not yet decided.
