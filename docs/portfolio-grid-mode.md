@@ -7,6 +7,10 @@ display mode — a Pinterest-style column wall that sits beside the existing ima
 globe. It is the contract the implementation has to satisfy; §17 records what
 building the first step settled.
 
+**Resuming this work? Read `docs/portfolio-grid-remaining.md` instead** — it is
+the handoff: branch, current state, and the remaining steps in enough detail to
+continue on another machine. This file is the decision record behind it.
+
 Related records: `docs/canvas-consolidation-plan.md` (why the site is not going
 all-WebGL, and why the globe stays a 2D canvas), `docs/performance-audit.md`
 (the fps campaign this section came out of), `CLAUDE.md` (the heavy-effect
