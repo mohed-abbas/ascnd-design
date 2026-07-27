@@ -101,6 +101,44 @@ export function assignColumns(
 }
 
 /**
+ * Base drift speed, in CSS px per second.
+ *
+ * Authored in px/sec rather than a duration so a column's speed does not depend
+ * on how tall it happens to be — the same reason logos-marquee.tsx does it
+ * (`SPEED = 40`). A column of 6 tiles and a column of 3 must LOOK equally slow;
+ * with a fixed duration the short one would sprint.
+ *
+ * 30 is deliberately below the logos row's 40: that marquee is a thin band of
+ * wordmarks glanced at in passing, this is a wall of work someone is reading.
+ * A tile takes ~13s to cross a 400px-tall window, which is browsing pace.
+ */
+export const DRIFT_SPEED = 30;
+
+/**
+ * Per-column drift: which way it goes, and how fast.
+ *
+ * Direction alternates (D3) — that opposition is what stops the wall reading as
+ * one sheet sliding past. Speed varies ±15% on a fixed pattern rather than at
+ * random: `Math.random()` is banned in anything that renders (it would differ
+ * between the server and the client), and a deterministic offset is also
+ * reproducible when something looks wrong. The pattern is intentionally not
+ * symmetric across 4 columns, so columns 1 and 3 (same direction) still drift
+ * apart over time instead of moving as a pair.
+ */
+const SPEED_VARIANCE = [1, 0.87, 1.12, 0.94];
+
+export function columnDrift(index: number): {
+  direction: 1 | -1;
+  speed: number;
+} {
+  return {
+    // Even columns fall, odd columns rise.
+    direction: index % 2 === 0 ? 1 : -1,
+    speed: DRIFT_SPEED * SPEED_VARIANCE[index % SPEED_VARIANCE.length],
+  };
+}
+
+/**
  * Glass-mat metrics as fractions of the COLUMN width, for the CSS container
  * query in portfolio-grid.tsx (D10).
  *

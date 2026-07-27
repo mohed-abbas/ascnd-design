@@ -1,6 +1,6 @@
 # Portfolio grid mode — the second variant of the work section
 
-**Status: DECIDED 2026-07-27. Step 1 of 7 BUILT (§13), unverified in a browser.**
+**Status: DECIDED 2026-07-27. Steps 1–3 of 7 BUILT (§13), unverified in a browser.**
 This is the architecture decision record for the portfolio section's *second*
 display mode — a Pinterest-style column wall that sits beside the existing image
 globe. It is the contract the implementation has to satisfy; §17 records what
@@ -379,9 +379,13 @@ first, then add:
    no motion yet. `grid/grid-spec.ts` (aspects, column count, assignment, mat
    ratios) + `grid/portfolio-grid.tsx` (the wall) + the mode wiring in
    `portfolio.tsx`. Two things were settled while building — see §17.
-2. Column marquee (D3) on the `logos-marquee` mechanic, alternating directions,
-   px/sec speeds, off-screen idle gate.
-3. Hover pause via `timeScale` easing (D4).
+2. ✅ **DONE** — column marquee (D3) on the `logos-marquee` mechanic,
+   alternating directions, px/sec speeds, off-screen idle gate.
+   `grid/grid-marquee.tsx`, a render-nothing sibling that reads `[data-drift-*]`
+   off the columns; drift constants in `grid-spec.ts` (`DRIFT_SPEED = 30`,
+   `columnDrift()`). Tier registry row added in the same commit per §6.
+3. ✅ **DONE** — hover pause via `timeScale` easing (D4), 0.4s in and out,
+   per column. Pointer events, so touch never triggers it.
 4. Mask fade (D7) — measure it here, while there is nothing else to blame.
 5. Flip expand (D5), wall dim, Escape/click-out to close, focus restored to the
    originating tile.
@@ -898,3 +902,28 @@ above it.
   once tile sizes diverge from the globe's.
 - No tier row in `lib/perf/tiers.ts` yet: at rest the wall has no loop to gate.
   It **must** land with step 2, in the same commit as the first tween (§6 row 3).
+
+### 17.4 Drift mechanics, as built (steps 2–3)
+
+- **A falling column cannot simply translate downward from 0** — at `y = 0` its
+  first tile already sits at the viewport top, so falling would drag empty space
+  in behind it. Falling columns start at `y = -advance` (one group parked above
+  the viewport) and travel to 0; rising columns are the plain `0 → -advance`.
+- **Each column measures its OWN advance** (`group.offsetHeight + rowGap`).
+  Unequal column heights at a constant px/sec means unequal loop periods, so the
+  columns desync with no extra machinery. Never pad a column to match another —
+  that would delete the effect (§8.1).
+- **Speed variance is a fixed pattern**, `[1, 0.87, 1.12, 0.94]`, not
+  `Math.random()`: random would differ between server and client, and a fixed
+  offset is reproducible when something looks wrong. Chosen asymmetric so
+  columns 1 and 3 — same direction — still drift apart over time.
+- **`DRIFT_SPEED = 30` px/sec**, deliberately under the logos row's 40: that
+  marquee is glanced at in passing, this is work someone is reading. A tile
+  crosses a 400px window in ~13s.
+- **`will-change: transform` is on the TRACK**, one per column, never on a tile.
+- **Clones are `aria-hidden`** and will need excluding from the tab order once
+  step 5 makes tiles focusable — a screen reader must not read the portfolio
+  three times.
+- **Rebuild key** is `filter:columnCount`. A filter change or a breakpoint
+  change replaces the columns wholesale, and both the cloned nodes and the
+  measured advances belong to the old wall.

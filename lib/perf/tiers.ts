@@ -60,6 +60,25 @@
  * |                                            | its 28-image fetch+decode init until     |
  * |                                            | ~1000px near-view, and self-caps its     |
  * |                                            | backing store at dpr≤1.5.                |
+ * | components/sections/portfolio/             | NONE, and this row exists to say WHY —   |
+ * |   grid/grid-marquee.tsx                    | the ★ RULE below is about being listed,  |
+ * |                                            | not about having knobs. The portfolio    |
+ * |                                            | wall's drift is ONE `y` tween per column |
+ * |                                            | (4 max) on a promoted layer: no repaint, |
+ * |                                            | no fill-rate, nothing an fps cap would   |
+ * |                                            | make cheaper — capping it would only    |
+ * |                                            | make a compositor animation judder. It   |
+ * |                                            | rides the shared gsap.ticker and idles   |
+ * |                                            | to zero off-screen via IO. The cost that |
+ * |                                            | IS real here is layer + decoded-image    |
+ * |                                            | memory, which no tier knob addresses;    |
+ * |                                            | it is held down by `sizes` (real srcset, |
+ * |                                            | unlike the canvas' one global 900px) and |
+ * |                                            | by will-change living on the 4 tracks    |
+ * |                                            | rather than on every tile. The two       |
+ * |                                            | portfolio modes are mutually exclusive   |
+ * |                                            | MOUNTS, so this and the globe above are  |
+ * |                                            | never both live.                         |
  *
  * ★ RULE (audit 2026-07-02 F5.1): any NEW heavy effect — a WebGL canvas, a
  * free-running loop, a per-frame SVG/CSS filter — must be added to this table

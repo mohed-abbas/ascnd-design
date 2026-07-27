@@ -1,8 +1,10 @@
 import Image from "next/image";
 import { cloudProjects, type CloudFilter } from "../cloud-canvas/cloud-canvas-data";
+import GridMarquee from "./grid-marquee";
 import {
   assignColumns,
   columnCount,
+  columnDrift,
   GRID_ASPECT,
   MAT_RATIO,
   RADIUS_RATIO,
@@ -19,12 +21,12 @@ import {
  * decode, alt text and crawlability, all of which the canvas structurally
  * cannot have.
  *
- * ⚠️ PASS 1 OF 7 (§13). This renders the wall at REST — correct layout, correct
- * tiles, no motion. The infinite opposite-direction drift (step 2), hover pause
- * (step 3), edge mask tuning (step 4) and Flip expand (step 5) land on top of
- * this, in that order. Tiles are therefore NOT interactive yet: there is nothing
- * to click until the expand exists, so they are figures with alt text rather
- * than buttons that do nothing.
+ * ⚠️ STEPS 1–3 OF 7 (§13). Layout, drift and hover pause are in; the drift and
+ * the pause live in grid-marquee.tsx, a render-nothing sibling. Still to come:
+ * mask tuning against the real thing (step 4), the Flip expand (step 5), the
+ * grid image preset (step 6) and the full-length tiles (step 7). Tiles are
+ * therefore NOT interactive yet: there is nothing to click until the expand
+ * exists, so they are figures with alt text rather than buttons that do nothing.
  *
  * LAYOUT (D9 — masonry, not a uniform grid)
  * Every column is the same WIDTH; every tile's HEIGHT is its own authored aspect
@@ -90,22 +92,47 @@ export default function PortfolioGrid({
           this stops mattering, but at rest it is the difference between a wall
           and four stretched images. */}
       <div className="flex h-full w-full items-start justify-center gap-[24px] px-[24px] max-md:gap-[14px] max-md:px-[14px]">
-        {columns.map((tiles, columnIndex) => (
+        {columns.map((tiles, columnIndex) => {
+          const drift = columnDrift(columnIndex);
+          return (
           <div
             key={columnIndex}
             data-grid-column
+            // Read by grid-marquee.tsx at build time. Passing the drift through
+            // data attributes rather than props keeps the motion component a
+            // render-nothing sibling (the house pattern — logos-marquee,
+            // footer-reveal, design-shots-reveal all work this way), so the
+            // markup stays declarative and the animation owns no JSX.
+            data-drift-direction={drift.direction}
+            data-drift-speed={drift.speed}
             // @container: the mat metrics below resolve in `cqw` against THIS
             // column, so one CSS rule gives every tile a mat proportional to the
             // column at any viewport — no ResizeObserver, no measurement.
             // max-w caps a column at the design width so 4 columns on an
             // ultra-wide don't inflate into posters.
-            className="@container flex w-full max-w-[380px] flex-col gap-[24px] max-md:gap-[14px]"
+            className="@container w-full max-w-[380px]"
             style={{
               // Consumed by every tile in this column (see below).
               ["--tile-mat" as string]: `${MAT_RATIO * 100}cqw`,
               ["--tile-radius" as string]: `${RADIUS_RATIO * 100}cqw`,
             }}
           >
+            {/* TRACK — the one element the marquee translates. will-change sits
+                here, on the four moving layers, and never on a tile: promoting
+                every tile would multiply layer memory by the tile count to
+                animate exactly the same four transforms. */}
+            <div
+              data-grid-track
+              className="flex flex-col gap-[24px] will-change-transform max-md:gap-[14px]"
+            >
+              {/* GROUP — the unit the marquee clones to fill the column. Its
+                  height + the track's gap IS the loop's advance, which is why
+                  it wraps the tiles instead of them sitting directly on the
+                  track: cloning needs one node to copy. */}
+              <div
+                data-grid-group
+                className="flex flex-col gap-[24px] max-md:gap-[14px]"
+              >
             {tiles.map((project) => (
               <figure
                 key={project.src}
@@ -144,10 +171,19 @@ export default function PortfolioGrid({
                   />
                 </div>
               </figure>
-            ))}
+                ))}
+              </div>
+            </div>
           </div>
-        ))}
+          );
+        })}
       </div>
+
+      {/* Drift + hover pause. Renders nothing; it reads the [data-grid-*]
+          attributes above and animates the tracks (steps 2–3). Keyed on the
+          wall's identity so it rebuilds when the filter or the breakpoint
+          changes the columns out from under it. */}
+      <GridMarquee rebuildKey={`${filter}:${columns.length}`} />
     </div>
   );
 }
