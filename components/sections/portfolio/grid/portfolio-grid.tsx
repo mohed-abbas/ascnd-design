@@ -62,26 +62,25 @@ export default function PortfolioGrid({
   const columns = assignColumns(projects, columnCount(projects.length, isMobile));
 
   return (
-    // The mask (D7) is the section's top/bottom fade. It has to be a mask and
-    // not an opaque gradient overlay: this section is transparent over the
-    // shared fixed sky, so a painted gradient would cover the CLOUDS passing
-    // behind the wall and leave a visibly cloud-free band.
+    // The wall is its OWN in-flow box BELOW the header, not a full-bleed layer
+    // behind it (the globe's arrangement, which this deliberately does not
+    // copy): the heading and the controls sit above the grid and the grid
+    // starts under them. `flex-1 min-h-0` takes the band's remaining height —
+    // min-h-0 because a flex item's default min-height:auto would let the
+    // columns push this box taller than the band and defeat the overflow clip.
     //
-    // The wall is FULL-BLEED behind the header, not padded below it — the same
-    // arrangement as the globe canvas, and the mask is why. Start the columns
-    // below the controls instead and the first 12% of the mask has no content
-    // to fade: tiles would simply begin, hard-edged, wherever the padding ended.
-    // Running the wall to the top of the band gives the fade something to act
-    // on and lets tiles rise into the header exactly as the globe's do.
+    // That box is also what makes the mask (D7) meaningful. The fade has to
+    // have content in its band to act on: masking a full-bleed layer whose
+    // columns were padded down to clear the header would fade empty sky at the
+    // top and tiles would simply begin, hard-edged, where the padding ended.
+    // Here the wall's top IS the fade's top, so 12% of tile does the dissolve.
     //
-    // The top stop is 22%, not the spec's 12%: it has to clear the floating
-    // header (10dvh + heading + pill row), or tiles pass behind the heading at
-    // ~83% opacity and eat its legibility — the problem the engine solves for
-    // its own core label with a text shadow. Step 4 tunes both stops against
-    // the real thing; this is the starting guess, and it is a guess.
+    // Mask, never an opaque gradient overlay: the section is transparent over
+    // the shared fixed sky, so a painted gradient would cover the CLOUDS
+    // passing behind the wall and leave a visibly cloud-free band.
     <div
       data-portfolio-grid
-      className="absolute inset-0 overflow-hidden [mask-image:linear-gradient(to_bottom,transparent_0%,#000_22%,#000_88%,transparent_100%)] [-webkit-mask-image:linear-gradient(to_bottom,transparent_0%,#000_22%,#000_88%,transparent_100%)]"
+      className="relative mt-[20px] min-h-0 w-full flex-1 overflow-hidden [mask-image:linear-gradient(to_bottom,transparent_0%,#000_12%,#000_88%,transparent_100%)] [-webkit-mask-image:linear-gradient(to_bottom,transparent_0%,#000_12%,#000_88%,transparent_100%)]"
     >
       {/* The field. Columns are capped at the design width and CENTRED, so a
           sparse filter (fewer columns) narrows the field instead of stretching

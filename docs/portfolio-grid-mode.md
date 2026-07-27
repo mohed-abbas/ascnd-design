@@ -864,20 +864,28 @@ name and the crawlable text never move, only their visibility. In grid mode it
 shows, above the controls, in the house mixed-font display (Product Sans Light +
 Instrument Serif on "shipped"). The two copies of the words must stay in sync.
 
-### 17.2 The wall runs FULL-BLEED behind the header, not padded below it
+### 17.2 The wall is its own box BELOW the header — corrected 2026-07-27
 
-First attempt padded the columns down so they started under the controls. That
-quietly breaks D7: with the content starting a quarter of the way down, the
-mask's top fade band has nothing in it to fade, and the wall just *begins*,
-hard-edged, wherever the padding stops.
+Shipped first as a full-bleed layer behind the floating header, on the reasoning
+that a mask needs content in its fade band and padded columns would leave the
+top 12% fading empty sky. **Stakeholder call: the heading and the controls sit
+ABOVE the grid, not over it.** They were right, and the original reasoning had a
+false premise: the fix is not padding the columns inside a full-bleed masked
+layer (which really would fade nothing), it is giving the WALL ITS OWN BOX below
+the header and masking that. Then the wall's top *is* the fade's top and 12% of
+tile does the dissolve, as specified.
 
-Running the wall to the top of the band — the same arrangement the globe canvas
-uses — gives the fade something to act on and lets tiles rise into the header
-the way the globe's do. The cost is that the top stop had to move from the
-spec's 12% to **22%**, so tiles clear the floating heading instead of sitting
-behind it at ~83% opacity (the same legibility problem the engine solves for its
-core label with a text shadow). Both stops are a starting guess and step 4
-exists to tune them against the real thing.
+So the band is now `flex flex-col`: header in flow, wall `flex-1 min-h-0`
+underneath. `min-h-0` because a flex item's default `min-height: auto` would let
+the columns push the box past the band and defeat its overflow clip. The mask
+top stop goes back to the spec's **12%** — the 22% was only ever compensation
+for tiles passing behind the heading, which can no longer happen.
+
+The globe is untouched: its canvas is `absolute inset-0`, out of flow, so it
+keeps floating its controls over a full-bleed sphere. **The two modes now differ
+in layout model on purpose** — the globe is an object you look *into* and its
+chrome floats on top; the grid is a surface you look *at* and its chrome sits
+above it.
 
 ### 17.3 Not yet true (so nobody reads pass 1 as the finished mode)
 

@@ -134,7 +134,12 @@ export default function Portfolio() {
           fixed, URL-bar-independent, so the band never resizes and the canvas
           is never reallocated during a scroll. Desktop keeps dvh (no URL bar,
           and dvh == svh there anyway). */}
-      <div className="relative h-dvh w-full max-md:h-svh">
+      {/* flex-col so GRID mode can lay out as header-then-wall in normal flow:
+          the heading and the controls sit ABOVE the grid, and the wall takes
+          the remaining height (portfolio-grid.tsx is `flex-1 min-h-0`). The
+          globe is unaffected — its canvas is `absolute inset-0`, out of flow,
+          and keeps floating its controls over a full-bleed sphere. */}
+      <div className="relative flex h-dvh w-full flex-col max-md:h-svh">
         {/* Top row — the controls. In GLOBE mode the heading lives at the
             sphere's core (painted by the engine), so this row carries the tabs
             alone, exactly as before. In GRID mode there is no canvas to paint
@@ -153,7 +158,11 @@ export default function Portfolio() {
           <h2
             className={
               mode === "grid"
-                ? "font-light text-[49px] leading-[1.1] tracking-[-0.03em] text-white max-md:text-[34px]"
+                ? // pointer-events-auto: the header row is none (so it can't
+                  // block the globe's drag), which would also make this text
+                  // unselectable. The heading is not interactive, but it should
+                  // still be selectable like any other copy on the page.
+                  "pointer-events-auto font-light text-[49px] leading-[1.1] tracking-[-0.03em] text-white max-md:text-[34px]"
                 : "sr-only"
             }
           >
