@@ -111,11 +111,35 @@ export default function Footer() {
             <ul className="flex items-start gap-[13px] whitespace-nowrap text-[16px] text-[#f7f4f0] max-md:flex-wrap max-md:justify-center max-md:gap-x-[18px] max-md:gap-y-[8px]">
               {NAV_LINKS.map(({ label, href }) => (
                 <li key={label}>
+                  {/* Roll-down hover: the label slides DOWN out of a clipped
+                      box while an identical copy parked one line ABOVE
+                      (bottom-full) rolls into its place. Both spans translate by
+                      the SAME +100%, so the pair moves as one strip and the
+                      clone lands exactly where the first sat (no half-pixel
+                      drift from separate offsets). The clone is the decoration —
+                      aria-hidden so the link's accessible name stays a single
+                      "work", not "workwork".
+                      Pure CSS transition on transform: a hover state doesn't
+                      belong on the GSAP ticker, and transform-only keeps it off
+                      the layout path. focus-visible mirrors hover so the roll
+                      also plays for keyboard tabbing. overflow-hidden clips to
+                      the 24px line box (Tailwind preflight's 1.5 leading on
+                      16px text), which leaves room for the descenders in
+                      "pricing" — don't tighten the leading here or they get
+                      sheared. */}
                   <AnchorLink
                     href={href}
-                    className="inline-block transition-opacity hover:opacity-70"
+                    className="group relative inline-block overflow-hidden align-bottom"
                   >
-                    {label}
+                    <span className="inline-block transition-transform duration-[420ms] ease-[cubic-bezier(0.33,1,0.68,1)] group-hover:translate-y-full group-focus-visible:translate-y-full">
+                      {label}
+                    </span>
+                    <span
+                      aria-hidden
+                      className="absolute bottom-full left-0 inline-block transition-transform duration-[420ms] ease-[cubic-bezier(0.33,1,0.68,1)] group-hover:translate-y-full group-focus-visible:translate-y-full"
+                    >
+                      {label}
+                    </span>
                   </AnchorLink>
                 </li>
               ))}
