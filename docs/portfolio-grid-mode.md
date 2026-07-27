@@ -52,12 +52,13 @@ So the two modes are not redundant — they split by device, see D2.
 |---|---|---|
 | **D1** | The grid is **DOM + CSS transforms + GSAP**. Not WebGL, not a second 2D canvas, not a new formation inside the existing engine. | ✅ |
 | **D2** | **Globe is the default on desktop. Grid is the default on mobile.** Both modes reachable on both devices via the switcher. | ✅ |
-| **D3** | **4 columns on desktop, 2 on mobile.** Adjacent columns run in opposite directions. | ✅ |
+| **D3** | **Up to 4 columns on desktop, 2 on mobile**, adjacent columns running in opposite directions. The desktop column COUNT adapts to the filtered set size (§8.2) — tile size never changes, the field narrows. | ✅ |
 | **D4** | **Hovering a column pauses THAT column only** — its neighbours keep drifting. See the note below; this is the one answer worth re-confirming when you first see it running. | ⚠️ see §3.1 |
-| **D5** | Clicking a tile does an **in-place Flip expand** (the wall dims behind it), matching the globe's focus feel. A lightbox/panel variant is recorded in §9 as a deferred alternative, not built. | ✅ |
+| **D5** | Clicking a tile does an **in-place Flip expand** (the wall dims behind it), matching the globe's focus feel. A lightbox/panel variant is recorded in §10 as a deferred alternative, not built. | ✅ |
 | **D6** | The **mode switcher sits next to the filter tabs**, reusing the same glass-pill recipe and `useSlidingHighlight`. | ✅ |
 | **D7** | The section's **top and bottom fade** is a CSS `mask-image` on the column viewport — not an opaque gradient overlay. | ✅ |
 | **D8** | **Full-length / oversized tile designs are deferred to last**, but the data shape that admits them lands with the first pass so it is not a rewrite. | ✅ |
+| **D9** | **Masonry, not a uniform grid.** Fixed column WIDTH; every tile's HEIGHT comes from its own authored aspect. Tiles are NOT all the same size — that is the whole point of the mode (§8). | ✅ |
 
 ### 3.1 The D4 caveat (read this)
 
@@ -226,7 +227,82 @@ spot documented at the top of `lib/perf/tiers.ts`.
 
 ---
 
-## 8. Data model and the image pipeline (D8 groundwork)
+## 8. Tile sizing — masonry, not a uniform grid (D9)
+
+### 8.1 Fixed width, varied height
+
+Pinterest's rule, and the thing that makes a wall read as a wall: **every column
+is the same width; every tile's height comes from its own aspect.** Tiles are
+deliberately NOT uniform.
+
+The grid does not invent aspects — it inherits the three the globe already
+authors in `SLOT_SIZE` (`cloud-canvas-engine.ts`), which every source image has
+already been cropped to by `scripts/optimize-portfolio-images.mjs`:
+
+| form | authored slot | aspect (w/h) | height in a 380px column |
+|---|---|---|---|
+| `landscape` | 164 × 104 | 1.577 | 241 px |
+| `square` | 126 × 126 | 1.000 | 380 px |
+| `portrait` | 112 × 146 | 0.767 | 495 px |
+| `tall` (D8, last) | — | ~0.55 | ~690 px |
+
+That is a ~2:1 spread between the shortest and tallest tile before D8 even
+lands — enough that no two columns line up and the wall reads as masonry rather
+than a table. `tall` widens it to ~3:1 later.
+
+Fixed width matters beyond looks: uniform column width means **one `sizes` value
+per breakpoint**, so the srcset resolves to a single source width per device
+instead of a per-tile matrix. A variable-*width* wall would multiply the image
+preset count for no visual gain. D8's `span: 2` is the deliberate exception, and
+it is the last thing built.
+
+Consequence for the marquee: each column's advance is **its own** content height
++ gap, measured per column (`logos-marquee` measures `offsetWidth + gap`; this
+measures `offsetHeight + gap`). Columns of unequal total height therefore loop at
+different periods at a constant px/sec — they desync for free. Nothing needs to
+be forced, and no column should be padded to match another.
+
+**Assignment:** shortest-column-first greedy — classic masonry — walked over the
+registry order. That order already rotates web → branding → misc specifically so
+a contiguous run can't clump one type (and therefore one shape); a rule written
+for the globe that pays off again here. Deterministic: same filter → same wall.
+
+### 8.2 The sparse-filter problem (this one bites)
+
+An infinite column built from few tiles repeats itself *on screen*:
+
+| tab | projects | at 4 columns | verdict |
+|---|---|---|---|
+| all | 24 | 6 / column | fine |
+| web designs | 10 | 2–3 / column | thin |
+| misc | 8 | 2 / column | thin |
+| brandings | 6 | 1–2 / column | **broken** — a 1-tile column is one image stacked forever |
+
+The globe answers sparsity by GROWING tiles (`densityFactors` shrinks spread and
+grows size — it is why the brandings tab reached 93.8% of screen width per tile
+on a phone before the `DESIGN_BASE` fix). **The grid must not copy that.** A
+bigger tile in a fixed-width column means a wider column, and the wall stops
+being a wall.
+
+The grid's answer is the inverse: **keep tile size constant, drop columns.**
+Floor of 3 tiles per column:
+
+```
+columns = clamp(floor(count / 3), 2, 4)      // desktop; mobile is always 2
+
+all(24) → 4      web(10) → 3      misc(8) → 2      brandings(6) → 2
+```
+
+The field centres and narrows; tile size never changes. At the 3-per-column
+floor a column stands ~1.3 viewports tall, so a given tile can appear at most
+twice on screen at once — that is the acceptable floor, and the reason the
+divisor is 3 rather than 2.
+
+Second lever if `brandings` still reads monotonous (it is nearly all portrait):
+the reserved `grid?.form` override (§9) can re-shape individual projects for the
+wall without touching their globe slot.
+
+## 9. Data model and the image pipeline (D8 groundwork)
 
 `CloudProject` (`cloud-canvas-data.ts`) currently carries `form: landscape |
 square | portrait`, which is coupled to the engine's `SLOT_SIZE` **and** to the
@@ -255,7 +331,7 @@ screenshot. That folds D8 into D5 instead of making it a separate feature.
 
 ---
 
-## 9. Deferred alternatives (recorded so a future change is cheap)
+## 10. Deferred alternatives (recorded so a future change is cheap)
 
 **Lightbox / panel expand** — instead of the in-place Flip, the tile flies to a
 centered panel carrying the project name, a link, and the full-length shot, over
@@ -272,7 +348,7 @@ recreate the exact gesture conflict the globe had to concede (`touch-action:
 pan-y`), and the grid's whole advantage on mobile is that it asks nothing of the
 visitor.
 
-## 10. Deferred degradation (feature-first, per `CLAUDE.md`)
+## 11. Deferred degradation (feature-first, per `CLAUDE.md`)
 
 Not in pass 1, by policy — build it working on capable Chrome *and* Firefox
 first, then add:
@@ -282,7 +358,7 @@ first, then add:
 - A no-JS resting state: the columns should render as a plain static grid with
   no tween, the way `logos-marquee` leaves a centred group under its mask.
 
-## 11. Open risks
+## 12. Open risks
 
 - **D4's reading** (§3.1) — confirm on first sight.
 - **Mobile default (D2) changes what a phone downloads.** Today a phone pays for
@@ -294,7 +370,7 @@ first, then add:
   archive"*), it should be deleted or moved outside the repo before this work
   adds a second image directory next to it.
 
-## 12. Implementation order
+## 13. Implementation order
 
 1. Mode state + switcher next to the filter tabs (D6), device default (D2),
    mutually exclusive mounts (§5). Grid renders a static wall — no motion yet.
@@ -304,5 +380,273 @@ first, then add:
 4. Mask fade (D7) — measure it here, while there is nothing else to blame.
 5. Flip expand (D5), wall dim, Escape/click-out to close, focus restored to the
    originating tile.
-6. Grid image preset + `grid?` data block (§8).
+6. Grid image preset + `grid?` data block (§9).
 7. **Last:** full-length tile designs (D8), reusing the expand from step 5.
+
+---
+
+## 14. Diagrams
+
+Drawn 2026-07-27 while reading the section. They describe the CURRENT globe
+(A–E) and the PLANNED grid (F–I).
+
+### A · Where the section sits in the page z-stack
+
+```
+  z-999   navbar (DOM, backdrop-blur — a SIBLING of the fixed layers, never an ancestor)
+  z-100   cursor lens (DOM)
+  z-61    FRONT cloud layer  ──────────────────────────┐
+                                                        │ portfolio's tiles can be
+  z-auto  ┌───────────────────────────────────────┐    │ occluded by front clouds
+          │  #work  [data-portfolio]              │◄───┘ ON PURPOSE — the globe
+          │  transparent, z-index: auto           │      floats IN the atmosphere
+          └───────────────────────────────────────┘
+  z-0+    other page content (DOM)
+  -z-10   REAR cloud layer   (fixed, own layer)
+  -z-20   sky backdrop       (fixed: #62abff fill + inline-SVG grain)
+
+  ⚠ nothing above may put filter/backdrop-filter on an ANCESTOR of the two
+    fixed layers — that breaks position:fixed for their descendants.
+```
+
+### B · Section anatomy today (vertical)
+
+```
+ ┌─ <section id="work" data-portfolio>  overflow-hidden ────────────────┐
+ │   pt-[8dvh]            ← only the REMAINDER of the house gap; the    │
+ │                          band's own 10dvh completes it               │
+ │  ┌─ .globe band ─ h-dvh (max-md:h-svh) ─ relative ─────────────────┐ │
+ │  │                                                                 │ │
+ │  │   pt-[10dvh]                                                    │ │
+ │  │   ┌──── header row · z-10 · pointer-events-NONE ─────────────┐  │ │
+ │  │   │        ╭──────────────────────────────────────╮          │  │ │
+ │  │   │        │ all │ web designs │ brandings │ misc │ ← glass   │  │ │
+ │  │   │        ╰──────────────────────────────────────╯   pill,   │  │ │
+ │  │   │           ▲ sliding highlight    pointer-events-AUTO      │  │ │
+ │  │   └──────────────────────────────────────────────────────────┘  │ │
+ │  │                                                                 │ │
+ │  │   <canvas>  absolute inset-0  h-full w-full   ← FULL-BLEED      │ │
+ │  │         ▒▒▒      ▒▒▒▒▒                          on purpose:     │ │
+ │  │     ▒▒▒▒   "stuff we've shipped"   ▒▒▒          an inset box    │ │
+ │  │        ▒▒▒▒  ▒▒▒▒     ▒▒▒▒▒                     would hard-clip │ │
+ │  │      ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒                      tiles at its    │ │
+ │  │          ▒▒▒▒▒▒▒▒▒▒▒▒▒                          own edge        │ │
+ │  │   <h2 class="sr-only">  ← the accessible twin of the in-canvas  │ │
+ │  └─────────────────────────────────────────── heading ────────────┘ │
+ │   pb-section          ← the band exists so this padding CANNOT      │
+ └──────────────────────── reach the canvas ───────────────────────────┘
+
+ why the band: radius = min(cssW,cssH) × 0.45 × spread × zoom.
+ A canvas grown by the padding would scale the sphere by the same amount
+ and hand back exactly the clearance the padding bought.
+ max-md:h-svh: dvh tracks the URL bar → resize → canvas.width reassigned
+ → backing store CLEARED → one blank frame per URL-bar move.
+```
+
+### C · Component / data flow
+
+```
+  portfolio.tsx  ("use client" — owns the filter state)
+        │
+        ├── useSlidingHighlight(filter) ──► groupRef + pillRef (the travelling pill)
+        │
+        ├── PROJECT_FILTERS ──► tab buttons ──► setFilter()
+        │                                            │
+        └── <CloudCanvasScene filter> ───────────────┘
+                  │  next/dynamic({ ssr:false })   ← 2D canvas + decode are
+                  ▼                                  browser-only
+            <CloudCanvasView config filter wheelZoom={false} initFrom="[data-pills]">
+                  │
+                  ├── CLOUD_CANVAS_PORTFOLIO_CONFIG   (locked preset, tuned in /lab on `dev`)
+                  ├── cloudProjects[24]               (src · name · type · form)
+                  │
+                  └── new CloudCanvasEngine(canvas, config, images)
+                         ├─ owns NO scheduler  ← tick(dt) is called by the view
+                         ├─ draws TRANSPARENT  ← clearRect only, never a bg fill
+                         └─ setFilter() re-FORMS (no rebuild): survivors glide,
+                            filtered-out evaporate in place, returners condense
+                            in at their new spot
+```
+
+### D · One frame of the globe
+
+```
+   formation unit points          per-card easing            painter's algorithm
+   ───────────────────           ───────────────            ───────────────────
+   Fibonacci sphere              visEase  (filter)          sort by rotated z
+   (Y_SQUASH 0.86)               hoverEase                        │
+        │                        focusEase ──┐                    ▼
+        ▼                        dimEase     │           ┌────────────────┐
+   Euler rotate (yaw/pitch/roll) ◄───────────┘           │ far  ░ faded   │
+        │                                                │  ▒             │
+        ▼                        FOCUS warp: a focused   │   ▓  CORE      │
+   orthographic project          tile leaves the         │  LABEL drawn   │
+   screen = centre + xy·radius   formation COMPLETELY,   │   ▓  HERE      │
+        │                        landing at centre,      │  █  near, big  │
+        ▼                        z→1.16, +0.45 scale —   └────────────────┘
+   draw: frame sprite blit       so every tile presents   the heading is SPLICED
+       + clip + cover-draw       identically whichever    into the sort, so tiles
+       + depth fade              face it was clicked on   pass BEHIND and IN FRONT
+
+   cost ≈ 48 drawImage + 25 fillRect + 24 clips + 2 shadow-blurred fillText
+   …every frame. The 0.2 autospin never reaches rest → no dirty check possible.
+```
+
+### E · Load + idle gating
+
+```
+  page load                scroll ──────────────────────────────────────►
+     │
+     │  mount: engine constructed, canvas empty & transparent. NO fetch.
+     │
+     ├──[data-pills] top hits viewport top ──► armInit()      ← ScrollTrigger floor:
+     │  (first UNPINNED section after the WhyStay pin)          keeps the 1.44MB
+     │                                                          fetch out of the
+     │                                                          page's heaviest pin
+     ├──1000px before the canvas ──► startInit()
+     │        fetch 24 imgs → decode → downscale to ≤900px → benchmark 2 real frames
+     │                                                            │
+     │                                        avg > 8ms? ─── yes ─┴─► isLite = true
+     │                                        (CPU raster: FF/Linux ~35ms vs ~4.6ms)
+     │                                        locked for the mount — never re-evaluated
+     │
+     └──canvas intersects (IO rootMargin 0px) ──► inView = true ──► ticker paints
+                                                  leaves view  ──► inView = false
+                                                                   → zero repaints
+
+   paint cap per frame:   coarse pointer → 30
+                          isLite         → 30
+                          interacting    → scrollRepaintFpsCap()   (cursor is the
+                          else           → heavyEffectFpsCap()      reference frame)
+                          +1ms tolerance, or 120Hz ticks slip and you measure ~44fps
+```
+
+### F · Grid mode — desktop, 4 columns (D3 + D9)
+
+Tile heights are the authored aspects (§8.1), NOT a uniform cell:
+
+```
+ ┌─ #work ────────────────────────────────────────────────────────────┐
+ │      ╭──────────────────────────────╮  ╭───────────────╮           │
+ │      │ all │ web │ brandings │ misc │  │ globe │ grid  │ ← D6      │
+ │      ╰──────────────────────────────╯  ╰───────────────╯   switcher│
+ │                                                     sits beside    │
+ │  ┌─ .viewport  mask-image: ↓ ─────────────────────── the filters ─┐│
+ │  │ ░░░░░░░░░░░░░░░░░░░░░ transparent → opaque (12%) ░░░░░░░░░░░░░ ││
+ │  │  ┌──────┐  ┌──────┐  ┌──────┐  ┌──────┐                        ││
+ │  │  │ land │  │ SQR  │  │ port │  │ land │   land = 1.577  241px  ││
+ │  │  └──────┘  │      │  │      │  └──────┘   sqr   = 1.000  380px ││
+ │  │  ┌──────┐  └──────┘  │      │  ┌──────┐   port  = 0.767  495px ││
+ │  │  │ port │  ┌──────┐  └──────┘  │ SQR  │   (in a 380px column)  ││
+ │  │  │      │  │ land │  ┌──────┐  │      │                        ││
+ │  │  │      │  └──────┘  │ land │  └──────┘   uniform WIDTH,       ││
+ │  │  └──────┘  ┌──────┐  └──────┘  ┌──────┐   varied HEIGHT →      ││
+ │  │  ┌──────┐  │ port │  ┌──────┐  │ port │   no two columns ever  ││
+ │  │  │ SQR  │  │      │  │ SQR  │  │      │   line up              ││
+ │  │  │      │  │      │  │      │  │      │                        ││
+ │  │  └──────┘  └──────┘  └──────┘  └──────┘                        ││
+ │  │     ↓         ↑         ↓         ↑     ← alternating, ±15%    ││
+ │  │  col 1     col 2     col 3     col 4      speed variance       ││
+ │  │ ░░░░░░░░░░░░░░░ opaque → transparent (88%) ░░░░░░░░░░░░░░░░░░░ ││
+ │  └────────────────────────────────────────────────────────────────┘│
+ └────────────────────────────────────────────────────────────────────┘
+
+   one column = logos-marquee's mechanic, vertical:
+   ┌ clone the tile group until track ≥ viewport + 1 advance
+   ├ advance = THIS column's own offsetHeight + gap  (§8.1 — columns of
+   │           unequal height loop at different periods and desync for free)
+   ├ gsap.to(track, { y: -advance, repeat: -1, ease: "none" })
+   └ frame at y=-advance ≡ frame at y=0  →  the restart is invisible
+     (clones are aria-hidden + out of tab order)
+
+   hover col 3:   col1 ↓   col2 ↑   col3 ■ (timeScale→0 over .4s)   col4 ↑
+                                         └─ D4: neighbours keep moving
+```
+
+### F.2 · Sparse filters — drop columns, never resize tiles (§8.2)
+
+```
+  all · 24 projects            web · 10              brandings · 6
+  ┌──┐┌──┐┌──┐┌──┐             ┌──┐┌──┐┌──┐            ┌──┐┌──┐
+  │  ││  ││  ││  │             │  ││  ││  │            │  ││  │
+  └──┘│  │└──┘│  │             └──┘│  │└──┘            │  ││  │
+  ┌──┐└──┘┌──┐└──┘             ┌──┐└──┘┌──┐            └──┘└──┘
+  │  │┌──┐│  │┌──┐             │  │┌──┐│  │            ┌──┐┌──┐
+  └──┘└──┘└──┘└──┘             └──┘└──┘└──┘            └──┘└──┘
+   4 cols · 6 per column        3 cols · 3–4          2 cols · 3
+      ▲ tile size is IDENTICAL in all three — only the COUNT of columns
+        changes and the field re-centres. The globe does the opposite
+        (densityFactors GROWS tiles when sparse); copying that here would
+        widen the column and stop it being a wall.
+```
+
+### G · Grid mode — mobile, 2 columns (the DEFAULT there, D2)
+
+```
+ ┌─────────────────────┐    no hover on touch, so:
+ │  ╭───────────────╮  │      · columns just keep drifting
+ │  │ globe │ grid  │  │      · tap = expand
+ │  ╰───────────────╯  │      · NO drag-to-scrub — that would recreate
+ │ ░░░░░░░░░░░░░░░░░░  │        the exact gesture conflict the globe
+ │  ┌──────┐ ┌──────┐  │        had to concede (touch-action: pan-y)
+ │  │ land │ │ port │  │
+ │  └──────┘ │      │  │    the grid's whole advantage here is that it
+ │  ┌──────┐ │      │  │    asks NOTHING of the visitor
+ │  │ port │ └──────┘  │
+ │  │      │ ┌──────┐  │
+ │  │      │ │ SQR  │  │
+ │  └──────┘ │      │  │
+ │  ┌──────┐ └──────┘  │
+ │  │ SQR  │ ┌──────┐  │
+ │  └──────┘ │ land │  │
+ │     ↓     └──────┘  │
+ │ ░░░░░░░░░░░░░░↑░░░  │
+ └─────────────────────┘
+```
+
+### H · Mode switching — the mount contract
+
+```
+                    ┌───────────── device default (D2) ─────────────┐
+                    │  useSyncExternalStore → server snapshot first,│
+                    │  device branch chosen AFTER hydration         │
+                    └───────┬───────────────────────────┬───────────┘
+                     desktop│                     mobile│
+                            ▼                           ▼
+                     ┌────────────┐   switcher   ┌────────────┐
+                     │   GLOBE    │ ◄──────────► │    GRID    │
+                     │ 2D canvas  │              │ DOM+GSAP   │
+                     └────────────┘              └────────────┘
+                            │                           │
+              on leaving:   │                           │  on leaving:
+              ticker.remove │                           │  kill tweens
+              engine.dispose│                           │  disconnect IO
+              IO/RO/gate off│                           │  remove clones
+                            ▼                           ▼
+                        UNMOUNTED                   UNMOUNTED
+
+   ⛔ NEVER render both and hide one with display:none — that is two
+      repaint sources for one visible section. The filter state is
+      SHARED across modes (it belongs to portfolio.tsx, not to either mode).
+```
+
+### I · The expand (D5, in-place Flip)
+
+```
+        BEFORE (state captured)              AFTER (Flip plays the delta)
+   ┌──────────────────────────────┐     ┌──────────────────────────────┐
+   │ ┌────┐ ┌────┐ ┌────┐ ┌────┐  │     │ ░░░░░░ wall dimmed ░░░░░░░░  │
+   │ │▓▓▓▓│ │▓▓▓▓│ │████│ │▓▓▓▓│  │     │ ░░  ┌──────────────────┐ ░░  │
+   │ ├────┤ │    │ └────┘ │    │  │ ──► │ ░░  │                  │ ░░  │
+   │ │▓▓▓▓│ ├────┤   ▲    ├────┤  │     │ ░░  │      ████        │ ░░  │
+   │ │    │ │▓▓▓▓│   │    │▓▓▓▓│  │     │ ░░  │                  │ ░░  │
+   │ └────┘ └────┘ clicked └────┘ │     │ ░░  └──────────────────┘ ░░  │
+   └──────────────────────────────┘     └──────────────────────────────┘
+      all columns keep drifting              columns PAUSE while open
+
+   mirrors the globe's focus: one tile leaves the formation, parks centre,
+   everything else dims. Escape / click-out closes; focus returns to the
+   originating tile.
+   D8 later: this expanded panel is where the FULL-LENGTH shot lives —
+   the wall shows the crop, the expand reveals the long screenshot.
+```
