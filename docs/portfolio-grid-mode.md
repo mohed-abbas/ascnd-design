@@ -59,6 +59,8 @@ So the two modes are not redundant — they split by device, see D2.
 | **D7** | The section's **top and bottom fade** is a CSS `mask-image` on the column viewport — not an opaque gradient overlay. | ✅ |
 | **D8** | **Full-length / oversized tile designs are deferred to last**, but the data shape that admits them lands with the first pass so it is not a rewrite. | ✅ |
 | **D9** | **Masonry, not a uniform grid.** Fixed column WIDTH; every tile's HEIGHT comes from its own authored aspect. Tiles are NOT all the same size — that is the whole point of the mode (§8). | ✅ |
+| **D10** | Grid tiles carry the **glass-matted frame**, the same treatment the globe draws around every tile — not bare rounded corners. The two modes stay one visual language, and a bare image over the live sky reads as a sticker. | ✅ |
+| **D11** | The **`tall` slot ships with D8, not in pass 1.** The wall launches on the three authored aspects (2:1 spread); the taller form arrives with the full-length designs. | ✅ |
 
 ### 3.1 The D4 caveat (read this)
 
@@ -821,16 +823,20 @@ realistic end state is: web work reads as the wide anchors, branding and
 mockups as the tall ones. Livelier than §15's drawing, calmer than the
 reference. That is on-brand, not a compromise.
 
-### 16.2 Consequence for the build order
+### 16.2 Consequence for the build order — RESOLVED (D11)
 
-If more variety is wanted, the **`tall` slot** should land in pass 1 — it is one
-row in the aspect table. That is separate from **D8's full-length designs** (new
-long-form artwork revealed by the expand), which stay last. Splitting the two
-was implicit before; it is explicit now.
+Splitting two things that were implicitly one: the **`tall` slot** is a row in
+the aspect table, while **D8's full-length designs** are new long-form artwork
+revealed by the expand. They *could* ship separately.
 
-### 16.3 Open look call
+**Decided: they don't.** The wall launches on the three authored aspects and its
+2:1 spread; `tall` arrives with D8, last. The reference's wider spread is
+knowingly not matched in pass 1 (see 16.1 for why that is defensible).
 
-Do grid tiles carry the globe's **glass-matted frame**, or bare rounded corners?
-Over a white page bare works (the reference); over the live sky, bare images
-risk reading as stickers. The frame also keeps the two modes speaking the same
-visual language. Recommendation: frame. Not yet decided.
+### 16.3 Tile treatment — RESOLVED (D10)
+
+**Glass-matted frame**, the same treatment the globe draws around every tile —
+not bare rounded corners. Bare works over the reference's white page; over the
+live sky it reads as a sticker, and the mat is what keeps the two modes one
+visual language. The DOM implementation has to reproduce the engine's mat
+(inset, radius, hairline, sheen) in CSS rather than approximate it by eye.
