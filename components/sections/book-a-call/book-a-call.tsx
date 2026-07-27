@@ -65,7 +65,7 @@ export default function BookACall() {
             once wired; a "coming soon" placeholder until then. */}
         <div
           data-book-a-call-box
-          className="flex h-[563px] w-full items-center justify-center overflow-hidden rounded-[20px] border border-dashed border-white/40 bg-gradient-to-b from-black/10 to-black/5 shadow-[inset_0_0_0_999px_rgba(255,255,255,0.06)] max-md:h-[70dvh]"
+          className="flex h-[563px] w-full items-center justify-center overflow-hidden rounded-[20px] border border-dashed border-white/40 bg-gradient-to-b from-black/10 to-black/5 shadow-[inset_0_0_0_999px_rgba(255,255,255,0.06)] max-md:h-[70svh]"
         >
           <p className="text-body font-light tracking-[0.02em] text-white/50">
             cal.me calendar — coming soon

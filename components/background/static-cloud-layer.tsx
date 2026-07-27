@@ -435,10 +435,10 @@ export default function StaticCloudLayer({
   return (
     <>
       {compositor && <style>{`${css}\n${pinCss}`}</style>}
-      <div aria-hidden style={reveal} className="pointer-events-none fixed inset-0 -z-10">
+      <div aria-hidden style={reveal} className="pointer-events-none fixed inset-0 -z-10 min-h-[100lvh]">
         {renderClouds("sky")}
       </div>
-      <div aria-hidden style={reveal} className="pointer-events-none fixed inset-0 z-[61]">
+      <div aria-hidden style={reveal} className="pointer-events-none fixed inset-0 z-[61] min-h-[100lvh]">
         {renderClouds("front")}
       </div>
     </>

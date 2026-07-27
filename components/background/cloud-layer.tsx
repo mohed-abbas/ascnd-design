@@ -153,7 +153,7 @@ export default function CloudLayer() {
         <div
           ref={skyTrackRef}
           aria-hidden
-          className="pointer-events-none fixed inset-0"
+          className="pointer-events-none fixed inset-0 min-h-[100lvh]"
         >
           <CloudView
             plane="rear"
@@ -176,7 +176,7 @@ export default function CloudLayer() {
         <div
           ref={rockTrackRef}
           aria-hidden
-          className="pointer-events-none fixed inset-0"
+          className="pointer-events-none fixed inset-0 min-h-[100lvh]"
         >
           <CloudView
             plane="front"

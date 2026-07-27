@@ -56,6 +56,14 @@ export default function ThemeDriver() {
       if (mode === prev) return;
       html.dataset.mode = mode;
 
+      // Retint the mobile browser chrome with the sky. The inline script in
+      // layout.tsx sets this before first paint; this keeps it true when the
+      // visitor switches mode. Set once per switch rather than per tween frame —
+      // the OS repaints its own chrome on this attribute, and it is not worth 60
+      // of those a second to crossfade a bar most desktops never render.
+      const meta = document.querySelector('meta[name="theme-color"]');
+      meta?.setAttribute("content", PALETTES[mode].sky.mid);
+
       const to = stopsOf(mode);
 
       // First application, or reduced motion: snap the resting sky + grain.

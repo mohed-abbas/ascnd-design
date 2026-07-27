@@ -68,7 +68,7 @@ export default function Portfolio() {
     <section
       id="work"
       data-portfolio
-      className="relative w-full overflow-hidden pt-[8dvh] pb-section"
+      className="relative w-full overflow-hidden pt-[8dvh] max-md:pt-[8svh] pb-section"
     >
       {/* The GLOBE BAND — an in-flow 100dvh block, and the containing block for
           the absolutely-positioned canvas.
@@ -93,7 +93,7 @@ export default function Portfolio() {
           and dvh == svh there anyway). */}
       <div className="relative h-dvh w-full max-md:h-svh">
         {/* Top row — filter tabs only; the heading lives at the globe's core. */}
-        <div className="pointer-events-none relative z-10 flex w-full flex-col items-center pt-[10dvh] max-md:px-6">
+        <div className="pointer-events-none relative z-10 flex w-full flex-col items-center pt-[10dvh] max-md:pt-[10svh] max-md:px-6">
           <div
             ref={groupRef}
             role="group"

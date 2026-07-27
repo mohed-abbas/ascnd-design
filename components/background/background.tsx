@@ -38,7 +38,15 @@ export default function Background() {
   return (
     <div
       aria-hidden
-      className="pointer-events-none fixed inset-0 -z-20 bg-[#62abff]"
+      // `min-h-[100lvh]` on top of inset-0: `lvh` is the LARGE viewport height,
+      // i.e. the viewport with the mobile browser chrome fully retracted. A
+      // fixed element sized only by inset-0 resolves against the layout
+      // viewport, which on iOS does not reliably grow as the URL bar collapses —
+      // leaving a strip along the top/bottom edge where the sky simply isn't
+      // painted and the page canvas shows through instead. Sizing to the LARGEST
+      // the viewport can ever be means there is no such strip at any point in
+      // the chrome's travel. Desktop is unaffected: lvh == vh with no chrome.
+      className="pointer-events-none fixed inset-0 -z-20 min-h-[100lvh] bg-[#62abff]"
       style={{ backgroundImage: SKY_GRADIENT }}
     >
       {/* Grain — 256px seamless noise tile above the fill. Opacity is per-MODE

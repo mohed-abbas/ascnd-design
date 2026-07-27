@@ -38,7 +38,7 @@ export default function Pricing() {
       // `py-section` (--gap-section in globals.css — see comparison.tsx), so
       // the sky above and below matches every other boundary on the page.
       // Mobile keeps its full-height layout; the token drops to 12dvh there.
-      className="relative flex max-md:min-h-dvh w-full items-center justify-center overflow-hidden py-section"
+      className="relative flex max-md:min-h-svh w-full items-center justify-center overflow-hidden py-section"
     >
       <div className="flex w-[1146px] flex-col items-center gap-[20px] max-md:w-full max-md:px-6">
         {/* ── Header ─────────────────────────────────────────────────────── */}

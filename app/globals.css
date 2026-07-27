@@ -83,18 +83,30 @@ html[data-mode="night"] {
    `py-[25dvh]`, which stacked to ~490px wherever two padded sections met and
    read as a dead gap — the same failure the final CTA was hand-patched for.
 
-   Viewport-proportional ON PURPOSE (dvh, not px): the rhythm scales with the
-   screen like the full-height tagline/cards/pills sections it has to sit
-   between. Sections that are still `min-h-dvh` (hero, tagline, cards, why-stay,
-   pills, costs) centre fixed content in a viewport and set their own slack —
-   they don't use this token. */
+   Viewport-proportional ON PURPOSE (viewport units, not px): the rhythm scales
+   with the screen like the full-height tagline/cards/pills sections it has to
+   sit between. Sections that set their own full height (hero, tagline, cards,
+   why-stay, pills, costs) centre fixed content in a viewport and set their own
+   slack — they don't use this token.
+
+   DESKTOP dvh / MOBILE svh. `dvh` tracks the live viewport, which on a phone
+   means it tracks the URL bar: every collapse or expand re-resolved this token
+   and re-padded EVERY section at once, so the page reflowed under the reader
+   and the content visibly stepped — worst on a browser whose chrome sits at both
+   ends, and impossible to reproduce in DevTools, which has no URL bar to move.
+   `svh` is the SMALL viewport height: fixed, chrome-independent, so the rhythm
+   is constant through the whole scroll. The same swap is applied at every
+   `min-h-*` section behind `max-md:` (portfolio's globe band got there first —
+   see the note in portfolio.tsx). Desktop keeps dvh, where all three units are
+   equal anyway. The trade: with the chrome retracted, full-height sections stop
+   growing to fill, so a little more sky shows at their bottom edge. */
 :root {
   --gap-section: 18dvh;
 }
 
 @media (width < 768px) {
   :root {
-    --gap-section: 12dvh;
+    --gap-section: 12svh;
   }
 }
 
@@ -244,8 +256,21 @@ html[data-mode="night"] {
   }
 }
 
+/* The page canvas is the SKY, never the OS colour scheme.
+   `--background` is create-next-app boilerplate: #ffffff, flipped to #0a0a0a by
+   the prefers-color-scheme block above. This site has no light/dark page design
+   — its theme is the sky MODE (data-mode on <html>), chosen by the visitor and
+   persisted, entirely independent of the OS setting. Pointing `body` at
+   `--background` meant a phone in dark mode painted the canvas near-black, and
+   the canvas is exactly what shows through in the two places the fixed
+   <Background/> can't cover: the strip a collapsing mobile URL bar exposes, and
+   the rubber-band overscroll at either end of the document. That is the black
+   band above and below the sky on iOS.
+   `--sky-mid` instead: it's the middle stop of the very gradient <Background/>
+   paints, ThemeDriver keeps it live (and TWEENS it across a mode change, so the
+   canvas crossfades with the sky), and the day fallback covers pre-JS. */
 body {
-  background: var(--background);
+  background: var(--sky-mid, #62abff);
   color: var(--foreground);
   font-family: var(--font-sans);
 }

@@ -37,7 +37,7 @@ export default function WorkingWith() {
       // globals.css — see comparison.tsx for the rationale), which keeps this
       // boundary identical to every other one. Mobile keeps its full-height
       // layout; the token drops to 12dvh there on its own.
-      className="relative flex max-md:min-h-dvh w-full items-center justify-center overflow-hidden py-section"
+      className="relative flex max-md:min-h-svh w-full items-center justify-center overflow-hidden py-section"
     >
       {/* Word-by-word headline reveal + serif flourish + paragraph blur-in;
           renders nothing, drives the [data-ww-*] nodes below. */}

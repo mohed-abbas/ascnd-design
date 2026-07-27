@@ -29,7 +29,7 @@ export default function Hero() {
       // collide (the "trusted by founders" caption ran through the CTAs on
       // short windows), so the hero grows past the viewport there instead —
       // the page scrolls a touch and the composition keeps its clearances.
-      className="relative min-h-[max(100dvh,850px)] w-full overflow-hidden"
+      className="relative min-h-[max(100dvh,850px)] max-md:min-h-[max(100svh,850px)] w-full overflow-hidden"
     >
       {/* Drives the staggered on-load slide-up reveal of the text blocks below
           (marked with data-reveal* / data-reveal-order). Renders nothing. */}

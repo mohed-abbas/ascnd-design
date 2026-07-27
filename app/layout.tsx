@@ -7,6 +7,7 @@ import CloudLayer from "@/components/background/cloud-layer";
 import SharedCanvasHost from "@/components/canvas/shared-canvas-host";
 import Cursor from "@/components/cursor/cursor";
 import { FLAGS } from "@/lib/flags";
+import { DEFAULT_MODE, PALETTES } from "@/lib/theme/palette";
 import { SITE_DESCRIPTION, SITE_NAME, SITE_TAGLINE, SITE_URL } from "@/lib/site";
 import LenisProvider from "@/components/providers/lenis-provider";
 import QualityController from "@/components/providers/quality-controller";
@@ -78,17 +79,22 @@ export const metadata: Metadata = {
 
 /**
  * The sky is the brand — tint the mobile browser chrome to match it rather than
- * letting Safari/Chrome pick white and break the edge-to-edge sky. One entry per
- * scheme so the night sky doesn't get a bright chrome bar above it.
+ * letting Safari/Chrome pick white and break the edge-to-edge sky.
+ *
+ * ONE static entry, deliberately. This used to be a prefers-color-scheme pair
+ * (light → #62abff, dark → #1c3f6e), which keyed the chrome off the OS setting
+ * while the sky itself is keyed off the visitor's chosen MODE (data-mode) — two
+ * unrelated inputs. A phone in dark mode showing the DAY sky therefore got
+ * night-navy chrome above a bright blue page: the dark band at the top of the
+ * screen. The mode is only knowable on the client, so the real value is written
+ * by the inline script below (before first paint) and kept in sync by
+ * ThemeDriver; this is just the pre-JS default, and it matches DEFAULT_MODE.
  *
  * themeColor lives on the `viewport` export, NOT `metadata` — Next moved it and
  * warns at build time if it's in the wrong one (generateViewport docs).
  */
 export const viewport: Viewport = {
-  themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#62abff" },
-    { media: "(prefers-color-scheme: dark)", color: "#1c3f6e" },
-  ],
+  themeColor: PALETTES[DEFAULT_MODE].sky.mid,
 };
 
 export default function RootLayout({
@@ -206,10 +212,29 @@ export default function RootLayout({
             synchronous-during-parse trick as the scripts around it; falls back to
             'day' on any invalid/blocked storage. Must match MODE_STORAGE_KEY +
             THEME_MODES in lib/theme/palette.ts. */}
+        {/* …and retint the browser chrome to that mode's sky in the same breath.
+            theme-color can't come from the `viewport` export, which is rendered
+            on the server and can't know the persisted mode; left to a static
+            value the URL bar reads as a dark band above a bright sky (or vice
+            versa) until the user changes mode. The mid stop is the compromise
+            the one value has to make: the chrome sits at the TOP edge on
+            Safari's top-bar layout and the BOTTOM edge on its default bottom-bar
+            layout, so it can't match --sky-top and --sky-bottom at once.
+            Colours must match PALETTES[*].sky.mid in lib/theme/palette.ts. */}
         <script
           dangerouslySetInnerHTML={{
             __html:
-              "try{var m=localStorage.getItem('ascnd:mode');document.documentElement.dataset.mode=['sunrise','day','sunset','night'].indexOf(m)>-1?m:'day';}catch(e){document.documentElement.dataset.mode='day';}",
+              "try{var m=localStorage.getItem('ascnd:mode');m=['sunrise','day','sunset','night'].indexOf(m)>-1?m:'day';}catch(e){m='day';}" +
+              "document.documentElement.dataset.mode=m;" +
+              // Update in place if Next's metadata tag is already parsed, else
+              // create one — this script and the metadata tag are both in <head>
+              // and their relative order isn't guaranteed. Either path leaves
+              // exactly one EFFECTIVE tag: browsers honour the first matching
+              // theme-color, and a created one lands ahead of anything Next
+              // appends later.
+              "var t=document.querySelector('meta[name=\"theme-color\"]');" +
+              "if(!t){t=document.createElement('meta');t.setAttribute('name','theme-color');document.head.appendChild(t);}" +
+              "t.setAttribute('content',{sunrise:'#f4c9b0',day:'#62abff',sunset:'#d9a9d4',night:'#1c3f6e'}[m]);",
           }}
         />
         {/* Arm the on-load reveal before first paint. This runs synchronously

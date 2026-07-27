@@ -24,7 +24,7 @@ export default function Cards() {
       // query hook — ids are for anchors, so a link can never depend on one.
       id="cards"
       data-cards
-      className="relative min-h-dvh w-full overflow-hidden max-md:flex max-md:flex-col max-md:items-center max-md:gap-[40px] max-md:py-[80px]"
+      className="relative min-h-dvh max-md:min-h-svh w-full overflow-hidden max-md:flex max-md:flex-col max-md:items-center max-md:gap-[40px] max-md:py-[80px]"
     >
       {/* Section heading (Figma 302:1446): "ground to launch in days" — floats
           303px above the card-row centre. Client component: it blur-reveals word

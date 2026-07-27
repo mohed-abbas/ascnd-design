@@ -145,9 +145,9 @@ export default function CalEmbed() {
       ref={boxRef}
       // Cal's iframe fills this; before it loads (and behind it), a faint
       // "loading" note keeps the box from reading as broken.
-      className="size-full min-h-[563px] [&_iframe]:rounded-[18px] max-md:min-h-[70dvh]"
+      className="size-full min-h-[563px] [&_iframe]:rounded-[18px] max-md:min-h-[70svh]"
     >
-      <p className="pointer-events-none flex size-full min-h-[563px] items-center justify-center text-body font-light text-white/50 max-md:min-h-[70dvh]">
+      <p className="pointer-events-none flex size-full min-h-[563px] items-center justify-center text-body font-light text-white/50 max-md:min-h-[70svh]">
         loading the calendar…
       </p>
     </div>
