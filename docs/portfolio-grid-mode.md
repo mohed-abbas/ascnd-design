@@ -374,8 +374,11 @@ first, then add:
 
 ## 13. Implementation order
 
-1. Mode state + switcher next to the filter tabs (D6), device default (D2),
-   mutually exclusive mounts (§5). Grid renders a static wall — no motion yet.
+1. ✅ **DONE** — mode state + switcher next to the filter tabs (D6), device
+   default (D2), mutually exclusive mounts (§5). Grid renders a static wall —
+   no motion yet. `grid/grid-spec.ts` (aspects, column count, assignment, mat
+   ratios) + `grid/portfolio-grid.tsx` (the wall) + the mode wiring in
+   `portfolio.tsx`. Two things were settled while building — see §17.
 2. Column marquee (D3) on the `logos-marquee` mechanic, alternating directions,
    px/sec speeds, off-screen idle gate.
 3. Hover pause via `timeScale` easing (D4).
@@ -672,7 +675,7 @@ switcher.
  ║                    stuff we've  𝑠𝘩𝑖𝑝𝑝𝑒𝑑                              ║  + clouds)
  ║                    ▲ DOM <h2> in grid mode — the globe paints this   ║
  ║                      in-canvas at its core; grid has no canvas.      ║
- ║                      OPEN ITEM (§12).                                ║
+ ║                      RESOLVED — see §17.                                 ║
  ║                                                                     ║
  ║      ╭──────────────────────────────────╮  ╭──────────────────╮     ║
  ║      │ all │ web │ brandings │ misc     │  │  globe  │  grid  │     ║
@@ -840,3 +843,50 @@ not bare rounded corners. Bare works over the reference's white page; over the
 live sky it reads as a sticker, and the mat is what keeps the two modes one
 visual language. The DOM implementation has to reproduce the engine's mat
 (inset, radius, hairline, sheen) in CSS rather than approximate it by eye.
+
+---
+
+## 17. Settled during pass 1 (2026-07-27)
+
+Two things the spec left open that building step 1 forced to a decision.
+
+### 17.1 The heading — visible in grid mode, hidden in globe mode
+
+The globe paints "stuff we've shipped" *inside* its canvas at the sphere's core
+(`config.coreLabel`), spliced into the painter's sort so near tiles pass in
+front of the words and far tiles behind. A DOM heading can only sit wholly above
+the canvas or wholly below it; depth is the whole point of that trick, so the
+globe keeps it.
+
+The grid has no canvas. **The `<h2>` therefore lives in the DOM in both modes and
+is merely `sr-only` while the engine is the one drawing it** — the accessible
+name and the crawlable text never move, only their visibility. In grid mode it
+shows, above the controls, in the house mixed-font display (Product Sans Light +
+Instrument Serif on "shipped"). The two copies of the words must stay in sync.
+
+### 17.2 The wall runs FULL-BLEED behind the header, not padded below it
+
+First attempt padded the columns down so they started under the controls. That
+quietly breaks D7: with the content starting a quarter of the way down, the
+mask's top fade band has nothing in it to fade, and the wall just *begins*,
+hard-edged, wherever the padding stops.
+
+Running the wall to the top of the band — the same arrangement the globe canvas
+uses — gives the fade something to act on and lets tiles rise into the header
+the way the globe's do. The cost is that the top stop had to move from the
+spec's 12% to **22%**, so tiles clear the floating heading instead of sitting
+behind it at ~83% opacity (the same legibility problem the engine solves for its
+core label with a text shadow). Both stops are a starting guess and step 4
+exists to tune them against the real thing.
+
+### 17.3 Not yet true (so nobody reads pass 1 as the finished mode)
+
+- No motion. Columns are static; steps 2–3 add the drift and the hover pause.
+- Tiles are `<figure>`s with alt text, **not** links or buttons — there is
+  nothing to open until the expand (step 5) exists, and a control that does
+  nothing is worse than none.
+- Still the globe's own images (`public/portfolio/cloud/`, cropped to the three
+  slot aspects, ≤900px). The dedicated grid preset (§9) only earns its bytes
+  once tile sizes diverge from the globe's.
+- No tier row in `lib/perf/tiers.ts` yet: at rest the wall has no loop to gate.
+  It **must** land with step 2, in the same commit as the first tween (§6 row 3).

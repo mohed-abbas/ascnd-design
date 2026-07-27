@@ -42,17 +42,60 @@
  *
  * (No "see all work" button: the section is the whole body of work.)
  */
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { useSlidingHighlight } from "@/components/ui/sliding-highlight";
 import CloudCanvasScene from "./cloud-canvas-scene";
 import {
   PROJECT_FILTERS,
   type CloudFilter,
 } from "./cloud-canvas/cloud-canvas-data";
+import PortfolioGrid from "./grid/portfolio-grid";
+
+/** The two display modes. See docs/portfolio-grid-mode.md. */
+type PortfolioMode = "globe" | "grid";
+
+const MODES: { value: PortfolioMode; label: string }[] = [
+  { value: "globe", label: "globe" },
+  { value: "grid", label: "grid" },
+];
+
+const SMALL_SCREEN = "(max-width: 768px)";
+
+function subscribeSmallScreen(callback: () => void) {
+  const mq = window.matchMedia(SMALL_SCREEN);
+  mq.addEventListener("change", callback);
+  return () => mq.removeEventListener("change", callback);
+}
+
+/**
+ * Is this a phone-width screen? Decides the DEFAULT mode (D2).
+ *
+ * useSyncExternalStore with a `false` SERVER snapshot, the same idiom
+ * cloud-layer.tsx uses for its device gate: SSR and the hydration render both
+ * see "not mobile" (→ globe, exactly what shipped before this feature), then
+ * React re-renders with the real answer. Reading matchMedia in the render path
+ * instead would be a hydration mismatch.
+ */
+function useIsSmallScreen() {
+  return useSyncExternalStore(
+    subscribeSmallScreen,
+    () => window.matchMedia(SMALL_SCREEN).matches,
+    () => false,
+  );
+}
 
 export default function Portfolio() {
   const [filter, setFilter] = useState<CloudFilter>("all");
   const { groupRef, pillRef } = useSlidingHighlight(filter);
+
+  // MODE (D2). The default is per-device — globe on desktop, grid on a phone —
+  // but a visitor who picks a mode OWNS it: `chosen` wins from then on, and a
+  // later resize across the breakpoint no longer moves it under them.
+  const isSmallScreen = useIsSmallScreen();
+  const [chosen, setChosen] = useState<PortfolioMode | null>(null);
+  const mode: PortfolioMode = chosen ?? (isSmallScreen ? "grid" : "globe");
+  const { groupRef: modeGroupRef, pillRef: modePillRef } =
+    useSlidingHighlight(mode);
 
   return (
     // ASYMMETRIC padding, and the only section that can't just take `py-section`
@@ -92,8 +135,35 @@ export default function Portfolio() {
           is never reallocated during a scroll. Desktop keeps dvh (no URL bar,
           and dvh == svh there anyway). */}
       <div className="relative h-dvh w-full max-md:h-svh">
-        {/* Top row — filter tabs only; the heading lives at the globe's core. */}
-        <div className="pointer-events-none relative z-10 flex w-full flex-col items-center pt-[10dvh] max-md:pt-[10svh] max-md:px-6">
+        {/* Top row — the controls. In GLOBE mode the heading lives at the
+            sphere's core (painted by the engine), so this row carries the tabs
+            alone, exactly as before. In GRID mode there is no canvas to paint
+            into, so the heading has to be a real DOM element and it goes here
+            (see the <h2> below). */}
+        <div className="pointer-events-none relative z-10 flex w-full flex-col items-center gap-[26px] pt-[10dvh] max-md:pt-[10svh] max-md:px-6">
+          {/* THE HEADING, in both modes — but only VISIBLE in grid mode.
+              The globe paints these same words at the sphere's core
+              (config.coreLabel) precisely so tiles can pass in front of them and
+              behind them; a DOM heading can only sit wholly above the canvas or
+              wholly below it, and depth is what that trick buys. Canvas text is
+              invisible to screen readers and crawlers, so the real <h2> lives
+              here either way and is merely hidden while the engine is the one
+              drawing it. The grid has no canvas, so here it shows.
+              Keep the words in sync with config.coreLabel. */}
+          <h2
+            className={
+              mode === "grid"
+                ? "font-light text-[49px] leading-[1.1] tracking-[-0.03em] text-white max-md:text-[34px]"
+                : "sr-only"
+            }
+          >
+            stuff we&apos;ve <span className="font-instrument">shipped</span>
+          </h2>
+
+          {/* Controls row: the existing type filters + the mode switcher beside
+              them (D6). They stack on a phone, where two pill groups side by
+              side would overflow the gutters. */}
+          <div className="flex items-center gap-[10px] max-md:flex-col max-md:gap-[12px]">
           <div
             ref={groupRef}
             role="group"
@@ -136,16 +206,57 @@ export default function Portfolio() {
               );
             })}
           </div>
+
+            {/* MODE SWITCHER (D6) — the same glass pill as the filters, and its
+                own sliding highlight. Deliberately a SEPARATE group rather than
+                more segments in the filter pill: these are orthogonal axes (what
+                you're looking at vs. how it's arranged), and merging them would
+                imply picking "grid" deselects "brandings". The filter state is
+                shared across both modes for exactly that reason. */}
+            <div
+              ref={modeGroupRef}
+              role="group"
+              aria-label="Choose how the work is displayed"
+              className="pointer-events-auto relative flex items-center gap-[2px] rounded-full border border-white/30 bg-white/10 p-[4px] shadow-[inset_0_0_18px_0_rgba(255,255,255,0.25)] backdrop-blur-[10px]"
+            >
+              <span
+                ref={modePillRef}
+                aria-hidden
+                className="pointer-events-none absolute left-0 top-0 rounded-full bg-white/25 opacity-0"
+              />
+              {MODES.map(({ value, label }) => {
+                const isActive = value === mode;
+                return (
+                  <button
+                    key={value}
+                    type="button"
+                    data-highlight={value}
+                    onClick={() => setChosen(value)}
+                    aria-pressed={isActive}
+                    className={`relative rounded-full px-5 py-[7px] text-[14px] lowercase leading-none transition-colors duration-300 max-md:px-3.5 max-md:text-[13px] ${
+                      isActive ? "text-white" : "text-white/60 hover:text-white/90"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         </div>
 
-        {/* The VISIBLE heading is painted by the engine (config.coreLabel), not
-            by this element — that's the only way to get a tile in front of the
-            type on its near pass and behind it on the far pass. Canvas text is
-            invisible to screen readers and crawlers, so the real <h2> stays here,
-            same words, visually hidden. Keep the two in sync. */}
-        <h2 className="sr-only">stuff we&apos;ve shipped</h2>
-
-        <CloudCanvasScene filter={filter} />
+        {/* THE TWO MODES ARE MUTUALLY EXCLUSIVE MOUNTS — never both rendered
+            with one hidden by CSS (docs/portfolio-grid-mode.md §5). Each is a
+            repaint source for the same visible section; keeping the loser
+            mounted would pay for a canvas nobody can see. Unmounting is enough
+            to stop it dead: CloudCanvasView's cleanup removes its ticker
+            function, disposes the engine and disconnects every observer.
+            Both read the SAME `filter` — switching modes never resets the tab. */}
+        {mode === "globe" ? (
+          <CloudCanvasScene filter={filter} />
+        ) : (
+          <PortfolioGrid filter={filter} isMobile={isSmallScreen} />
+        )}
       </div>
     </section>
   );
