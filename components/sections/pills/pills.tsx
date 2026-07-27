@@ -41,7 +41,7 @@ export default function Pills() {
   return (
     <section
       data-pills
-      className="relative min-h-dvh w-full overflow-hidden"
+      className="relative min-h-dvh max-md:min-h-svh w-full overflow-hidden"
     >
       {/* Slow upward drift + a random per-pill fade in/out twinkle, so pills
           materialise and vanish anywhere in the field (see pills-flow.tsx).

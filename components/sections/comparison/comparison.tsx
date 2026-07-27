@@ -64,9 +64,9 @@ export default function Comparison() {
       // regardless of content height — a fixed-viewport section made sparse
       // content float in far more air than dense content. This section used to
       // carry a hand-written py-[25dvh]; two of those met at ~490px and read as
-      // a dead gap. Mobile keeps its full-height layout (max-md:min-h-dvh); the
+      // a dead gap. Mobile keeps its full-height layout (max-md:min-h-svh); the
       // token drops to 12dvh there on its own.
-      className="relative flex max-md:min-h-dvh w-full items-center justify-center overflow-hidden py-section"
+      className="relative flex max-md:min-h-svh w-full items-center justify-center overflow-hidden py-section"
     >
       {/* Content block (Figma 469:646, 812×1360), flow-centred so a viewport
           shorter than the block grows the section (page scrolls) instead of

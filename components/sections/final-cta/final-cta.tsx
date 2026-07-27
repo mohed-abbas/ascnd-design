@@ -46,7 +46,7 @@ export default function FinalCta() {
       // so the buttons sit close to the footer below — the footer adds its own
       // sky headroom, and a full section gap here would re-open the dead space
       // this section exists to close.
-      className="relative flex w-full items-center justify-center overflow-hidden pt-section pb-[clamp(96px,13dvh,136px)] max-md:pb-[9dvh]"
+      className="relative flex w-full items-center justify-center overflow-hidden pt-section pb-[clamp(96px,13dvh,136px)] max-md:pb-[9svh]"
     >
       {/* Content block, flow-centred so a viewport shorter than the block grows
           the section (page scrolls) instead of clipping it. Below md it goes

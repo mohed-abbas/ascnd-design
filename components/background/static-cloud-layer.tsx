@@ -29,25 +29,28 @@ import {
  * page off-main-thread while JS-applied transforms land a frame (or more)
  * late, so ScrollTrigger-driven sprites visibly step during medium/fast
  * flings and update at half rate under Low Power Mode's rAF throttle. Where
- * the browser supports CSS scroll-driven animations, field and section clouds
- * are therefore driven ENTIRELY on the compositor:
+ * the browser supports CSS scroll-driven animations, ALL clouds are therefore
+ * driven on the compositor, and every one of them on the SAME timeline —
+ * anonymous `scroll(root)`:
  *
- *  - FIELD → `animation-timeline: scroll(root)` over a fixed 0–FIELD_RANGE_PX
- *    range with a `to` keyframe of −range·speed px, which resolves to
- *    y = −scroll·speed exactly, independent of document height.
- *  - SECTION → a named `view-timeline` stamped on the section element (hoisted
- *    to the fixed sprites via `timeline-scope` on <body>); the default `cover`
- *    range IS ScrollTrigger's "top bottom"→"bottom top", and linear keyframes
- *    between the drift's endpoints reproduce the y/scale math. (`swell` scale
- *    interpolates linearly instead of exponentially — <0.5% off at the 1.1
- *    swells in use.) `fill: both` parks off-range clouds exactly like the JS
- *    path's seeding.
+ *  - FIELD → `scroll(root)` over a fixed 0–FIELD_RANGE_PX range with a `to`
+ *    keyframe of −range·speed px, which resolves to y = −scroll·speed
+ *    exactly, independent of document height.
+ *  - SECTION and PIN → `scroll(root)` over a MEASURED px `animation-range`
+ *    covering the section's real scroll span (buildMeasuredTimelineCss).
+ *    Linear keyframes between the drift's endpoints reproduce the y/scale
+ *    math (`swell` scale interpolates linearly instead of exponentially —
+ *    <0.5% off at the 1.1 swells in use); `fill: both` parks off-range
+ *    clouds exactly like the JS path's seeding.
  *
- * PIN clouds always stay on the GSAP path: their span is one viewport of
- * entrance + the pin's extra scroll + the exit, which no view() timeline can
- * express (the section doesn't move while pinned, so its view timeline would
- * stall mid-pin). Browsers without scroll-timeline support (older iOS) keep
- * the full GSAP path for everything — identical to the pre-port behavior.
+ * Section clouds ORIGINALLY ran on a named `view-timeline` (stamped on the
+ * section, hoisted to the fixed sprites via `timeline-scope` on <body>) —
+ * measurement-free and self-tracking, but built on the wrong denominator:
+ * a view timeline resolves against the LAYOUT VIEWPORT, whose height tracks
+ * the mobile URL bar. See buildMeasuredTimelineCss for why that stepped and
+ * why the px range doesn't. Browsers without scroll-timeline support
+ * (iOS ≤ 18) keep the full GSAP path for everything — identical to the
+ * pre-port behavior.
  *
  * Theme tint: the sprites are baked day-lit, so each <img> carries the current
  * mode's `cloud.cssFilter` (palette.ts) with a CROSSFADE-matched transition —
@@ -66,54 +69,85 @@ import {
 // unused, the px-per-scroll slope is range-independent.
 const FIELD_RANGE_PX = 40000;
 
-// Both features ship together in practice, but the sprites need view() AND
-// the <body> timeline-scope hoist — probe for each so a partial
-// implementation falls back to the GSAP path instead of half-working.
+// ONE capability decides everything now: anonymous `scroll(root)` timelines.
+// The gate used to also demand view() + `timeline-scope: --t` for the section
+// clouds' named view-timeline hoist; that drive was retired (see
+// buildMeasuredTimelineCss), so the extra probes would only throw capable
+// browsers back onto the main-thread GSAP path for nothing.
 const canUseScrollTimeline = () =>
   typeof CSS !== "undefined" &&
-  CSS.supports("animation-timeline: view()") &&
-  CSS.supports("timeline-scope: --t");
-
-// "[data-cards]" → "--sct-data-cards" — one named timeline per section.
-const timelineName = (selector: string) =>
-  `--sct-${selector.replace(/[^a-zA-Z0-9-]/g, "")}`;
+  CSS.supports("animation-timeline: scroll(root)");
 
 /**
- * Bake the compositor path's stylesheet from STATIC_CLOUDS: one @keyframes +
- * one class per non-pin cloud. Generated (rather than var()-in-keyframes) so
- * every animation is a plain literal transform tween the compositor is
- * guaranteed to run off-main-thread.
+ * A viewport height that does NOT track the mobile browser chrome: `100lvh`,
+ * the LARGE viewport — the one with the chrome fully retracted. Constant for the
+ * life of an orientation.
+ *
+ * `window.innerHeight` is not that. It tracks the URL bar, and every cloud
+ * offset here is a multiple of it (`flow` and `travel` are expressed in vh), so
+ * re-reading it re-scaled the whole sky's drift the moment the bar moved: with
+ * a flow of ~500 a 10% viewport change is ~0.5vh of instant jump.
+ *
+ * ⚠️ `lvh`, NOT `svh`, and the difference is not cosmetic. The requirement here
+ * is only that the value STOP MOVING — matching the sections' `svh` was never
+ * part of it, and choosing svh actively broke things: it is ~10% smaller than
+ * what these specs were authored against (innerHeight, which on iOS sits at the
+ * large viewport once the bar retracts), so every travel and flow shrank by 10%
+ * and clouds that used to sweep clear of the viewport stopped short and hung
+ * there instead. static-cloud-specs.ts says as much in its `travel` note:
+ * `y + travel` has to clear ~100vh. lvh is just as constant as svh and is the
+ * value the tuning already assumes.
+ *
+ * Measured from a probe because there is no `window.largeViewportHeight` to ask.
+ * One forced layout per call, and it's called on mount and on refresh only —
+ * never per scroll update. Falls back to innerHeight if `lvh` is unsupported
+ * (nothing in the browserslist target is, but the probe returning 0 shouldn't
+ * park every cloud at the origin).
  */
+function stableViewportHeight(): number {
+  const probe = document.createElement("div");
+  probe.style.cssText =
+    "position:fixed;top:0;left:0;width:0;height:100lvh;visibility:hidden;pointer-events:none";
+  document.documentElement.appendChild(probe);
+  const h = probe.getBoundingClientRect().height;
+  probe.remove();
+  return h || window.innerHeight;
+}
+
 /**
- * Compositor rules for the PIN clouds — measured, so this cannot be a pure
- * function of the spec like the one below.
+ * Compositor rules for the SECTION and PIN clouds — measured, so this cannot
+ * be a pure function of the spec like the field builder below.
  *
- * These were the last sprites left on the main thread, and on a phone they were
- * the worst thing on the page: `position: fixed` elements whose `y` is written
- * from a scroll handler while the page itself pans on the compositor. At
- * walking pace the lag is a pixel or two and invisible; in a fling the browser
- * coalesces scroll events down to ~10–15Hz, so the clouds visibly STEP at that
- * rate against a perfectly smooth page. Reported, accurately, as "they feel
- * like they're at less than 10fps when I scroll fast".
- *
- * The file's original reasoning for keeping them on GSAP is sound as far as it
- * goes: their span is entrance + pin + exit, and a `view()` timeline on the
- * section would stall mid-pin because a pinned section stops moving. But that
- * argument only rules out view() — and it turns out nothing here needs it. The
- * GSAP formula is
+ * PIN clouds were the first tenants here. They were the last sprites left on
+ * the main thread, and on a phone they were the worst thing on the page:
+ * `position: fixed` elements whose `y` is written from a scroll handler while
+ * the page itself pans on the compositor. At walking pace the lag is a pixel
+ * or two and invisible; in a fling the browser coalesces scroll events down
+ * to ~10–15Hz, so the clouds visibly STEP at that rate against a perfectly
+ * smooth page. The file's original reasoning for keeping them on GSAP ("no
+ * view() timeline can express a pinned span") only rules out view() — the
+ * GSAP formula
  *
  *     y = (pAt − progress) × flow × vh / 100 ,  progress = (scroll − start) / total
  *
- * which is LINEAR IN SCROLL. So it is exactly a field cloud with a computed
- * slope and a non-zero offset, and `scroll(root)` — the same primitive the
- * field clouds already run on, off the main thread, at any scroll speed —
- * expresses it perfectly:
+ * is LINEAR IN SCROLL, so `scroll(root)` + `animation-range: <start>px
+ * <end>px` expresses it exactly: the keyframes are progress 0 and 1, the
+ * range places them at the same scroll offsets the trigger used.
  *
- *     y(progress) = (pAt − progress) × flow × vh / 100
- *
- * so the two endpoints are simply progress 0 and progress 1, and
- * `animation-range: <start>px <end>px` places them at the same scroll offsets
- * the trigger used.
+ * SECTION clouds moved in later, off a named `view-timeline`, and the eviction
+ * notice was the mobile URL bar. A view timeline resolves against the
+ * scrollport — the LAYOUT VIEWPORT — and on a phone that viewport's height
+ * changes every time the bar shows or hides. Each change re-resolves the
+ * timeline's cover range, so the animation's progress JUMPS in place: with
+ * travel 100–130 over a ~2-viewport crossing, a ~60px bar toggle snapped
+ * every section cloud several vh mid-scroll — on the compositor, no JS
+ * involved, identical in every supporting browser. (The visible symptom:
+ * "the clouds are doing the same step on scroll as the content was doing" —
+ * the content's dvh disease, but in the timeline's denominator.) The SAME
+ * drift as `scroll(root)` + a px range has no viewport-height term at all:
+ * document offsets don't move when the bar does (the sections are svh-sized,
+ * the cloud math lvh-based), so the range shifts only on genuine layout
+ * changes — width resize, refresh — never mid-scroll.
  *
  * ⚠️ THE RANGE IS LOAD-BEARING, not a detail. A ScrollTrigger is BOUNDED — past
  * its end the tween holds its final value. Mapping these to the field clouds'
@@ -126,16 +160,13 @@ const timelineName = (selector: string) =>
  * `start` and `total` are layout-dependent, so this is recomputed whenever
  * ScrollTrigger refreshes (see the effect below).
  */
-function buildPinTimelineCss(clouds: StaticCloudSpec[]): string {
+function buildMeasuredTimelineCss(clouds: StaticCloudSpec[]): string {
   const rules: string[] = [];
-  const vh = window.innerHeight;
+  const vh = stableViewportHeight();
   for (const c of clouds) {
-    if (!c.pin || !c.trigger) continue;
+    if (!c.trigger) continue; // field clouds: static builder below
     const section = document.querySelector<HTMLElement>(c.trigger);
     if (!section) continue;
-
-    const { extra, at } = c.pin;
-    const flow = c.flow ?? DEFAULT_FLOW;
 
     // ⚠️ MEASURE THE PIN-SPACER, NEVER THE SECTION.
     // ScrollTrigger pins by setting the section to `position: fixed` and
@@ -160,50 +191,71 @@ function buildPinTimelineCss(clouds: StaticCloudSpec[]): string {
         ? section.parentElement
         : null;
     const box = spacer ?? section;
-    const total = vh + (spacer ? spacer.offsetHeight : extra + section.offsetHeight);
-    const pAt = (vh + at * extra) / total;
     // Document offset at which the GSAP trigger's "top bottom" start fires.
     const start = box.getBoundingClientRect().top + window.scrollY - vh;
+    const total = c.pin
+      ? vh + (spacer ? spacer.offsetHeight : c.pin.extra + section.offsetHeight)
+      : vh + box.offsetHeight;
 
-    // progress 0 → 1 over exactly [start, start + total], matching the trigger.
-    const y0 = (pAt * flow * vh) / 100;
-    const y1 = ((pAt - 1) * flow * vh) / 100;
+    // Scroll can't go negative, so a range that begins above the document top
+    // (a section within one viewport of it) would be clipped by the browser
+    // and the `from` keyframe would land at the wrong scroll offset. Clamp it
+    // ourselves instead: start the range at 0 and re-evaluate the `from`
+    // endpoint at the progress scroll 0 actually corresponds to.
+    const pFrom = start < 0 ? -start / total : 0;
+    const rangeStart = Math.max(0, start);
+    const range = `animation-range: ${rangeStart.toFixed(0)}px ${(start + total).toFixed(0)}px;`;
 
-    rules.push(
-      `@keyframes sc-${c.key} { from { transform: translateY(${y0.toFixed(1)}px); } to { transform: translateY(${y1.toFixed(1)}px); } }`,
-      // ⚠️ shorthand first — `animation:` resets timeline/range longhands.
-      `.sc-${c.key} { animation: sc-${c.key} 1ms linear both; animation-timeline: scroll(root); animation-range: ${start.toFixed(0)}px ${(start + total).toFixed(0)}px; }`,
-    );
-  }
-  return rules.join("\n");
-}
-
-function buildScrollTimelineCss(clouds: StaticCloudSpec[]): string {
-  const rules: string[] = [];
-  for (const c of clouds) {
-    if (c.pin) continue;
-    if (!c.trigger) {
-      const shift = (-FIELD_RANGE_PX * (c.speed ?? 1)).toFixed(0);
+    if (c.pin) {
+      const { extra, at } = c.pin;
+      const flow = c.flow ?? DEFAULT_FLOW;
+      const pAt = (vh + at * extra) / total;
+      // progress pFrom → 1 over exactly [rangeStart, start + total].
+      const y0 = ((pAt - pFrom) * flow * vh) / 100;
+      const y1 = ((pAt - 1) * flow * vh) / 100;
       rules.push(
-        `@keyframes sc-${c.key} { to { transform: translateY(${shift}px); } }`,
-        // ⚠️ shorthand first: `animation:` resets animation-timeline/range,
-        // so the longhands must follow it.
-        `.sc-${c.key} { animation: sc-${c.key} 1ms linear both; animation-timeline: scroll(root); animation-range: 0px ${FIELD_RANGE_PX}px; }`,
+        `@keyframes sc-${c.key} { from { transform: translateY(${y0.toFixed(1)}px); } to { transform: translateY(${y1.toFixed(1)}px); } }`,
+        // ⚠️ shorthand first — `animation:` resets timeline/range longhands.
+        `.sc-${c.key} { animation: sc-${c.key} 1ms linear both; animation-timeline: scroll(root); ${range} }`,
       );
       continue;
     }
-    // Drift endpoints: d = 2·(progress − at) evaluated at progress 0 and 1,
+
+    // SECTION drift endpoints: d = 2·(progress − at) at progress pFrom and 1,
     // y = −d·travel vh, scale = swell^d — the SectionRig math, linearized.
+    // Same keyframes the view-timeline rules used; only the timeline changed.
     const at = c.at ?? 0.5;
     const travel = c.travel ?? DEFAULT_TRAVEL;
     const swell = c.swell ?? 1;
     const y = (d: number) => (-d * travel).toFixed(2);
     const s = (d: number) => Math.pow(swell, d).toFixed(4);
-    const d0 = -2 * at;
+    const d0 = 2 * (pFrom - at);
     const d1 = 2 * (1 - at);
     rules.push(
-      `@keyframes sc-${c.key} { from { transform: translateY(${y(d0)}vh) scale(${s(d0)}); } to { transform: translateY(${y(d1)}vh) scale(${s(d1)}); } }`,
-      `.sc-${c.key} { animation: sc-${c.key} 1ms linear both; animation-timeline: ${timelineName(c.trigger)}; }`,
+      `@keyframes sc-${c.key} { from { transform: translateY(${y(d0)}lvh) scale(${s(d0)}); } to { transform: translateY(${y(d1)}lvh) scale(${s(d1)}); } }`,
+      `.sc-${c.key} { animation: sc-${c.key} 1ms linear both; animation-timeline: scroll(root); ${range} }`,
+    );
+  }
+  return rules.join("\n");
+}
+
+/**
+ * Bake the FIELD clouds' stylesheet from STATIC_CLOUDS: one @keyframes + one
+ * class per cloud, a pure function of the spec (no measuring — the 0–
+ * FIELD_RANGE_PX range is fixed). Generated (rather than var()-in-keyframes)
+ * so every animation is a plain literal transform tween the compositor is
+ * guaranteed to run off-main-thread.
+ */
+function buildFieldTimelineCss(clouds: StaticCloudSpec[]): string {
+  const rules: string[] = [];
+  for (const c of clouds) {
+    if (c.trigger) continue; // section/pin clouds: measured builder above
+    const shift = (-FIELD_RANGE_PX * (c.speed ?? 1)).toFixed(0);
+    rules.push(
+      `@keyframes sc-${c.key} { to { transform: translateY(${shift}px); } }`,
+      // ⚠️ shorthand first: `animation:` resets animation-timeline/range,
+      // so the longhands must follow it.
+      `.sc-${c.key} { animation: sc-${c.key} 1ms linear both; animation-timeline: scroll(root); animation-range: 0px ${FIELD_RANGE_PX}px; }`,
     );
   }
   return rules.join("\n");
@@ -225,55 +277,54 @@ export default function StaticCloudLayer({
   // pass to keep consistent with.
   const [compositor] = useState(canUseScrollTimeline);
   const css = useMemo(
-    () => (compositor ? buildScrollTimelineCss(clouds) : ""),
+    () => (compositor ? buildFieldTimelineCss(clouds) : ""),
     [compositor, clouds],
   );
-  // Pin-cloud rules are MEASURED, so unlike the static rules above they live in
-  // state and are rebuilt whenever the layout they were measured against moves.
-  const [pinCss, setPinCss] = useState("");
+  // Section/pin-cloud rules are MEASURED, so unlike the static rules above they
+  // live in state and are rebuilt whenever the layout they were measured
+  // against moves.
+  const [measuredCss, setMeasuredCss] = useState("");
 
-  // ——— Compositor wiring: name each section's view timeline and hoist the
-  // names to <body> so the fixed sprites (not descendants of the sections)
-  // can reference them. Inline styles, restored on unmount.
+  // ——— Section + pin clouds on the compositor: measure, then re-measure
+  // whenever the page geometry they were derived from changes.
+  // ScrollTrigger.refresh() is the right signal (the pin itself re-measures
+  // there, and lenis-provider already debounces it behind a DOM-height
+  // watchdog), plus an orientation / real-resize pass. Deliberately NOT hooked
+  // to plain scroll: the whole point is that scrolling touches nothing here.
   useEffect(() => {
     if (!compositor) return;
-    const tagged: HTMLElement[] = [];
-    const names: string[] = [];
-    const selectors = new Set(
-      clouds.filter((c) => c.trigger && !c.pin).map((c) => c.trigger!),
-    );
-    for (const sel of selectors) {
-      const section = document.querySelector<HTMLElement>(sel);
-      if (!section) continue;
-      const name = timelineName(sel);
-      section.style.setProperty("view-timeline-name", name);
-      tagged.push(section);
-      names.push(name);
-    }
-    document.body.style.setProperty("timeline-scope", names.join(", "));
-    return () => {
-      tagged.forEach((s) => s.style.removeProperty("view-timeline-name"));
-      document.body.style.removeProperty("timeline-scope");
-    };
-  }, [compositor, clouds]);
-
-  // ——— Pin clouds on the compositor: measure, then re-measure whenever the
-  // page geometry they were derived from changes. ScrollTrigger.refresh() is
-  // the right signal (the pin itself re-measures there, and lenis-provider
-  // already debounces it behind a DOM-height watchdog), plus an orientation /
-  // real-resize pass. Deliberately NOT hooked to plain scroll: the whole point
-  // is that scrolling touches nothing here.
-  useEffect(() => {
-    if (!compositor) return;
-    if (!clouds.some((c) => c.pin)) return;
+    if (!clouds.some((c) => c.trigger)) return;
     gsap.registerPlugin(ScrollTrigger);
-    const rebuild = () => setPinCss(buildPinTimelineCss(clouds));
+    const rebuild = () => setMeasuredCss(buildMeasuredTimelineCss(clouds));
     rebuild();
     ScrollTrigger.addEventListener("refresh", rebuild);
-    window.addEventListener("resize", rebuild);
+
+    // ⚠️ WIDTH-only. A bare `resize` listener here is what made the why-stay
+    // clouds step on Chrome for Android: the mobile URL bar collapsing fires
+    // `resize`, so every bar movement swapped this <style> element's contents
+    // mid-scroll. Even when the rebuilt rules come out numerically identical,
+    // replacing them re-attaches every animation to its scroll timeline, and
+    // that re-attach is the visible jump — it showed up at why-stay
+    // specifically because, at the time, the pin clouds were the only ones
+    // built here. Now that the section clouds are too, this guard matters for
+    // every section.
+    //
+    // Height-only resizes are exactly the ones we must ignore now: nothing this
+    // function measures depends on them any more (the sections are `svh` and
+    // stableViewportHeight() is `lvh`, both constant), so a rebuild can only
+    // cost a jump and never buy a correction. Orientation changes and real
+    // window resizes move the width, and those still rebuild. Same
+    // discriminator lenis-provider uses on its body-height watchdog.
+    let lastWidth = window.innerWidth;
+    const onResize = () => {
+      if (window.innerWidth === lastWidth) return;
+      lastWidth = window.innerWidth;
+      rebuild();
+    };
+    window.addEventListener("resize", onResize);
     return () => {
       ScrollTrigger.removeEventListener("refresh", rebuild);
-      window.removeEventListener("resize", rebuild);
+      window.removeEventListener("resize", onResize);
     };
   }, [compositor, clouds]);
 
@@ -311,9 +362,8 @@ export default function StaticCloudLayer({
       ScrollTrigger.addEventListener("refresh", onRefresh);
     }
 
-    // SECTION + PIN clouds — fallback browsers only now. Pin clouds used to be
-    // unconditional here ("no view() timeline can express a pinned span"), but
-    // they run on scroll(root) instead (buildPinTimelineCss), so where the
+    // SECTION + PIN clouds — fallback browsers only. Both run on scroll(root)
+    // px ranges where supported (buildMeasuredTimelineCss), so where the
     // compositor path exists it owns every cloud and this loop does nothing.
     for (const c of clouds) {
       if (!c.trigger) continue;
@@ -322,10 +372,17 @@ export default function StaticCloudLayer({
       const el = imgRefs.current.get(c.key);
       if (!section || !el) continue;
 
-      // Viewport height, captured per refresh instead of read per update: the
-      // mobile URL bar changes innerHeight mid-fling, which made the drift
-      // amplitude wobble during the scroll it was sampled in.
-      let vh = window.innerHeight;
+      // Viewport height, captured per refresh instead of read per update, and
+      // read as the STABLE small viewport rather than innerHeight.
+      //
+      // Capturing per refresh was the first half of this fix: innerHeight
+      // changing mid-fling made the drift amplitude wobble during the very
+      // scroll it was sampled in. But it only reduced the frequency of the
+      // problem — the value was still a URL-bar-dependent one, so every refresh
+      // re-scaled the whole sky and the clouds stepped. stableViewportHeight()
+      // removes the dependency instead of re-sampling it, and matches the unit
+      // the sections themselves are now laid out in.
+      let vh = stableViewportHeight();
 
       if (c.pin) {
         // The element's viewport crossing understates a pinned section's real
@@ -347,12 +404,12 @@ export default function StaticCloudLayer({
         const st = ScrollTrigger.create({
           trigger: section,
           start: "top bottom",
-          end: () => `+=${window.innerHeight + extra + section.offsetHeight}`,
+          end: () => `+=${vh + extra + section.offsetHeight}`,
           scrub: true,
           invalidateOnRefresh: true,
           onUpdate: apply,
           onRefresh: (self) => {
-            vh = window.innerHeight;
+            vh = stableViewportHeight();
             apply(self);
           },
         });
@@ -378,7 +435,7 @@ export default function StaticCloudLayer({
         invalidateOnRefresh: true,
         onUpdate: apply,
         onRefresh: (self) => {
-          vh = window.innerHeight;
+          vh = stableViewportHeight();
           apply(self);
         },
       });
@@ -434,7 +491,7 @@ export default function StaticCloudLayer({
   // content, front above the rock bases / intro canvas.
   return (
     <>
-      {compositor && <style>{`${css}\n${pinCss}`}</style>}
+      {compositor && <style>{`${css}\n${measuredCss}`}</style>}
       <div aria-hidden style={reveal} className="pointer-events-none fixed inset-0 -z-10">
         {renderClouds("sky")}
       </div>

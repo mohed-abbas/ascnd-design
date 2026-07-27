@@ -39,7 +39,7 @@ export default function Testimonials() {
       // every other one. Mobile keeps min-h-dvh so the rocks re-anchor to the
       // real viewport corners (max-md:inset-0 below); the block is absolute
       // there, so the padding doesn't affect the mobile height.
-      className="relative flex max-md:min-h-dvh w-full items-center justify-center overflow-hidden py-section"
+      className="relative flex max-md:min-h-svh w-full items-center justify-center overflow-hidden py-section"
     >
       {/* Centre-anchored design block = the Figma TestimonialRocks group. Below
           md it fills the section (absolute inset-0) so the four rocks re-anchor

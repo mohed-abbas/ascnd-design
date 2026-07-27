@@ -43,7 +43,7 @@ export default function Tagline() {
   let si = 0;
 
   return (
-    <section data-tagline className="relative min-h-dvh w-full overflow-hidden">
+    <section data-tagline className="relative min-h-dvh max-md:min-h-svh w-full overflow-hidden">
       {/* Scrubs the per-line "supersize" reveal (per-char roll-up + blur-clear +
           bright fill) as the section crosses the viewport; renders nothing. */}
       <TaglineReveal />

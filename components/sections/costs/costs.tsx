@@ -40,7 +40,7 @@ export default function Costs() {
   let si = 0;
 
   return (
-    <section data-costs className="relative min-h-dvh w-full overflow-hidden">
+    <section data-costs className="relative min-h-dvh max-md:min-h-svh w-full overflow-hidden">
       {/* The tagline's supersize reveal, scoped to this section. Renders nothing. */}
       <TaglineReveal section="[data-costs]" />
       <p
