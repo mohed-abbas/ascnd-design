@@ -1,6 +1,7 @@
 # Portfolio grid mode — the second variant of the work section
 
-**Status: DECIDED 2026-07-27. Steps 1–3 of 7 BUILT (§13), unverified in a browser.**
+**Status: DECIDED 2026-07-27. Steps 1–3 and 5 of 7 BUILT (§13), unverified in a
+browser. Step 4 is blocked on a human looking at it.**
 This is the architecture decision record for the portfolio section's *second*
 display mode — a Pinterest-style column wall that sits beside the existing image
 globe. It is the contract the implementation has to satisfy; §17 records what
@@ -391,8 +392,10 @@ first, then add:
 3. ✅ **DONE** — hover pause via `timeScale` easing (D4), 0.4s in and out,
    per column. Pointer events, so touch never triggers it.
 4. Mask fade (D7) — measure it here, while there is nothing else to blame.
-5. Flip expand (D5), wall dim, Escape/click-out to close, focus restored to the
-   originating tile.
+5. ✅ **DONE** — expand (D5), wall dim, Escape/click-out to close, focus
+   restored to the originating tile. `grid/grid-expand.tsx` + the freeze
+   contract in `grid/grid-freeze.ts`. Built out of order: step 4 needs a human
+   in a browser, and this did not.
 6. Grid image preset + `grid?` data block (§9).
 7. **Last:** full-length tile designs (D8), reusing the expand from step 5.
 
@@ -992,3 +995,73 @@ The declared `(max-width: 768px) 45vw, (max-width: 1600px) 23vw, 380px` is
 correct as an upper bound: at 1440px the 4-column layout computes to 330px vs a
 declared 331px; at 1600px, 370 vs 368; above that the `max-w-[380px]` cap holds.
 Sparse filters only widen columns up to that same cap, so it stays safe.
+
+---
+
+## 19. The expand, as built (step 5)
+
+### 19.1 Clicks are delegated and native — NOT React `onClick`
+
+The marquee CLONES each column's tiles (step 2), and at any moment most tiles on
+screen are those clones. They are `cloneNode`d DOM with **no React fiber**, so
+React's delegated synthetic events never fire for them: an `onClick` on the tile
+would work on the handful of originals and silently do nothing on every copy —
+which would have read as "the expand works sometimes".
+
+So the wall carries one native `click` listener, resolved with
+`closest("[data-grid-tile]")` and the tile's `data-tile-key`. This is a
+correctness requirement of cloned content, not a style preference. Anything
+later that adds per-tile interaction (a hover label, a link) inherits the same
+constraint.
+
+Related: clones are `aria-hidden` **and** their tiles get `tabIndex = -1`, but
+they stay clickable. Making them `inert` would be tidier for AT and would break
+the wall's main interaction, since most of what you click is a clone.
+
+### 19.2 FLIP by hand, not the Flip plugin
+
+The panel renders at its final centred layout, is measured, and is tweened from
+the delta to the tile's live rect. Two things make the simple version correct:
+
+- `getBoundingClientRect` is already post-transform viewport space, so the
+  drifting track's translate is accounted for with no extra work.
+- **The panel keeps the tile's ASPECT**, so the scale is uniform and the shot
+  cannot distort in flight. A panel of a different shape would need per-axis
+  handling — that is when the plugin earns its place. (§10's deferred lightbox
+  variant is exactly that case, and should use the plugin.)
+
+The return flight **re-measures** the origin. The columns ease to a stop rather
+than snapping, so the tile keeps moving for ~0.4s after the outbound flight
+starts; flying home to the rect captured on the way out would land the tile
+visibly beside itself.
+
+### 19.3 The panel is portalled to `<body>`
+
+Inside the wall it would be clipped by the viewport's `overflow-hidden`, faded
+by its edge mask (masks apply to every descendant), and `position: fixed` would
+be trapped by the tracks' `will-change: transform`, which forms a containing
+block. All three vanish with a portal.
+
+### 19.4 The wall recedes, it does not darken
+
+Opening a tile drops the wall's opacity to 0.3 rather than laying a dark scrim
+over it. This site's depth cue is toward white/atmosphere, never toward black —
+the same rule `cloud-canvas-engine.ts` follows for its own haze ("*NOT black:
+this site's depth cue is receding INTO the sky … which reads muddy over the
+bright atmosphere*"). The backdrop element is transparent and exists only to
+catch the click-out.
+
+### 19.5 The freeze contract
+
+`grid-freeze.ts` is a window event plus a module-scoped flag, the same idiom as
+`intro-state.ts`. The marquee and the expand are siblings that must not hold
+handles to each other: the marquee **rebuilds** on every filter change and every
+resize, so a direct reference would go stale exactly when it matters. Three
+cases the flag (rather than the event alone) covers:
+
+- a marquee rebuilt *while a tile is open* comes back frozen, because it reads
+  `isFrozen()` instead of waiting for an event that already fired;
+- `pointerleave` firing as the cursor crosses the backdrop toward the panel must
+  not restart that column;
+- `setFrozen` is idempotent, so a double-close can't thaw a wall that has since
+  been legitimately frozen again.

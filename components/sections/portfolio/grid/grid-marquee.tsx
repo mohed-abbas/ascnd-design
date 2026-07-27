@@ -2,6 +2,7 @@
 
 import { useEffect, useLayoutEffect } from "react";
 import gsap from "gsap";
+import { GRID_FREEZE_EVENT, isFrozen } from "./grid-freeze";
 
 // useLayoutEffect on the client (tweens exist before paint, so the wall never
 // shows one static frame then jumps), plain useEffect during SSR so React
@@ -106,6 +107,15 @@ export default function GridMarquee({ rebuildKey }: { rebuildKey: string }) {
           // would walk the same project repeatedly. Same reason the footer's
           // roll-hover clone is hidden.
           clone.setAttribute("aria-hidden", "true");
+          // ...and out of the tab order, one step further than aria-hidden.
+          // The tiles are <button>s (step 5), and a clone stays CLICKABLE on
+          // purpose — most tiles on screen are clones, so making them inert
+          // would break the wall's main interaction. But tabbing must not walk
+          // the same project three times, so only the originals are reachable
+          // by keyboard.
+          clone
+            .querySelectorAll<HTMLElement>("[data-grid-tile]")
+            .forEach((tile) => (tile.tabIndex = -1));
           track.appendChild(clone);
         }
 
@@ -124,12 +134,22 @@ export default function GridMarquee({ rebuildKey }: { rebuildKey: string }) {
           },
         );
         if (!visible) tween.pause();
+        // A rebuild that happens while a tile is open (a resize behind the
+        // panel) must come back frozen, not drifting — the open panel has to
+        // fly home to a tile that hasn't moved. Read the current value rather
+        // than waiting for another event, since the event already fired.
+        if (isFrozen()) tween.timeScale(0);
         tweens.push(tween);
 
         // Hover pause (D4) — this column only.
         const slow = () => gsap.to(tween, { timeScale: 0, duration: PAUSE_EASE });
-        const resume = () =>
+        const resume = () => {
+          // A pointer leaving a column while a tile is OPEN must not restart
+          // it: the expand froze the whole wall, and the pointer crossing the
+          // backdrop on its way to the panel is exactly when this fires.
+          if (isFrozen()) return;
           gsap.to(tween, { timeScale: 1, duration: PAUSE_EASE });
+        };
         column.addEventListener("pointerenter", slow);
         column.addEventListener("pointerleave", resume);
         cleanups.push(() => {
@@ -163,11 +183,25 @@ export default function GridMarquee({ rebuildKey }: { rebuildKey: string }) {
     });
     io.observe(viewport);
 
+    // Freeze while a tile is expanded (grid-freeze.ts). Every column, not just
+    // the hovered one — the wall is the backdrop now, and one column still
+    // drifting behind an open panel would read as a glitch. Eased rather than
+    // snapped, so it settles WITH the outbound flight instead of stopping dead
+    // under it.
+    const onFreeze = (e: Event) => {
+      const next = (e as CustomEvent<{ frozen: boolean }>).detail.frozen;
+      tweens.forEach((t) =>
+        gsap.to(t, { timeScale: next ? 0 : 1, duration: PAUSE_EASE }),
+      );
+    };
+    window.addEventListener(GRID_FREEZE_EVENT, onFreeze);
+
     return () => {
       disposed = true;
       cancelAnimationFrame(raf);
       ro.disconnect();
       io.disconnect();
+      window.removeEventListener(GRID_FREEZE_EVENT, onFreeze);
       cleanups.forEach((fn) => fn());
       tweens.forEach((t) => t.kill());
       viewport

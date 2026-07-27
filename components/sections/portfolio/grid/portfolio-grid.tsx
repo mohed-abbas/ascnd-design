@@ -1,5 +1,6 @@
 import Image from "next/image";
 import { cloudProjects, type CloudFilter } from "../cloud-canvas/cloud-canvas-data";
+import GridExpand from "./grid-expand";
 import GridMarquee from "./grid-marquee";
 import {
   assignColumns,
@@ -134,9 +135,22 @@ export default function PortfolioGrid({
                 className="flex flex-col gap-[24px] max-md:gap-[14px]"
               >
             {tiles.map((project) => (
-              <figure
+              // A real <button>, so the wall is operable by keyboard and
+              // announces itself — but the CLICK is handled by a delegated
+              // native listener in grid-expand.tsx, never by an onClick here.
+              // Most tiles on screen are marquee clones (cloneNode, no React
+              // fiber), and React's synthetic events do not fire for those, so
+              // an onClick would work on the originals and silently fail on
+              // every copy. `data-tile-key` is how the listener resolves which
+              // project it just got, clone or not.
+              <button
                 key={project.src}
-                className="relative w-full"
+                type="button"
+                data-grid-tile
+                data-tile-key={project.src}
+                aria-haspopup="dialog"
+                aria-label={`Open ${project.name}`}
+                className="relative block w-full cursor-pointer"
                 style={{ aspectRatio: GRID_ASPECT[project.form] }}
               >
                 {/* Glass mat — an OUTER border (negative inset) so the shot
@@ -170,7 +184,7 @@ export default function PortfolioGrid({
                     className="object-cover"
                   />
                 </div>
-              </figure>
+              </button>
                 ))}
               </div>
             </div>
@@ -184,6 +198,12 @@ export default function PortfolioGrid({
           wall's identity so it rebuilds when the filter or the breakpoint
           changes the columns out from under it. */}
       <GridMarquee rebuildKey={`${filter}:${columns.length}`} />
+
+      {/* Click-to-expand (step 5). Renders nothing until a tile is opened, then
+          portals a centred panel to <body>. It takes the FILTERED list because
+          that is what the wall is showing — a stale key can't resolve to a
+          project that isn't on screen. */}
+      <GridExpand projects={projects} />
     </div>
   );
 }
