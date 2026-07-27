@@ -1,10 +1,10 @@
 # Portfolio grid mode — the second variant of the work section
 
-**Status: DECIDED 2026-07-27, not yet implemented.** This is the architecture
-decision record for the portfolio section's *second* display mode — a Pinterest-
-style column wall that sits beside the existing image globe. Nothing in
-`components/sections/portfolio/` has changed yet; this document is the contract
-the implementation has to satisfy.
+**Status: DECIDED 2026-07-27. Step 1 of 7 BUILT (§13), unverified in a browser.**
+This is the architecture decision record for the portfolio section's *second*
+display mode — a Pinterest-style column wall that sits beside the existing image
+globe. It is the contract the implementation has to satisfy; §17 records what
+building the first step settled.
 
 Related records: `docs/canvas-consolidation-plan.md` (why the site is not going
 all-WebGL, and why the globe stays a 2D canvas), `docs/performance-audit.md`
