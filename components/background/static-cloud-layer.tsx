@@ -75,27 +75,35 @@ const canUseScrollTimeline = () =>
   CSS.supports("timeline-scope: --t");
 
 /**
- * The viewport height the CONTENT is laid out against: `100svh`, the SMALL
- * viewport — the one with the mobile browser chrome expanded. Constant for the
+ * A viewport height that does NOT track the mobile browser chrome: `100lvh`,
+ * the LARGE viewport — the one with the chrome fully retracted. Constant for the
  * life of an orientation.
  *
  * `window.innerHeight` is not that. It tracks the URL bar, and every cloud
  * offset here is a multiple of it (`flow` and `travel` are expressed in vh), so
  * re-reading it re-scaled the whole sky's drift the moment the bar moved: with
- * a flow of ~500 a 10% viewport change is ~0.5vh of instant jump. The sections
- * stopped doing this when they moved to `svh`; the clouds kept doing it in JS,
- * which is why they were the only thing left stepping.
+ * a flow of ~500 a 10% viewport change is ~0.5vh of instant jump.
  *
- * Measured from a probe because there is no `window.smallViewportHeight` to ask.
+ * ⚠️ `lvh`, NOT `svh`, and the difference is not cosmetic. The requirement here
+ * is only that the value STOP MOVING — matching the sections' `svh` was never
+ * part of it, and choosing svh actively broke things: it is ~10% smaller than
+ * what these specs were authored against (innerHeight, which on iOS sits at the
+ * large viewport once the bar retracts), so every travel and flow shrank by 10%
+ * and clouds that used to sweep clear of the viewport stopped short and hung
+ * there instead. static-cloud-specs.ts says as much in its `travel` note:
+ * `y + travel` has to clear ~100vh. lvh is just as constant as svh and is the
+ * value the tuning already assumes.
+ *
+ * Measured from a probe because there is no `window.largeViewportHeight` to ask.
  * One forced layout per call, and it's called on mount and on refresh only —
- * never per scroll update. Falls back to innerHeight if `svh` is unsupported
+ * never per scroll update. Falls back to innerHeight if `lvh` is unsupported
  * (nothing in the browserslist target is, but the probe returning 0 shouldn't
  * park every cloud at the origin).
  */
 function stableViewportHeight(): number {
   const probe = document.createElement("div");
   probe.style.cssText =
-    "position:fixed;top:0;left:0;width:0;height:100svh;visibility:hidden;pointer-events:none";
+    "position:fixed;top:0;left:0;width:0;height:100lvh;visibility:hidden;pointer-events:none";
   document.documentElement.appendChild(probe);
   const h = probe.getBoundingClientRect().height;
   probe.remove();
@@ -230,7 +238,7 @@ function buildScrollTimelineCss(clouds: StaticCloudSpec[]): string {
     const d0 = -2 * at;
     const d1 = 2 * (1 - at);
     rules.push(
-      `@keyframes sc-${c.key} { from { transform: translateY(${y(d0)}svh) scale(${s(d0)}); } to { transform: translateY(${y(d1)}svh) scale(${s(d1)}); } }`,
+      `@keyframes sc-${c.key} { from { transform: translateY(${y(d0)}lvh) scale(${s(d0)}); } to { transform: translateY(${y(d1)}lvh) scale(${s(d1)}); } }`,
       `.sc-${c.key} { animation: sc-${c.key} 1ms linear both; animation-timeline: ${timelineName(c.trigger)}; }`,
     );
   }
@@ -298,10 +306,31 @@ export default function StaticCloudLayer({
     const rebuild = () => setPinCss(buildPinTimelineCss(clouds));
     rebuild();
     ScrollTrigger.addEventListener("refresh", rebuild);
-    window.addEventListener("resize", rebuild);
+
+    // ⚠️ WIDTH-only. A bare `resize` listener here is what made the why-stay
+    // clouds step on Chrome for Android: the mobile URL bar collapsing fires
+    // `resize`, so every bar movement swapped this <style> element's contents
+    // mid-scroll. Even when the rebuilt rules come out numerically identical,
+    // replacing them re-attaches every animation to its scroll timeline, and
+    // that re-attach is the visible jump — which is why it showed up at
+    // why-stay specifically, the only section whose clouds are built here.
+    //
+    // Height-only resizes are exactly the ones we must ignore now: nothing this
+    // function measures depends on them any more (the sections are `svh` and
+    // stableViewportHeight() is `lvh`, both constant), so a rebuild can only
+    // cost a jump and never buy a correction. Orientation changes and real
+    // window resizes move the width, and those still rebuild. Same
+    // discriminator lenis-provider uses on its body-height watchdog.
+    let lastWidth = window.innerWidth;
+    const onResize = () => {
+      if (window.innerWidth === lastWidth) return;
+      lastWidth = window.innerWidth;
+      rebuild();
+    };
+    window.addEventListener("resize", onResize);
     return () => {
       ScrollTrigger.removeEventListener("refresh", rebuild);
-      window.removeEventListener("resize", rebuild);
+      window.removeEventListener("resize", onResize);
     };
   }, [compositor, clouds]);
 
