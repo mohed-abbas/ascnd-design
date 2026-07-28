@@ -199,6 +199,14 @@ export function columnDrift(index: number): {
  * mat ring 6.39/261 (SHOT_MAT_RATIO 0.0245 × SHOT_BASE 261), 1px white/40
  * hairline, inset white sheen filling the ring.
  *
+ * ⚠️ SECOND deviation, 2026-07-28: the mat ratio is 0.0195, not the house
+ * 0.0245. The house number is authored against a 261px shot on the conveyor;
+ * a wall column is 380px, so the same fraction drew a visibly heavier ring
+ * here than the same recipe does anywhere else on the page. Trimmed by ~20% so
+ * the wall's frames read at the design's weight rather than at its fraction.
+ * `SHOT_MAT_RATIO` in shots-spec.ts is untouched — the conveyor is correct at
+ * its own base.
+ *
  * ⚠️ ONE deliberate deviation. The engine bases both on `min(w, h)` of the tile,
  * because on the sphere a tile's on-screen size varies by depth — the mat has
  * to track the tile or it would look pasted on. In a wall every tile shares one
@@ -207,5 +215,43 @@ export function columnDrift(index: number): {
  * row, at the same distance. So the base here is the COLUMN width: one mat
  * weight for the whole wall. Same recipe, correct base for a flat layout.
  */
-export const MAT_RATIO = 0.0245;
+export const MAT_RATIO = 0.0195;
 export const RADIUS_RATIO = 14 / 261;
+
+/**
+ * The EXPANDED panel's mat, and the reason it is a different number.
+ *
+ * The panel resolves the same fractions against its own short edge, because it
+ * is not inside a column container and has no `cqw` source. That looked correct
+ * and was not: an open panel's short edge is ~766px against a 380px column, so
+ * one shared ratio drew the panel's frame at TWICE the weight of the wall's —
+ * 18.8px vs 9.3px on a 1512×982 screen. The frame stopped being a mat and
+ * started being a border.
+ *
+ * A mat is a frame WEIGHT — a constant of the design, not a feature of the
+ * picture. It should read the same on a tile and on the panel that tile opens
+ * into. 0.0105 of the panel's short edge lands at ~8px, against the wall's
+ * ~7.2px at a 380px column, and the two hold together across viewports because
+ * both bases scale with the screen.
+ *
+ * The RADIUS deliberately keeps the shared ratio: a corner belongs to the shape
+ * rather than to the frame, and a big panel with a small tile's corner reads as
+ * a mistake where a big panel with a small tile's mat reads as the same object.
+ */
+export const PANEL_MAT_RATIO = 0.0105;
+
+/**
+ * The wall tile's `sizes`, exported because the EXPAND has to say the same
+ * thing (grid-expand.tsx).
+ *
+ * ⚠️ Not cosmetic, and not "nice to share". next/image picks a srcset candidate
+ * from `sizes`, so two elements pointing at the same file with DIFFERENT sizes
+ * request different URLs. The panel's under-layer exists precisely because it is
+ * the tile the visitor is already looking at, decoded and free; when it asked
+ * for `86vw` it was measured taking 553ms and 15.8KB of fresh network to arrive
+ * — slower than the uncropped file stacked on top of it — and the panel showed
+ * its white backing plate until it did. That white flash was the whole bug.
+ * Same string, same candidate, same cache entry, first frame.
+ */
+export const GRID_TILE_SIZES =
+  "(max-width: 768px) 45vw, (max-width: 1600px) 23vw, 380px";
