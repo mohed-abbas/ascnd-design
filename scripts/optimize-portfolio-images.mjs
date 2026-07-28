@@ -72,6 +72,11 @@ const CROPS = {
   // identifying band on the page. focus 0 keeps the top, so the sphere shows
   // the emerald wordmark and the "Care that works" hero.
   "emerald-landing": { form: "portrait", focus: 0 },
+  // 1440×14730 (0.0978), the longest of the three. A centred cut keeps 1878px
+  // out of 14730 — 13% of the page, taken from somewhere around the accreditation
+  // logos. focus 0 keeps the top: the "opus." wordmark and the "a symphony of
+  // wealth" hero, which is the only band that identifies the fund.
+  "opus-ventures": { form: "portrait", focus: 0 },
 };
 
 const dry = process.argv.includes("--dry");

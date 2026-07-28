@@ -31,25 +31,37 @@ the scales below land each frame near 1300px on the long side.
 | `dubai-blueprint` | `59:127617` | 0.17 | 1342×755 | Dubai Blueprint — Burj Khalifa |
 | `troxride-landing` | `20:7647` | 1 | 1440×4816 | TroxRide — **full-length landing page** (`grid.form: "tall"`) |
 | `emerald-landing` | `20:334` | 3 → 1440w | 1440×8780 | Emerald Psychiatry — **full-length landing page** (`grid.form: "tall"`) |
+| `opus-ventures` | `20:2263` | 2 → 1440w | 1440×14730 | Opus Ventures — **full-length landing page** (`grid.form: "tall"`) |
 
-The two full-length pages are the exception to the "near 1300px on the long
+The three full-length pages are the exception to the "near 1300px on the long
 side" rule above: they are exported at the frame's **natural 1440 width** and
 left at full height, because the wall and the expand crop the same source
-differently and the expand shows all of it (ADR §24, §29).
+differently and the expand shows all of it (ADR §24, §29, §30).
 
-⚠️ **`emerald-landing` cannot be pulled at scale 1.** At that scale the export
-service hands back a 672×4096 image — the long side is clamped and the width
-collapses to 672, well under the 900 the wall's grid preset needs. Ask for
-**scale 3** (4320×26340, ~31MB, uncapped) and downsample to 1440 wide locally:
+⚠️ **A full-length frame cannot be pulled at scale 1.** Past roughly 4096px the
+export service clamps the long side and the WIDTH collapses with it — asking for
+`emerald-landing` at scale 1 returns 672×4096, well under the 900 the wall's
+grid preset needs. Ask for **scale 2 or 3** (uncapped: 2880×29460 and 4320×26340
+respectively) and downsample to 1440 wide locally:
 
 ```bash
-node -e "require('sharp')('<scale3>.png',{limitInputPixels:false})
+node -e "require('sharp')('<export>.png',{limitInputPixels:false})
   .resize({width:1440,kernel:'lanczos3'}).png({compressionLevel:9})
-  .toFile('portfolio-src/web/emerald-landing.png')"
+  .toFile('portfolio-src/web/<slug>.png')"
 ```
 
-Supersampling from 3× is also sharper than a direct 1× export would have been.
-Any future design past roughly 4096px tall will hit the same clamp.
+Supersampling down is also sharper than a direct 1× export would have been.
+Scale 2 is enough for any of these and costs a third of the bytes of scale 3;
+go to 3 only if 2 comes back clamped. **Always check the `--dry` headroom
+column afterwards** — `← source-limited` on a fresh full-length page means the
+export was clamped, not that the artwork is small.
+
+⚠️ **Ceiling: a source taller than ~16851px cannot be built at all.** The `full`
+preset is 1400 wide, and WebP's hard maximum dimension is 16383, so
+`1400 / (1440/H) > 16383` fails. It fails loudly — sharp throws *"Processed
+image is too large for the WebP format"* — so this cannot ship silently, but a
+longer design needs `FULL_MAX` lowered or the sheet split. `opus-ventures` at
+14730 is 87% of the way there.
 
 Names for `operations-dashboard`, `performance-consultancy`, `crypto-scratchers`
 and `fashion-storefront` are **descriptive, not brands** — those designs carry

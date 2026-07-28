@@ -46,8 +46,9 @@ grid, and `chosen` survives so widening gives the globe back.
 **The expand has no caption** (§28.3). The project name under the open panel is
 gone; `aria-label` + `alt` still carry it for screen readers.
 
-**A second full-length design landed 2026-07-28** (§29): Emerald Psychiatry,
-1440×8780. 26 projects now; the `web` tab runs 4 columns.
+**Two more full-length designs landed 2026-07-28** (§29, §30): Emerald
+Psychiatry (1440×8780) and Opus Ventures (1440×14730). 27 projects now; the
+`web` tab runs 4 columns, with one tall tile per column on every desktop filter.
 
 Two decisions the ADR had left open are now closed:
 
@@ -61,20 +62,27 @@ Two decisions the ADR had left open are now closed:
 
 ## 1. Still open: more full-length artwork (D8 is otherwise DONE)
 
-The `tall` slot is **built and shipped** (ADR §24). **Two** full-length designs
-are in it — TroxRide (1440×4816, 0.299) and Emerald Psychiatry (1440×8780,
-0.164) — each in the wall as a 0.6 top crop, opening into a scrolling panel
+The `tall` slot is **built and shipped** (ADR §24). **Three** full-length designs
+are in it — TroxRide (0.299), Emerald Psychiatry (0.164) and Opus Ventures
+(0.0978) — each in the wall as a 0.6 top crop, opening into a scrolling panel
 showing the whole page.
 
-The second one (ADR §29) confirmed the claim below: it cost a registry entry, a
-`CROPS` line and two script runs, with **no code changed**. Two things it did
-surface, both recorded so the third does not rediscover them:
+Designs two and three (ADR §29, §30) confirmed the claim below: each cost a
+registry entry, a `CROPS` line and two script runs, with **no code changed**.
+A 3.1× range of aspect produces the same 900×1500 tile at the same 1.18×
+headroom, which is the cap in §24.1 doing exactly what it was for.
 
-- **Exporting past ~4096px tall clamps at scale 1**, silently — this frame came
-  back 672×4096, under the 900 the grid preset needs. Pull at **scale 3** and
-  downsample to 1440 wide (recipe in `portfolio-src/SOURCES.md`). The `--dry`
-  headroom table is what catches it: a fresh full-length page reading
-  `← source-limited` is this, not the artwork.
+Three things they surfaced, recorded so the fourth does not rediscover them:
+
+- **Exporting past ~4096px tall clamps at scale 1**, silently — the width
+  collapses with the long side (1440 → 672, under the 900 the grid preset
+  needs). Pull at **scale 2** and downsample to 1440 wide (recipe in
+  `portfolio-src/SOURCES.md`). The `--dry` headroom table is what catches it: a
+  fresh full-length page reading `← source-limited` is this, not the artwork.
+- **⚠️ There is now a ceiling ~16851px of source height**, and Opus is at 87% of
+  it. WebP's max dimension is 16383 and the `full` preset is 1400 wide. It fails
+  loudly, but **the next long design may not fit** — §30.2 has three options
+  costed, and recommends lowering `FULL_MAX` for tall forms only.
 - **`web` moved 3 → 4 columns** at 12 projects (`floor(12/3)`). Expected — the
   sparse-filter floor working, not something to tune.
 
@@ -223,8 +231,14 @@ collected here so they are not rediscovered the hard way.
     (§24.1, §29.1)
 26. **Verify a registry insertion by RUNNING `assignColumns`/`columnCount`**
     against the real data (`npx tsx` a 20-line script), not by reasoning about
-    it. That is how the two talls were confirmed to land in different columns —
-    and how the `web` tab's jump to 4 columns was caught. (§29.3, §29.4)
+    it. Two of the four rotation-legal slots for Opus stacked two full-length
+    tiles in one column, and nothing in the registry line hinted at which. It
+    has changed the decision three times now — it is part of adding a project,
+    not verification of one. (§29.3, §29.4, §30.3)
+27. **The `full` preset has a hard ceiling at 16383px** (WebP's max dimension),
+    which at `FULL_MAX = 1400` means a source no taller than ~16851px. Opus is
+    at 87%. It throws rather than corrupting, but the next long design may not
+    build — §30.2 costs the three ways out. (§30.2)
 
 ---
 

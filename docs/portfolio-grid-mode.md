@@ -1988,3 +1988,95 @@ when that tile is expanded, never by the wall or the globe, and
 `next.config.ts`'s `imageDirs` already gives `portfolio/:path*` long-lived cache
 headers. Worth watching if a third full-length design lands, not worth
 compressing now.
+
+---
+
+## 30. The third full-length design, and the ceiling (2026-07-28)
+
+**Opus Ventures, 1440×14730** (Figma `20:2263`), exported to
+`portfolio-src/web/opus-ventures.png`. A Dubai forex fund; dark, which makes it
+the strongest tonal break in a wall that is otherwise mostly light artwork.
+
+Cost: a registry entry, a `CROPS` line, two script runs. Again no code. The
+interesting part of this one is not that it worked — §29 established that — it
+is that it finally found where the pipeline *stops* working.
+
+### 30.1 Three designs, one tile
+
+```
+             aspect    source        wall tile     full sheet      full KB
+TroxRide     0.299     1440×4816     900×1500      1400×4682        214
+Emerald      0.164     1440×8780     900×1500      1400×8536        560
+Opus         0.0978    1440×14730    900×1500      1400×14321       864
+```
+
+The middle column is the whole argument. Three designs spanning a **3.1× range
+of aspect** produce the *same tile*, at the same 1.18× headroom, because
+`GRID_ASPECT.tall = 0.6` is a cap (§24.1). The wall cannot be destabilised by a
+longer page; only the sheet grows. Nothing in the masonry, the drift or the
+expand needed a number changed for any of them.
+
+### 30.2 The ceiling, which is now close
+
+The `full` preset is `FULL_MAX = 1400` wide, and **WebP's hard maximum dimension
+is 16383**. So from a 1440-wide source:
+
+```
+max source height = 16383 × 1440/1400 = 16851px
+opus-ventures     = 14730px            = 87% of it
+```
+
+Measured, not recalled: 1400×16383 encodes fine, 1400×16384 throws *"Processed
+image is too large for the WebP format"*. **It fails loudly**, which is the
+saving grace — a design past the ceiling cannot ship as a silently broken tile
+the way a clamped export can (§29.2). But the next full-length design is
+genuinely at risk, and the fix is not obvious-in-the-moment, so decide it now:
+
+- **Lower `FULL_MAX`** for tall forms only. 1000px wide buys 23600px of height.
+  Cheapest change; costs sharpness on the one form that is already scrolled
+  past rather than studied.
+- **Split the sheet** into stacked images inside the scroller. Keeps full
+  resolution, and the panel already scrolls, so nothing about the interaction
+  changes. More moving parts in `grid-expand.tsx`.
+- **AVIF or JPEG for the `full` preset only.** Neither has WebP's 16383 limit.
+  Changes the format matrix for one preset, which the presets script currently
+  has no notion of.
+
+Preference is the first: it is a constant, it is reversible, and the `full`
+preset for a tall form is a sheet someone scrolls — the wall's tile, which is
+what gets *looked* at, comes from the `grid` preset and is unaffected.
+
+### 30.3 Placement was chosen by measurement, not by eye
+
+Four registry positions keep §14's rotation (a `web` entry needs a non-`web`
+neighbour on both sides). Running the real `assignColumns`/`columnCount` over
+each of the four:
+
+```
+idx  after                    all/desk           web/desk
+ 2   emerald-mark             talls[0,1,2,0] ✗   talls[0,1,1,1]
+ 5   emerald-poster-mind      talls[0,1,1,1] ✓   talls[0,1,1,1]   spread 0.43u  ← chosen
+ 8   emerald-poster-help      talls[0,1,1,1] ✓   talls[0,1,1,1]   spread 0.63u
+15   emerald-poster-ohio      talls[0,1,2,0] ✗   talls[1,1,1,0]
+```
+
+Two of the four rotation-legal slots stack **two full-length tiles in one
+column** — the seam §29.4 was placed to avoid — and nothing about the registry
+line would have hinted at which. Index 5 wins the tie on `all` balance.
+
+Result: **one tall per column on every desktop filter.** Mobile cannot match
+that — 3 talls into 2 columns means one column holds two by pigeonhole — but the
+spreads stay tight (0.57u of ~13.4u on `all`), so it is even where it can be.
+
+This is the third time the placement check has changed a decision. Treat it as
+part of adding a project, not as verification of one.
+
+### 30.4 State after this
+
+27 projects. Filters: all 4 columns (27) / web 4 (13) / brandings 2 (6) /
+misc 2 (8). `public/portfolio/` totals grid 1.2M, full 2.8M, cloud 1.0M.
+
+The `full` directory is now 2.8M across 27 files, and three of those files are
+1.6M of it. That directory is fetched **one file at a time, only on expand**,
+and never by the wall or the globe — it is not page weight. Revisit only if a
+future change makes the expand preload.

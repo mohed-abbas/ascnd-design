@@ -177,6 +177,15 @@ export const cloudProjects: CloudProject[] = [
   { src: `${dir}/cloth-tag-mockup.webp`, name: "cloth tag mockup", type: "misc", form: "square" },
   { src: `${dir}/kalinka.webp`, name: "Kalinka", type: "web", form: "landscape" },
   { src: `${dir}/emerald-poster-mind.webp`, name: "Emerald Psychiatry — your mind matters", type: "branding", form: "portrait" },
+  // The THIRD full-length design (D8) — 1440×14730, an aspect of 0.0978 and the
+  // longest thing in the set by some way. Same treatment as the two below it;
+  // §29.1 is the argument for why a page this long still costs the wall nothing.
+  //
+  // This slot was CHOSEN, not guessed: of the four rotation-legal positions,
+  // only this one and index 8 keep every desktop column down to one tall tile,
+  // and this one balances the `all` wall tighter (0.43u of spread against
+  // 0.63u). Re-run the check in §29.4 before moving it.
+  { src: `${dir}/opus-ventures.webp`, name: "Opus Ventures", type: "web", form: "portrait", grid: { form: "tall" } },
   { src: `${dir}/desktop-mockup.webp`, name: "desktop mockup", type: "misc", form: "landscape" },
   { src: `${dir}/medlink.webp`, name: "Medlink", type: "web", form: "landscape" },
   // Pre-cropped by scripts/optimize-portfolio-images.mjs (CROPS), not centred:
