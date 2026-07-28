@@ -88,7 +88,11 @@ export const MIN_TILES_PER_COLUMN = 3;
  * constant and the column COUNT drops instead; the field simply narrows and
  * re-centres.
  *
- *   all(24) → 4      web(10) → 3      misc(8) → 2      brandings(6) → 2
+ *   all(26) → 4      web(12) → 4      misc(8) → 2      brandings(6) → 2
+ *
+ * `web` reached 4 with the second full-length design (§29): 12/3 hits the cap
+ * exactly, so the tab gained a column rather than lengthening the three it had.
+ * That is the floor above doing its job — every column still holds ≥3 tiles.
  *
  * Mobile is always 2 — its columns are already narrow enough that dropping to
  * one would make a single-file feed, not a wall.

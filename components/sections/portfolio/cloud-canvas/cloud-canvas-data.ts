@@ -185,6 +185,21 @@ export const cloudProjects: CloudProject[] = [
   { src: `${dir}/phone-mockup-finance.webp`, name: "phone mockup — finance", type: "misc", form: "portrait" },
   { src: `${dir}/crypkit.webp`, name: "CrypKit", type: "web", form: "landscape" },
   { src: `${dir}/elyv-logo.webp`, name: "ElyV", type: "branding", form: "square" },
+  // The SECOND full-length design (D8) — 1440×8780, an aspect of 0.164, and
+  // the most extreme in the set: 1.8× longer than TroxRide and 3.6× taller than
+  // the 0.6 slot it is cropped into. Same two-modes-disagree treatment; see the
+  // TroxRide entry below for the full reasoning, which this one only repeats.
+  //
+  // Placed after a branding and before a misc so the rotation holds, and well
+  // away from TroxRide in the `web` sequence — the wall's `web` filter drops
+  // every branding and misc entry, so those two are what actually neighbour
+  // each other there, and two 0.6 tiles dealt into the same column would give
+  // that column a visible seam of full-length pages.
+  //
+  // Not adjacent to the four `emerald-*` BRANDING tiles either: this is the
+  // same client's landing page, and stacking five Emerald entries in a row
+  // would read as the sphere repeating itself.
+  { src: `${dir}/emerald-landing.webp`, name: "Emerald Psychiatry — landing page", type: "web", form: "portrait", grid: { form: "tall" } },
   { src: `${dir}/tablet-mockup.webp`, name: "tablet mockup", type: "misc", form: "square" },
   { src: `${dir}/dubai-blueprint.webp`, name: "Dubai Blueprint", type: "web", form: "landscape" },
   { src: `${dir}/emerald-poster-ohio.webp`, name: "Emerald Psychiatry — telehealth", type: "branding", form: "portrait" },

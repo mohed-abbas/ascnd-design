@@ -29,6 +29,27 @@ the scales below land each frame near 1300px on the long side.
 | `medlink` | `52:112121` | 0.25 | 1339×1005 | Medlink — "Your Health, Simplified" |
 | `fashion-storefront` | `55:124634` | 0.23 | 1324×745 | fashion e-commerce product page |
 | `dubai-blueprint` | `59:127617` | 0.17 | 1342×755 | Dubai Blueprint — Burj Khalifa |
+| `troxride-landing` | `20:7647` | 1 | 1440×4816 | TroxRide — **full-length landing page** (`grid.form: "tall"`) |
+| `emerald-landing` | `20:334` | 3 → 1440w | 1440×8780 | Emerald Psychiatry — **full-length landing page** (`grid.form: "tall"`) |
+
+The two full-length pages are the exception to the "near 1300px on the long
+side" rule above: they are exported at the frame's **natural 1440 width** and
+left at full height, because the wall and the expand crop the same source
+differently and the expand shows all of it (ADR §24, §29).
+
+⚠️ **`emerald-landing` cannot be pulled at scale 1.** At that scale the export
+service hands back a 672×4096 image — the long side is clamped and the width
+collapses to 672, well under the 900 the wall's grid preset needs. Ask for
+**scale 3** (4320×26340, ~31MB, uncapped) and downsample to 1440 wide locally:
+
+```bash
+node -e "require('sharp')('<scale3>.png',{limitInputPixels:false})
+  .resize({width:1440,kernel:'lanczos3'}).png({compressionLevel:9})
+  .toFile('portfolio-src/web/emerald-landing.png')"
+```
+
+Supersampling from 3× is also sharper than a direct 1× export would have been.
+Any future design past roughly 4096px tall will hit the same clamp.
 
 Names for `operations-dashboard`, `performance-consultancy`, `crypto-scratchers`
 and `fashion-storefront` are **descriptive, not brands** — those designs carry

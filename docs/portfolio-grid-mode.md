@@ -1879,3 +1879,112 @@ viewport's centre exactly (measured 422 vs 422 at 390×844). It used to sit
 ~18px high — the caption and the gap pushed it up. The close's fold-and-fly was
 unaffected either way: the panel's centre is independent of its own height under
 `justify-center`, which is what §23.2 relies on.
+
+---
+
+## 29. The second full-length design (2026-07-28)
+
+**Emerald Psychiatry, 1440×8780** (Figma `20:334`), exported to
+`portfolio-src/web/emerald-landing.png`. §24.7 predicted that the next one would
+be "genuinely a data change". It was — the registry entry, a `CROPS` line and
+the two scripts, with **no code touched** beyond a stale comment. §24's
+machinery held at an aspect it was not sized against.
+
+### 29.1 More extreme than the thing that forced the slot to exist
+
+```
+             aspect   vs the 0.6 slot   full page at 1400w
+TroxRide     0.299    2.0× taller       1400×4682   214KB
+Emerald      0.164    3.6× taller       1400×8536   560KB
+```
+
+0.164 is **1.8× longer than TroxRide** and 4.6× past the 0.767 portrait slot the
+globe files it under. It changed nothing, because §24.1's decision was to treat
+`GRID_ASPECT.tall = 0.6` as a **cap** rather than an aspect: the wall shows a
+0.6 top crop whatever the source does, so the tile is 900×1500 for both designs
+and the wall cannot be destabilised by a longer page. Only the expand's sheet
+grows, and it was already a scroller.
+
+Both crops stay top-anchored and agree, as §24.5's continuity requires — the
+globe's from `CROPS` (`focus: 0`), the wall's from `TOP_ANCHORED`, which already
+contained `"tall"` and so needed no new entry. A centred cut here would have
+landed in the **FAQ accordion**, the least identifying band on the page. The top
+2400px carries the emerald wordmark and the "Care that works, delivered with
+compassion" hero.
+
+### 29.2 The export clamps past ~4096px, and scale 1 is a trap
+
+Asking the export service for this frame at **scale 1 returns 672×4096** — the
+long side is capped and the width collapses with it, from 1440 to 672. That is
+**below `GRID_MAX` (900)**, so the wall's tile would have been upscaled from a
+short source and the headroom column would have read `0.75× ← source-limited`
+instead of `1.18×`.
+
+The cap is not absolute: **scale 3 returns 4320×26340 uncapped** (~31MB).
+Downsampling that to 1440 wide locally is both a correct source and a sharper
+one than a 1× export, being supersampled 3:1. The recipe is in
+`portfolio-src/SOURCES.md`.
+
+**This is the failure mode to watch**, because it is silent — a clamped export
+is a valid PNG of the right design and the pipeline emits a tile from it without
+complaint. The `--dry` headroom table is what catches it; anything reading
+`← source-limited` for a freshly-added full-length page is this bug, not a
+resolution limit of the artwork.
+
+### 29.3 The `web` tab gained a fourth column
+
+`columnCount` is `floor(total / MIN_TILES_PER_COLUMN)` clamped to [2, 4]. Web
+went 11 → 12 projects, and `floor(12/3)` is exactly 4:
+
+```
+             before            after
+all          26 → 4 cols       26 → 4 cols   (unchanged)
+web          11 → 3 cols       12 → 4 cols   ← the density floor, working
+branding      6 → 2 cols        6 → 2 cols
+misc          8 → 2 cols        8 → 2 cols
+```
+
+Not a regression to tune away. §8.2's floor exists so no column is built from
+fewer than 3 tiles; at 12 projects a 4th column still gives every column 3, so
+the tab widens instead of the three it had growing longer.
+
+### 29.4 Where it sits in the registry, and why
+
+Placed after `elyv-logo` (branding) and before `tablet-mockup` (misc), which
+keeps §14's web → branding → misc rotation intact. Two further constraints
+decided it over the other rotation-legal slots:
+
+- **Away from TroxRide in the `web` sequence.** The `web` filter drops every
+  branding and misc entry, so registry neighbours are not what neighbour each
+  other there — the other `web` entries are. Two 0.6 tiles dealt into one column
+  would give it a visible seam of full-length pages.
+- **Not adjacent to the four `emerald-*` branding tiles.** Same client; five
+  Emerald entries in a row reads as the sphere repeating itself.
+
+Verified by running the real `assignColumns`/`columnCount` against the real
+registry rather than by eye:
+
+```
+DESKTOP  all   4 cols, spread 0.57u   talls in col2 and col3   ✓ separated
+         web   4 cols, spread 0.24u   talls in col0 and col3   ✓ maximally
+MOBILE   web   2 cols, spread 0.00u   one tall per column      ✓ balanced
+         all   2 cols, spread 0.30u   both talls in col0       ← see below
+```
+
+The one imperfect case is mobile `all`: both full-length tiles land in column 0.
+The heights still balance (0.30u apart over ~12.7u), and at 1.67u each inside a
+13-tile drifting column they are nowhere near each other on screen, so this is
+recorded rather than fixed. Forcing it would mean overriding the masonry for one
+filter on one breakpoint — a worse trade than an even wall.
+
+### 29.5 State after this
+
+26 projects. Filters: all 4 columns (26) / web **4** (12) / brandings 2 (6) /
+misc 2 (8). Assets: cloud 690×900 57KB, grid 900×1500 122KB, full 1400×8536
+560KB. `public/portfolio/` totals grid 1.1M, full 2.0M, cloud 988K.
+
+560KB is the largest single file in the section by 2.6×. It is fetched **only**
+when that tile is expanded, never by the wall or the globe, and
+`next.config.ts`'s `imageDirs` already gives `portfolio/:path*` long-lived cache
+headers. Worth watching if a third full-length design lands, not worth
+compressing now.

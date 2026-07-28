@@ -67,6 +67,11 @@ const CROPS = {
   // via scripts/build-portfolio-presets.mjs — see the `GridForm` note in
   // cloud-canvas-data.ts for why the two modes are allowed to disagree.
   "troxride-landing": { form: "portrait", focus: 0 },
+  // Same treatment, more extreme: 1440×8780 (0.164). A centred cut keeps 1878px
+  // out of 8780 — here that lands in the FAQ accordion, which is the least
+  // identifying band on the page. focus 0 keeps the top, so the sphere shows
+  // the emerald wordmark and the "Care that works" hero.
+  "emerald-landing": { form: "portrait", focus: 0 },
 };
 
 const dry = process.argv.includes("--dry");
