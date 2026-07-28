@@ -47,7 +47,10 @@ where pitch-by-drag had to be surrendered (`touch-action: pan-y`) so the canvas
 would stop eating page scroll. A column wall is the opposite: it shows the
 whole body of work at a glance and asks nothing of the visitor.
 
-So the two modes are not redundant — they split by device, see D2.
+So the two modes are not redundant. They originally split by device; since
+2026-07-28 the wall is simply the default and the globe is the thing you opt
+into (D2, §25). The argument above is why — it just turned out to apply on
+the desktop too, not only on a phone.
 
 ---
 
@@ -56,7 +59,7 @@ So the two modes are not redundant — they split by device, see D2.
 | # | Decision | Locked |
 |---|---|---|
 | **D1** | The grid is **DOM + CSS transforms + GSAP**. Not WebGL, not a second 2D canvas, not a new formation inside the existing engine. | ✅ |
-| **D2** | **Globe is the default on desktop. Grid is the default on mobile.** Both modes reachable on both devices via the switcher. | ✅ |
+| **D2** | ~~Globe default on desktop, grid on mobile.~~ **REVISED 2026-07-28 (§25): grid is the default EVERYWHERE.** Both modes still reachable on both devices via the switcher. | ✅ |
 | **D3** | **Up to 4 columns on desktop, 2 on mobile**, adjacent columns running in opposite directions. The desktop column COUNT adapts to the filtered set size (§8.2) — tile size never changes, the field narrows. | ✅ |
 | **D4** | **Hovering a column pauses THAT column only** — its neighbours keep drifting. See the note below; this is the one answer worth re-confirming when you first see it running. | ⚠️ see §3.1 |
 | **D5** | Clicking a tile does an **in-place Flip expand** (the wall dims behind it), matching the globe's focus feel. A lightbox/panel variant is recorded in §10 as a deferred alternative, not built. | ✅ |
@@ -179,10 +182,19 @@ disconnected), so this is free — but it is load-bearing: two live modes means
 two repaint sources for one visible section. Never render both and hide one with
 `display:none`.
 
-Corollary for D2: the *initial* mode is a device decision, so it must be picked
-the way `CloudLayer` picks: `useSyncExternalStore` with a server snapshot, so
-SSR renders one stable branch and the device branch is chosen after hydration.
-No `matchMedia` in the render path, or hydration mismatches result.
+Corollary for D2 — **no longer applies to the MODE, and that is the point**
+(§25). The initial mode used to be a device decision, which meant picking it the
+way `CloudLayer` does: `useSyncExternalStore` with a server snapshot, SSR
+renders one stable branch, the device branch arrives after hydration. The
+unavoidable cost was that a phone rendered the *globe* on the server and swapped
+to the wall on hydration — mounting and disposing a canvas for nothing, on the
+devices least able to afford it.
+
+Grid being the default everywhere removes that: SSR and the client now agree on
+the mode for every device. The `useSyncExternalStore` idiom is still used, but
+only for the wall's COLUMN COUNT (D3), where being wrong for one render re-deals
+4 columns into 2 and rebuilds the marquee — no canvas involved. Still no
+`matchMedia` in the render path, for the same hydration reason.
 
 ---
 
@@ -627,15 +639,17 @@ Tile heights are the authored aspects (§8.1), NOT a uniform cell:
 ### H · Mode switching — the mount contract
 
 ```
-                    ┌───────────── device default (D2) ─────────────┐
-                    │  useSyncExternalStore → server snapshot first,│
-                    │  device branch chosen AFTER hydration         │
-                    └───────┬───────────────────────────┬───────────┘
-                     desktop│                     mobile│
-                            ▼                           ▼
+                    ┌──────────── default (D2, rev. §25) ───────────┐
+                    │  GRID, on every device. SSR and client agree, │
+                    │  so no mode swap on hydration and no canvas   │
+                    │  mounted-then-disposed on a phone.            │
+                    └───────────────────┬──────────────────────────┘
+                                        │  (was: desktop→globe, mobile→grid)
+                                        ▼
                      ┌────────────┐   switcher   ┌────────────┐
                      │   GLOBE    │ ◄──────────► │    GRID    │
-                     │ 2D canvas  │              │ DOM+GSAP   │
+                     │ 2D canvas  │   opt-in     │ DOM+GSAP   │
+                     │            │              │ ← default  │
                      └────────────┘              └────────────┘
                             │                           │
               on leaving:   │                           │  on leaving:
@@ -1072,37 +1086,63 @@ cases the flag (rather than the event alone) covers:
 
 ---
 
-## 20. Step 6 is BLOCKED on assets (2026-07-27)
+## 20. Step 6 — RESOLVED, the originals were never lost (2026-07-27)
 
-The dedicated grid image preset cannot be built. Its whole value (§18.2) is
-cropping to the WALL's aspect *before* the 900px cap, which restores the 8 tiles
-that currently under-resolve a 380px column at 2× DPR. That requires the
-uncropped originals.
+This section previously recorded step 6 as blocked, on the finding that
+`portfolio-src/` held `SOURCES.md` and nothing else. **That was a conclusion
+drawn from `git ls-files`, and it was wrong about the world.** The folder is
+listed in `.gitignore` — the PNGs were never *committed*, which is not the same
+as never *existing*. All 24 are on the authoring machine, exactly where
+`SOURCES.md` says they should be. Nothing had to be re-pulled from Figma.
 
-**They are not in the repo.** `portfolio-src/` contains `SOURCES.md` and nothing
-else; git history confirms the PNGs were never committed — the manifest's own
-header says the folder exists "so a tile can be re-cropped without another trip
-through Figma", but only the manifest survived.
+The lesson worth keeping: for a gitignored path, git history is evidence about
+the repository, not about the disk. Check the filesystem before recording an
+asset as lost.
 
-Three ways forward, none of them mine to pick:
+**Built:** `scripts/build-portfolio-presets.mjs` (`npm run presets:portfolio`),
+a sibling of `optimize-portfolio-images.mjs` that never touches
+`public/portfolio/cloud` or `MAX_SIDE` — that constant stays hand-coupled to the
+engine's `FAST_MAX_SIDE`, and raising it would bill every globe visitor for
+bytes only the wall can see. It emits two presets from the originals:
 
-1. **Re-pull from Figma.** `SOURCES.md` records the file key
-   (`AlJwKmp1F8MmaViAh75vuu`), every node ID and the export scale, so
-   `download_assets` can fetch all 24. This is the real fix.
-2. **Supply the originals** if they still exist on a disk somewhere.
-3. **Ship without the preset** and accept the measured shortfall — invisible
-   except on a retina screen, looking closely.
+| preset | crop | cap | consumed by |
+|---|---|---|---|
+| `public/portfolio/grid/` | to the tile's SLOT aspect | 900 | the wall tile (`gridSrc()`) |
+| `public/portfolio/full/` | none — the whole design | 1400 | the expanded panel (`fullSrc()`) |
 
-### 20.1 Why it should probably wait regardless
+Measured against §18.2's table, cropping *before* the cap recovers what the old
+double-downscale threw away. Source-limited tiles drop from 8 to 6, and the
+worst case improves by 15%:
 
-Even with the originals in hand, generating the preset now would be premature.
-The preset is cropped to the wall's aspects at the wall's sizes, and **both are
-still moving**: step 4 tunes the mask, the gutters and the column width, and
-D8/D11's `tall` form changes the aspect table outright. Generating 24 assets
-against numbers that are about to change is the definition of work that gets
-redone. The preset should be cut ONCE the layout is settled.
+```
+phone-mockup-fitness   518 → 589 usable   (0.68× → 0.78×)
+emerald-* / laptop- / phone-finance  600 → 672–689   (0.79× → 0.88–0.91×)
+monitor-mockup         675 → 768          (0.89× → 1.01×)
+16:9 landscape tiles   798 → 900          (1.05× → 1.18×)
+```
 
-Which makes the honest ordering: **step 4 (needs a human) → step 6 → step 7.**
+Bytes: grid 866K (vs the globe set's 838K — the same order, for a sharper
+image), full 1169K and fetched only when a tile is actually opened.
+
+The wall aspect per slug is **parsed out of `cloud-canvas-data.ts`**, not copied
+into the script: that registry is the single source of truth for `form` and for
+`grid.form`, and a duplicate would drift silently the first time a tile is
+reshaped. A slug the registry does not mention, or a missing original, is a hard
+error rather than a quietly skipped tile.
+
+Paths are likewise **derived, not listed**. `gridSrc()` / `fullSrc()` map a
+project's `src` slug into each preset directory; `grid.src` / `grid.full` remain
+as per-project overrides for framing the convention cannot express. Twenty-four
+literal paths in the registry would have been 24 chances to typo a filename that
+still type-checks and only surfaces as a broken tile.
+
+### 20.1 Why the ordering held anyway
+
+The original worry — that cutting the preset before step 4 would waste it —
+turned out not to bite, because step 4 changed **no layout constant** (§22). But
+the ordering was still right for the reason given: the preset is cut against the
+wall's aspects, and had step 4 moved the column width or D8 landed `tall`, these
+24 assets would have been recut. Step 4 first remains the correct sequence.
 
 ## 21. Self-review of steps 1–5 (2026-07-27)
 
@@ -1139,3 +1179,343 @@ so a panel above the cursor layer would have left no visible pointer at all.
 **Noted, not changed — the navbar floats over the panel** (`z-[999]` vs the
 panel's 120). Arguably right (the nav stays reachable) and arguably wrong (it
 sits on top of the work). A look call for the review pass, not a bug.
+
+---
+
+## 22. Step 4 — the browser pass, done (2026-07-27)
+
+Driven with Playwright against the dev server at 1512×982, 1280×800 and 390×844.
+The wall had never been rendered anywhere before this; the headline is that
+**nothing in the layout needed changing.** Every constant §17.4 and §8 argued for
+survived contact with the real thing.
+
+### 22.1 Verified, unchanged
+
+| checked | measured | verdict |
+|---|---|---|
+| masonry seams | column seams land on different lines in all 4 | the effect works |
+| mask stops (12% / 88%) | 89px fade on a 745px wall, both ends | dissolves cleanly; no change |
+| gutters | 24px desktop / 14px mobile, track and group equal | reads as a wall, not a contact sheet |
+| mat weight | `MAT_RATIO` → 8.5px at a 348px column | matches the globe's ring |
+| drift | 26.2 / 33.8 / 28.3 px/s vs 26.1 / 33.6 / 28.2 declared | exact; browsing pace |
+| column count | all 4 · web 3 · brandings 2 · misc 2 | §8.2 holds |
+| sparse filters | width caps at 380, field re-centres, tiles never grow | §8.2 holds |
+| `sizes` | 23vw declared → 348px actual at 1512 | §18.3 confirmed on the nose |
+| mobile default | grid, 2 columns, 174px, D2 | correct |
+| expand + close | lands on the tile's exact box, wall thaws, no tile left hidden | the freeze contract works |
+
+**A framing note, not a defect.** The section is `pt-[8dvh]` plus a `h-dvh` band,
+so the wall's bottom sits ~78px below the fold until you scroll another 78px.
+That is where the band aligns to the viewport and the composition resolves. The
+globe has the same overrun and never shows it, because its content is a centred
+sphere in empty sky; the wall fills its box, so the last strip is simply below
+the fold on the way in. Scrolling reveals it. No change.
+
+### 22.2 D4 — RESOLVED: per-column stays
+
+§3.1 flagged this as the one answer worth re-confirming. Confirmed as built, and
+the deciding argument is one the original note did not make:
+
+**The section is a full 100dvh.** A whole-wall pause fires whenever the pointer
+is anywhere over it — which, on a full-viewport section, is most of the time it
+is on screen. The wall would be frozen almost permanently and the drift would
+effectively never be seen. Per-column freezes the one column being read and
+leaves the other three alive, which is both the better reading experience and
+the only version where the feature is visible at all.
+
+Verified: hovering column 3 moved it 0px over 1.5s while its neighbours
+continued at their declared speeds.
+
+### 22.3 Navbar z-order — RESOLVED: leave it
+
+§21 left this as "a look call". Looked at, and the premise turns out to be
+false: **nothing that paints actually overlaps the panel.** The nav's *bounding
+box* intersects it, but the box is `pointer-events-none` and transparent — its
+visible controls sit in the right margin, outside the panel at every width
+tested (1512 and 1280, landscape and portrait tiles).
+
+So there is nothing to fix, and raising the dialog above `z-[999]` would hide
+the nav to solve a collision that does not occur. The nav stays reachable, as
+§21 preferred. Re-open this only if the panel envelope grows past `86vw`.
+
+### 22.4 Found in passing
+
+- **The expanded panel is small on a phone** — 335×213 for a landscape shot at
+  390px wide, barely 1.9× the tile. A dense UI screenshot is not legible at that
+  size, and mobile is where grid is the DEFAULT (D2). This is not a tuning
+  problem: a 16:9 desktop screenshot **cannot** be made legible on a 390px
+  portrait screen by sizing alone — the envelope is already width-bound, and
+  going 86vw → 94vw buys 9%. The real answer is pinch-zoom or a scrollable
+  full-resolution view, which is a feature, not a constant. **Recorded, not
+  built** — it is the natural next piece of work on this mode.
+- **The name label was `text-white/80`** over the receded wall, which is pale
+  sky plus washed-out tiles. 80% on that is barely a shade. Now full white.
+- **Two Next LCP warnings** name wall tiles. False positives from jumping
+  straight to the section — the wall is ~7,600px down the page and is never the
+  real LCP. Adding `loading="eager"` would be actively wrong: it would eagerly
+  fetch 24 images far below the fold.
+
+---
+
+## 23. Step 7 — the two-stage expand (2026-07-27)
+
+D8's original shape was "full-length designs": a `tall` (~0.55–0.6) slot in the
+wall, fed by long-form screenshots. **That half remains blocked, and not on
+tooling — on artwork that does not exist.** Every export in `portfolio-src/`
+measures 0.667 or wider; the tallest thing in the set is a 2:3 poster. Cropping
+a 4:3 mockup into a 0.577 slot would keep 43% of its width and destroy it. No
+amount of scripting makes a long-form design out of a 1024×768 frame.
+
+What D8 *also* promised is buildable today, and is the more valuable half —
+§8/§15.3's "the wall shows the crop, clicking reveals the full screenshot":
+
+> the long-form shot belongs in the EXPAND, not the wall
+
+**Built.** Opening a tile no longer shows the same crop larger. It shows the
+whole design:
+
+```
+stage 1   fly from the tile, at the TILE's aspect, showing the same crop
+stage 2   once the uncropped file decodes, unfold to the shot's TRUE aspect
+```
+
+Measured end to end:
+
+```
+phone-mockup-fitness   0.767 → 1.333    a portrait sliver becomes the whole 4:3 mockup
+crypkit                1.577 → 1.777    the 16:9 dashboard's cropped edges come back
+circle-mark            1.000 → 1.000    no morph — skipped by MORPH_EPSILON
+```
+
+### 23.1 Why two stages and not one
+
+§19.2's constraint. The flight is a **uniform** scale, which is exact only while
+the panel carries the tile's aspect; flying straight to a different shape needs
+per-axis scaling and visibly squashes the shot on the way. Splitting them keeps
+the flight uniform and puts the aspect change in its own tween, where no scaling
+is happening at all.
+
+The morph animates `width`/`height` rather than a transform — deliberately. The
+two stages differ in SHAPE, and a non-uniform transform is precisely the
+distortion being avoided. It is one portalled element with no layout dependents,
+for half a second, once per open; not a per-frame cost the page carries.
+
+### 23.2 The close folds and flies at once
+
+Returning from an unfolded panel to a tile of a different shape could have been
+two sequential tweens (fold back, then fly), which would make every close take
+`FLIGHT + MORPH` and read as a stall before the tile goes home.
+
+It runs as one motion instead, and the reason it is safe is a property of the
+layout: **the panel is centred by the dialog's flexbox, so folding it does not
+move its centre.** The centre-to-centre translation is therefore unaffected by
+the fold running alongside it, and the two tweens cannot fight. The flight's
+scale is measured against the *folded* width, which is known up front.
+
+Verified by sampling the panel through a close: aspect 1.33 → 1.28 → 1.08 →
+0.84 → 0.77 while travelling, landing on 290×378 — the tile's exact box.
+
+### 23.3 Two stacked images, not one swapped source
+
+The panel shows the wall's cropped tile UNDER the uncropped one, which fades in
+on decode. At stage 1 both are the same crop at the same size, so the hand-off
+is invisible. Without it, clicking a tile would flash an empty white frame while
+the larger file downloaded — the cropped tile is already in cache and paints on
+the first frame.
+
+### 23.4 The true aspect is read, not stored
+
+`fullAspect` is deliberately NOT a registry field. It is a property *of the
+file*: 24 copies in `cloud-canvas-data.ts` would be 24 numbers to re-derive by
+hand every time an export is re-pulled, and a stale one would size the panel
+wrong with nothing to catch it. It is read off the decoded image instead —
+which costs nothing, since the morph could not begin before the pixels exist.
+
+### 23.5 What remains of D8
+
+Only the `tall` wall slot, and only the artwork. When long-form designs exist:
+
+1. Drop them into `portfolio-src/`, add the entry to `cloud-canvas-data.ts`.
+2. Add `tall` to `ProjectForm` and to `GRID_ASPECT` — **cap near 0.6, not
+   Pinterest's 1:2** (§16.1: height × motion is a cost a static wall never pays).
+3. Re-run `npm run presets:portfolio`. Both presets pick it up automatically —
+   the script reads the wall form out of the registry.
+4. `grid.span: 2` is still reserved and still unimplemented; the first span-2
+   tile buys a second `sizes` value per breakpoint (§8.1).
+
+---
+
+## 24. D8 — the `tall` slot and the scrolling expand (2026-07-28)
+
+The first full-length design arrived: **TroxRide, 1440×4816** (Figma
+`20:7647`), exported to `portfolio-src/web/troxride-landing.png`. §23.5 assumed
+that adding `tall` would be a data change. It was not — the artwork is far more
+extreme than the aspect table anticipated, and two things had to be built.
+
+### 24.1 0.299 is not a tile aspect
+
+The design is **1:3.34**. §16.1 already capped `tall` near 0.6 and rejected even
+Pinterest's 1:2; this is two and a half times taller than the number that was
+rejected. In a moving wall:
+
+```
+0.6    380px column → 633px tall  → ~21s to cross at 30px/s
+0.5    380px column → 760px tall  → ~25s        (Pinterest's cap)
+0.299  380px column → 1271px tall → ~42s, and TALLER THAN THE WALL (1040px)
+```
+
+A tile that outlives the wall it travels through stops being one item among
+many and becomes a column of its own, and at 42s nobody sees it leave.
+
+**`GRID_ASPECT.tall = 0.6` is therefore a CAP, not the artwork's aspect.** The
+wall shows a 0.6 crop of the top — the hero, which is what identifies a landing
+page — and the whole 4816px lives in the expand. Which is precisely the split
+§8/§15.3 asked for.
+
+### 24.2 `tall` is a wall form, not a project form
+
+`ProjectForm` is coupled to `SLOT_SIZE` in cloud-canvas-engine.ts, so widening
+it would have given the SPHERE a 1:1.67 card as a side effect of a wall change.
+Instead:
+
+```ts
+export type GridForm = ProjectForm | "tall";   // the wall's shapes
+grid?: { form?: GridForm }                      // tall lives here and nowhere else
+```
+
+TroxRide carries `form: "portrait"` for the globe and `grid.form: "tall"` for
+the wall. **The two modes disagree about its shape on purpose**, and each gets
+its own top-anchored crop: the globe's from the `CROPS` map in
+optimize-portfolio-images.mjs, the wall's from `TOP_ANCHORED` in
+build-portfolio-presets.mjs. A centred cut on a 4816px page lands around the
+testimonials and could belong to any site.
+
+### 24.3 A latent bug this surfaced
+
+`assignColumns` and the tile's own `aspectRatio` both read `project.form`
+directly, while only the expand read `grid.form ?? form`. Harmless while the
+override was unused — the moment `tall` landed, the wall would have BALANCED
+that project as a 0.767 portrait and RENDERED it as a 0.6 tall, leaving the
+masonry quietly unbalanced with no visible cause. All three now go through
+`wallForm()` in grid-spec.ts.
+
+### 24.4 The cap moved from the long side to the WIDTH
+
+`build-portfolio-presets.mjs` capped the longer side. For a 1440×4816 page that
+yields **418px across** — narrower than the column it has to fill.
+
+Width is the axis the layout constrains (a 380px column, an 86vw panel) and the
+axis `sizes` describes, so it is the one that decides whether a tile looks
+sharp. For every non-tall tile the two rules agree exactly — none is tall enough
+after cropping for height to bind — so this was a **no-op on the existing 24**
+and the correct rule for what is arriving. Verified: all 24 headroom figures are
+unchanged.
+
+Output: grid `900×1500` (0.600, 58K), full `1400×4682` (0.299, 214K).
+
+### 24.5 Fitting is the wrong rule past a point — the scrolling panel
+
+The two-stage expand (§23) fits the true aspect into `min(86vw, 78vh × aspect)`.
+At 0.299 on a 1512×982 screen that computes to a **229px-wide sliver** — a
+reveal that reveals nothing.
+
+So past a point the panel stops shrinking to fit and starts scrolling:
+
+```
+                    fitting                     scrolling
+target box    min(86vw, 78vh×aspect)      min(86vw, 1040) × 78vh
+chosen by     the decoded aspect          the authored wall form
+```
+
+**Keyed on `wallForm === "tall"`, not on the decoded aspect.** `tall` IS the
+declaration that a project is full-length, so the answer is known at click time,
+before a pixel of the full file arrives, and the panel never changes its mind
+about what kind of panel it is halfway through the flight.
+
+Measured: stage 1 `460×766` (the tile's 0.6 box) → stage 2 `1040×766`, sheet
+3478px tall, scrollable.
+
+**Continuity comes for free**, and this is why both crops are top-anchored: the
+sheet is the full design at the panel's width, clipped, top-aligned. At stage 1
+the panel IS the tile's 0.6 box, so the clipped sheet is pixel-for-pixel the
+tile that was clicked — the two presets are the same source cut at the same
+corner. Nothing cross-fades; the panel just gets bigger, then scrolls.
+
+### 24.6 Two details that would have broken it
+
+**`data-lenis-prevent` is load-bearing.** The page's smooth scroll is one global
+Lenis instance that swallows wheel events before the browser sees them; without
+the attribute the wheel over an open panel scrolls the PAGE behind it and the
+design never moves. Verified against the installed Lenis (1.3.23,
+`lenis.mjs:580`): it walks `event.composedPath()` for exactly this attribute and
+bails out, letting the native scroll through.
+
+**The close rewinds as it folds.** The tile shows the TOP of the design, so a
+panel closed halfway down a landing page would fly home showing the
+testimonials and land on a tile showing the hero — one object visibly becoming
+another. `scrollTop` is tweened back to 0 over the same `FLIGHT` as the fold,
+through a proxy object rather than directly (it is not a CSS property, and a
+proxy avoids registering ScrollToPlugin for one tween).
+
+Verified through a close from `scrollTop: 1400`: the box folds 1.35 → 1.25 →
+0.87 → 0.64 → 0.60 while the scroll rewinds 1400 → 1195 → 500 → 67 → 1, landing
+on 348×580 — the tile's exact box.
+
+### 24.7 State after this
+
+25 projects. Filters: all 4 columns / web 3 (11 projects) / brandings 2 (6) /
+misc 2 (8). Globe canvas alive with the 25th. Drift unchanged at 30/26/34/28.
+
+Adding the next full-length design is now genuinely a data change: drop the PNG
+in `portfolio-src/`, add the registry entry with `form` + `grid.form: "tall"`,
+add a `CROPS` entry so the globe crops from the top, and run both scripts.
+
+---
+
+## 25. D2 revised — grid is the default everywhere (2026-07-28)
+
+**Was:** globe on desktop, grid on a phone. **Now:** grid on both; the globe is
+what you opt into. The switcher is unchanged and still offers both.
+
+```ts
+const mode = chosen ?? "grid";        // was: chosen ?? (isSmallScreen ? "grid" : "globe")
+```
+
+§2's argument for the wall — *it shows the whole body of work at a glance and
+asks nothing of the visitor* — was written as a mobile argument. It is not one.
+A first-time visitor on any device is better served seeing 25 projects than one
+spinning object showing four legibly, and the globe is the more rewarding thing
+to find second. So the split by device was doing less work than it looked.
+
+### 25.1 Two problems it removes for free
+
+**A resize can no longer swap modes under you.** The old default read the
+breakpoint on every render, so dragging a desktop window past 768px flipped a
+visitor who had never touched the switcher from the globe to the wall
+mid-look — tearing down a canvas and building a marquee as a side effect of a
+window drag. `chosen` protected anyone who had picked; nobody else. The default
+no longer reads the breakpoint at all.
+
+**SSR and the client now agree on every device.** The old rule was strictly
+worse on a phone than it looked: `useIsSmallScreen`'s server snapshot is
+`false`, so a phone rendered the GLOBE on the server, hydrated, discovered it
+was mobile, and swapped to the wall — mounting and immediately disposing a 2D
+canvas on precisely the devices least able to afford it. Grid being the default
+everywhere means the server and the client pick the same mode, always.
+
+### 25.2 What still reads the breakpoint
+
+`useIsSmallScreen` stays, feeding the wall's COLUMN COUNT (D3, 4 vs 2). Being
+wrong for one render there re-deals the columns and rebuilds the marquee, which
+is cheap and self-correcting — no canvas is involved. The hook's doc comment now
+says so, because "decides the default mode" was its stated purpose and is no
+longer true.
+
+### 25.3 What this does NOT change
+
+- The globe is not deprecated. It is one tap away and keeps its tuned preset.
+- The mount contract is untouched: still mutually exclusive, still never both
+  with one hidden by CSS (§5).
+- The filter state is still shared across modes.
+- D3's column counts, D4's per-column pause, everything from §22 onward: all
+  unchanged. This is a one-line change to which branch is picked first.
