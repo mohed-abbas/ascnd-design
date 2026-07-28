@@ -58,6 +58,15 @@ const CROPS = {
   // 0.85 takes that loss off the top instead: full lockup and URL survive, the
   // orange arc still reads, and no one's head gets cropped.
   "emerald-poster-help": { form: "portrait", focus: 0.85 },
+  // A 1440×4816 full-length landing page (0.299) in the portrait slot. A
+  // centred cut keeps 1878px out of 4816 — a band somewhere around the
+  // testimonials that could belong to any site. focus 0 keeps the TOP, so the
+  // sphere shows the hero and the tile is recognisably TroxRide.
+  //
+  // The WALL crops the same source differently again (0.6, also top-anchored)
+  // via scripts/build-portfolio-presets.mjs — see the `GridForm` note in
+  // cloud-canvas-data.ts for why the two modes are allowed to disagree.
+  "troxride-landing": { form: "portrait", focus: 0 },
 };
 
 const dry = process.argv.includes("--dry");
