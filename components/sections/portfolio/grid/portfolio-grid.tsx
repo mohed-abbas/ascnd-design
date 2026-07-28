@@ -1,5 +1,9 @@
 import Image from "next/image";
-import { cloudProjects, type CloudFilter } from "../cloud-canvas/cloud-canvas-data";
+import {
+  cloudProjects,
+  gridSrc,
+  type CloudFilter,
+} from "../cloud-canvas/cloud-canvas-data";
 import GridExpand from "./grid-expand";
 import GridMarquee from "./grid-marquee";
 import {
@@ -9,6 +13,7 @@ import {
   GRID_ASPECT,
   MAT_RATIO,
   RADIUS_RATIO,
+  wallForm,
 } from "./grid-spec";
 
 /**
@@ -22,12 +27,14 @@ import {
  * decode, alt text and crawlability, all of which the canvas structurally
  * cannot have.
  *
- * ⚠️ STEPS 1–3 OF 7 (§13). Layout, drift and hover pause are in; the drift and
- * the pause live in grid-marquee.tsx, a render-nothing sibling. Still to come:
- * mask tuning against the real thing (step 4), the Flip expand (step 5), the
- * grid image preset (step 6) and the full-length tiles (step 7). Tiles are
- * therefore NOT interactive yet: there is nothing to click until the expand
- * exists, so they are figures with alt text rather than buttons that do nothing.
+ * Layout is here; the drift and the hover pause live in grid-marquee.tsx and the
+ * click-to-expand in grid-expand.tsx, both render-nothing siblings. Tiles ARE
+ * interactive — see the note on the <button> below for why the click is caught
+ * natively rather than with an onClick.
+ *
+ * Only D8's full-length `tall` slot remains unbuilt, and it is blocked on
+ * artwork: every export in portfolio-src/ is 0.667 or wider, so there is no
+ * long-form design to put in a taller tile yet (§16.1, D11).
  *
  * LAYOUT (D9 — masonry, not a uniform grid)
  * Every column is the same WIDTH; every tile's HEIGHT is its own authored aspect
@@ -43,11 +50,14 @@ import {
  * (grid-spec.ts explains why the column, not the tile, is the base), so it
  * scales fluidly with the layout and needs no measurement in JS.
  *
- * IMAGES — public/portfolio/cloud/*.webp, the globe's own set. They are already
- * cropped to the three slot aspects and capped at 900px, which is exactly what
- * this wall wants; the dedicated grid preset (§9) only becomes worth its bytes
- * once tile sizes diverge from the globe's. Unlike the canvas, this gets real
- * `sizes` — a phone pulls phone-width sources instead of the one global 900px.
+ * IMAGES — public/portfolio/grid/*.webp, the wall's OWN preset (§9), resolved by
+ * `gridSrc()`. Not the globe's set: those are capped at 900px on the long side
+ * and are NOT pre-cut to the slot aspects, so cover-cropping one into a portrait
+ * tile discarded resolution twice over — §18.2 measured 8 of 24 tiles as
+ * source-limited that way. This preset crops to the slot aspect FIRST, at full
+ * source resolution, then caps; the worst tile improves 0.68× → 0.78× and the
+ * 16:9 web shots 1.05× → 1.18×. Unlike the canvas, this also gets real `sizes` —
+ * a phone pulls phone-width sources instead of the one global 900px.
  */
 export default function PortfolioGrid({
   filter,
@@ -151,7 +161,7 @@ export default function PortfolioGrid({
                 aria-haspopup="dialog"
                 aria-label={`Open ${project.name}`}
                 className="relative block w-full cursor-pointer"
-                style={{ aspectRatio: GRID_ASPECT[project.form] }}
+                style={{ aspectRatio: GRID_ASPECT[wallForm(project)] }}
               >
                 {/* Glass mat — an OUTER border (negative inset) so the shot
                     keeps its full box and only the ring shows as glass. Sits
@@ -175,7 +185,7 @@ export default function PortfolioGrid({
                   style={{ borderRadius: "var(--tile-radius)" }}
                 >
                   <Image
-                    src={project.src}
+                    src={gridSrc(project)}
                     alt={project.name}
                     fill
                     // Real responsive sources — the thing the canvas could never
