@@ -10,15 +10,41 @@ import {
   type CloudProject,
 } from "../cloud-canvas/cloud-canvas-data";
 import { setFrozen } from "./grid-freeze";
-import { GRID_ASPECT, MAT_RATIO, RADIUS_RATIO, wallForm } from "./grid-spec";
+import {
+  GRID_ASPECT,
+  GRID_TILE_SIZES,
+  PANEL_MAT_RATIO,
+  RADIUS_RATIO,
+  wallForm,
+} from "./grid-spec";
 
-/** Flight time each way. Long enough to read as one object moving, not a cut. */
-const FLIGHT = 0.62;
-const EASE_OPEN = "power3.inOut";
+/**
+ * Flight time each way. Long enough to read as one object moving, not a cut.
+ *
+ * Was 0.62 with `power3.inOut`, and the two together were the problem: a cubic
+ * in-out spends most of its budget in a fast middle, so a short one arrives
+ * before the eye has finished following it — quick rather than composed, which
+ * is not what the rest of this page does. Lengthened AND softened, because
+ * either alone would have missed: 0.62 on power2 is still brisk, and 0.85 on
+ * power3 still snaps through the middle.
+ */
+const FLIGHT = 0.85;
+/**
+ * Quadratic in-out. Leaves the wall from rest and settles into the centre from
+ * rest, with no sprint between — the calmest of the standard curves that still
+ * has a direction. (An `out` ease would start at maximum velocity, which reads
+ * as the tile being flung rather than lifted.)
+ */
+const EASE_OPEN = "power2.inOut";
 /** How far the wall recedes behind an open tile. */
 const WALL_DIM = 0.3;
-/** The unfolding of the crop into the whole design. */
-const MORPH = 0.5;
+/**
+ * The unfolding of the crop into the whole design. Lengthened with the flight,
+ * and by less than it: the flight is where the eye is tracking an object across
+ * the screen, while this is a frame growing in place, which needs less time to
+ * read as deliberate. Open, end to end, is FLIGHT + MORPH ≈ 1.5s.
+ */
+const MORPH = 0.65;
 const EASE_MORPH = "power2.inOut";
 /** How much of the viewport an open panel may take, on each axis. */
 const PANEL_VW = 0.86;
@@ -186,14 +212,37 @@ export default function GridExpand({ projects }: { projects: CloudProject[] }) {
   /**
    * The mat is a fraction of the tile edge everywhere else (grid-spec.ts); the
    * panel is not inside a column container, so its `cqw` source doesn't exist
-   * here. Same fractions, resolved against the panel's own short edge — which
-   * the morph changes, so this is re-applied as it runs.
+   * here. Same recipe, resolved against the panel's own short edge — which the
+   * morph changes, so this is re-applied as it runs.
+   *
+   * `scale` is the flight's CURRENT transform scale, and dividing it back out
+   * is what keeps the frame's weight constant while the panel flies.
+   *
+   * The panel is scaled from ~0.29 to 1 on the way out, and a mat set once at
+   * the landed size therefore RENDERED at a third of its value on launch and
+   * thickened all the way in — the tile left the wall wearing a thinner frame
+   * than the tile it had just been. A mat is a frame weight, not a feature of
+   * the picture: it should be the same number of screen pixels at every moment
+   * of the flight, and at launch that number should be the wall's.
+   *
+   * The RADIUS is deliberately NOT compensated. A corner belongs to the shape,
+   * so it is supposed to grow with the panel; holding the open panel's ~41px
+   * corner through a launch at tile size would round a 380px box into a pill.
    */
-  const applyMat = useCallback((panel: HTMLElement) => {
+  const applyMat = useCallback((panel: HTMLElement, scale = 1) => {
     const base = Math.min(panel.offsetWidth, panel.offsetHeight);
-    panel.style.setProperty("--tile-mat", `${MAT_RATIO * base}px`);
+    panel.style.setProperty(
+      "--tile-mat",
+      `${(PANEL_MAT_RATIO * base) / scale}px`,
+    );
     panel.style.setProperty("--tile-radius", `${RADIUS_RATIO * base}px`);
   }, []);
+
+  /** The panel's live transform scale, for the mat compensation above. */
+  const panelScale = useCallback(
+    (panel: HTMLElement) => Number(gsap.getProperty(panel, "scale")) || 1,
+    [],
+  );
 
   /** Stage 2 — unfold the crop into the whole design. */
   const morph = useCallback(() => {
@@ -247,7 +296,28 @@ export default function GridExpand({ projects }: { projects: CloudProject[] }) {
       origin.style.opacity = "";
       // Focus returns to where the pointer/keyboard left off — the tile the
       // visitor opened, not the top of the document.
-      if (origin.isConnected) origin.focus?.({ preventScroll: true });
+      //
+      // ...but NOT to the origin itself when the origin is a marquee CLONE,
+      // which is most of the time (grid-marquee.tsx clones each group two or
+      // three times over, so most tiles on screen are copies). Clones carry
+      // `aria-hidden` and `tabIndex = -1` precisely so a screen reader doesn't
+      // read the portfolio three times, and moving focus into an aria-hidden
+      // subtree is a contradiction the browser refuses — Chrome logs "Blocked
+      // aria-hidden on an element because its descendant retained focus" and
+      // the keyboard is left stranded on the body.
+      //
+      // The ORIGINAL tile for the same project is the honest destination: same
+      // project, same button, and the one copy that is actually in the tab
+      // order. preventScroll because it may be a loop away from where the
+      // clone was, and the page must not jump to it.
+      const homeKey = origin.dataset.tileKey;
+      const home =
+        (origin.closest("[data-grid-clone]") && homeKey
+          ? document.querySelector<HTMLElement>(
+              `[data-grid-group]:not([data-grid-clone]) [data-tile-key="${CSS.escape(homeKey)}"]`,
+            )
+          : origin) ?? origin;
+      if (home.isConnected) home.focus?.({ preventScroll: true });
       originRef.current = null;
       setFrozen(false);
       closing.current = false;
@@ -320,12 +390,14 @@ export default function GridExpand({ projects }: { projects: CloudProject[] }) {
     // translation below is unaffected by the fold running alongside it, and the
     // two tweens cannot fight. Sequencing them instead would make every close
     // take FLIGHT + MORPH and read as a stall before the tile goes home.
+    // The fold and the fly run together, so the mat has to answer to BOTH: the
+    // base is shrinking under it while the scale is shrinking around it.
     gsap.to(panel, {
       width: folded.width,
       height: folded.height,
       duration: FLIGHT,
       ease: EASE_OPEN,
-      onUpdate: () => applyMat(panel),
+      onUpdate: () => applyMat(panel, panelScale(panel)),
     });
     gsap.to(panel, {
       x: to.left + to.width / 2 - (from.left + from.width / 2),
@@ -335,7 +407,7 @@ export default function GridExpand({ projects }: { projects: CloudProject[] }) {
       ease: EASE_OPEN,
       onComplete: land,
     });
-  }, [applyMat, sizeFor]);
+  }, [applyMat, panelScale, sizeFor]);
 
   // Unmount while a tile is open — a mode switch, or the section leaving the
   // tree. Without this the wall stays at WALL_DIM opacity and, worse, stays
@@ -436,6 +508,10 @@ export default function GridExpand({ projects }: { projects: CloudProject[] }) {
     const from = origin.getBoundingClientRect();
     const to = panel.getBoundingClientRect();
     const scale = from.width / to.width;
+    // Compensate the mat for the launch scale BEFORE the flight's from-state is
+    // applied. The tween's onUpdate does not fire until the next tick, so
+    // without this the panel would paint one frame wearing a third of its mat.
+    applyMat(panel, scale);
 
     // Hide the tile the panel is standing in for, or it shows through the
     // faded wall as a duplicate.
@@ -467,6 +543,7 @@ export default function GridExpand({ projects }: { projects: CloudProject[] }) {
         scale: 1,
         duration: FLIGHT,
         ease: EASE_OPEN,
+        onUpdate: () => applyMat(panel, panelScale(panel)),
         onComplete: () => {
           landed.current = true;
           morph();
@@ -490,7 +567,7 @@ export default function GridExpand({ projects }: { projects: CloudProject[] }) {
       setSheetAspect(cached);
       gsap.set(img, { opacity: 1 });
     }
-  }, [project, sizeFor, applyMat, morph]);
+  }, [project, sizeFor, applyMat, panelScale, morph]);
 
   /**
    * The uncropped file has decoded. Both branches need the same three things —
@@ -522,7 +599,11 @@ export default function GridExpand({ projects }: { projects: CloudProject[] }) {
       // TRAP (tab can still reach the controls behind); a trap belongs with the
       // deferred lightbox variant, which is when this becomes a real modal.
       tabIndex={-1}
-      className="fixed inset-0 z-[120] flex flex-col items-center justify-center gap-[18px] outline-none"
+      // The panel is the ONLY thing in here — no caption, no chrome (see the
+      // note where the name used to be, below the panel). So this is a plain
+      // centring box: the panel's centre is the viewport's centre exactly,
+      // which is also what the close's fold-and-fly assumes.
+      className="fixed inset-0 z-[120] flex items-center justify-center outline-none"
     >
       {/* Click-out. A transparent catcher rather than a tinted sheet: the wall
           itself does the dimming (by receding, not darkening), so this only
@@ -550,13 +631,22 @@ export default function GridExpand({ projects }: { projects: CloudProject[] }) {
           style={{ borderRadius: "var(--tile-radius)" }}
         >
           {/* The wall's cropped tile, already decoded — it paints on the first
-              frame so the flight never carries an empty white box. */}
+              frame so the flight never carries an empty white box.
+              ⚠️ GRID_TILE_SIZES, not "86vw", and that is the entire point of
+              this layer. `sizes` decides which srcset candidate is fetched, so
+              asking for 86vw here requested a DIFFERENT file from the one the
+              wall had already downloaded: measured at 553ms and 15.8KB of fresh
+              network, arriving AFTER the uncropped shot stacked on top of it,
+              with the white backing plate visible for the whole wait. Saying
+              what the tile says makes this a memory-cache hit. It is upscaled
+              at panel size, which is correct — it is a placeholder for the
+              moment before the real file lands, and soft beats blank. */}
           <Image
             src={gridSrc(project)}
             alt=""
             aria-hidden
             fill
-            sizes="86vw"
+            sizes={GRID_TILE_SIZES}
             className="object-cover"
           />
           {/* The whole design. Identical to the layer beneath at stage 1 (same
@@ -619,13 +709,17 @@ export default function GridExpand({ projects }: { projects: CloudProject[] }) {
           )}
         </div>
       </div>
-      {/* The name, which the wall itself deliberately doesn't show — a tile
-          reads as work, a labelled tile reads as a catalogue. Full white
-          rather than white/80: it sits over the RECEDED wall, which is pale
-          sky plus washed-out tiles, and 80% on that is barely a shade. */}
-      <p className="relative text-[15px] lowercase text-white">
-        {project.name}
-      </p>
+      {/* NO CAPTION. The project's name used to sit here, under the panel.
+          It is gone on purpose: the wall already declines to label its tiles —
+          a tile reads as work, a labelled tile reads as a catalogue — and the
+          expand was contradicting that at the one moment the work is largest.
+          The design is the thing being shown; a name under it competes.
+
+          The name is NOT lost to assistive tech, which is why this can be a
+          purely visual removal: the dialog's `aria-label` is the project name
+          and the shot's `alt` is too, so a screen reader still announces which
+          project opened. Anything re-adding a visible caption should be a
+          deliberate decision, not a fix for a perceived a11y gap. */}
     </div>,
     document.body,
   );
