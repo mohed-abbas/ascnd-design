@@ -6,7 +6,7 @@
  * project list, so the wall a given filter produces is deterministic and can be
  * reasoned about (and later tested) without a browser.
  */
-import type { CloudProject, ProjectForm } from "../cloud-canvas/cloud-canvas-data";
+import type { CloudProject, GridForm } from "../cloud-canvas/cloud-canvas-data";
 
 /**
  * Tile aspect (width ÷ height) per authored form.
@@ -37,10 +37,33 @@ import type { CloudProject, ProjectForm } from "../cloud-canvas/cloud-canvas-dat
  * That 2:1 spread IS the masonry effect (§8.1). The wider `tall` form that
  * would push it to ~3:1 is deferred to D8/D11 — deliberately, not forgotten.
  */
-export const GRID_ASPECT: Record<ProjectForm, number> = {
+export const GRID_ASPECT: Record<GridForm, number> = {
   landscape: 164 / 104,
   square: 1,
   portrait: 112 / 146,
+  /**
+   * `tall` (D8) — the full-length slot, and the ONE aspect here with no
+   * counterpart on the globe (see `GridForm`).
+   *
+   * 0.6, and the ceiling is the whole argument (§16.1). The source designs are
+   * far taller — the first one in is 1440×4816, or 0.299 — and the temptation
+   * is to show them at their real proportion. That is a mistake in a MOVING
+   * wall, which is what separates this from Pinterest's static one:
+   *
+   *   at 0.6   a 380px column → 633px tall → ~21s to cross at 30px/s
+   *   at 0.5   a 380px column → 760px tall → ~25s   (Pinterest's own cap)
+   *   at 0.299 a 380px column → 1271px tall → ~42s, and TALLER THAN THE WALL
+   *
+   * A tile that outlives the wall it travels through stops reading as one item
+   * among many and becomes a column of its own, and at 42s a visitor never sees
+   * it leave. Height multiplied by motion is a cost a static grid never pays.
+   *
+   * So the wall shows a 0.6 CROP of the top — the hero, which is the part that
+   * identifies a landing page — and the whole design lives in the expand, which
+   * scrolls (grid-expand.tsx). That split is exactly what §8/§15.3 called for:
+   * "the long-form shot belongs in the EXPAND, not the wall".
+   */
+  tall: 0.6,
 };
 
 /** Ceiling on desktop columns (D3). */
@@ -77,6 +100,22 @@ export function columnCount(total: number, isMobile: boolean): number {
 }
 
 /**
+ * The shape a project takes IN THE WALL — `grid.form` when set, otherwise the
+ * globe's `form`.
+ *
+ * Every consumer of a tile's aspect must go through this, and the reason is a
+ * bug this replaced: `assignColumns` and the tile's own `aspectRatio` both read
+ * `project.form` directly while the expand read the override, so a project that
+ * used `grid.form` was BALANCED as one shape and RENDERED as another. Harmless
+ * while the override was unused; the moment `tall` landed it would have dealt
+ * the columns against a 0.767 tile and then drawn a 0.6 one, leaving the
+ * masonry visibly unbalanced with no obvious cause.
+ */
+export function wallForm(project: CloudProject): GridForm {
+  return project.grid?.form ?? project.form;
+}
+
+/**
  * Deal the projects into columns, shortest-column-first — classic masonry.
  *
  * Heights are compared in UNIT terms (a tile of width 1 is 1/aspect tall), so
@@ -107,7 +146,7 @@ export function assignColumns(
       if (heights[i] < heights[target]) target = i;
     }
     buckets[target].push(project);
-    heights[target] += 1 / GRID_ASPECT[project.form];
+    heights[target] += 1 / GRID_ASPECT[wallForm(project)];
   }
 
   return buckets;

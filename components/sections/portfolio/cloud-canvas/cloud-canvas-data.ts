@@ -28,6 +28,20 @@
 
 export type ProjectType = "web" | "branding" | "misc";
 export type ProjectForm = "landscape" | "square" | "portrait";
+/**
+ * The shapes the WALL can draw — the globe's three, plus `tall` (D8/D11).
+ *
+ * A separate type rather than a fourth `ProjectForm`, and this is the load-
+ * bearing part: `ProjectForm` is coupled to `SLOT_SIZE` in
+ * cloud-canvas-engine.ts, so widening it would give the SPHERE a tall slot too
+ * — a 1:1.67 card on a Fibonacci sphere, which is not what D8 asked for and
+ * would reshape a tuned formation as a side effect of a wall change.
+ *
+ * So a full-length design carries a normal `form` for the globe (the sphere
+ * cover-crops it like anything else) and `grid.form: "tall"` for the wall.
+ * The two modes disagree about that project's shape ON PURPOSE.
+ */
+export type GridForm = ProjectForm | "tall";
 /** A filter tab value: a project type, or "all" (the default tab). */
 export type CloudFilter = ProjectType | "all";
 
@@ -58,11 +72,13 @@ export interface CloudProject {
    */
   grid?: {
     /**
-     * Slot shape for the wall only; falls back to the top-level `form`. Still
-     * the same three shapes today — D11 holds the taller `tall` form back to
-     * D8, and this widens with `ProjectForm` when it lands.
+     * Slot shape for the wall only; falls back to the top-level `form`.
+     *
+     * `tall` (D8) lives here and NOWHERE else — see `GridForm` for why the
+     * globe must not learn about it. A project using it still needs a sane
+     * top-level `form` for the sphere.
      */
-    form?: ProjectForm;
+    form?: GridForm;
     /**
      * A different file for the wall, for when the globe's crop is the wrong
      * framing at wall size. Those belong under `public/portfolio/grid/` as
@@ -70,8 +86,20 @@ export interface CloudProject {
      * scripts/optimize-portfolio-images.mjs — that constant is hand-coupled to
      * the engine's FAST_MAX_SIDE, and raising it bills every globe visitor for
      * bytes they never see.
+     *
+     * ⚠️ OPTIONAL, AND NORMALLY ABSENT. `gridSrc()` below derives the wall's
+     * file from `src` by convention, because scripts/build-portfolio-presets.mjs
+     * emits one preset per project under the same slug — 24 hand-copied paths
+     * would be 24 chances to typo a filename that still type-checks. Set this
+     * only to point a tile at a file the convention would not find.
      */
     src?: string;
+    /**
+     * Likewise for the UNCROPPED shot the expand reveals (§15.3): the wall shows
+     * the slot crop, opening a tile shows the whole design. Derived by
+     * `fullSrc()` from `src`; set only to override.
+     */
+    full?: string;
     /**
      * Columns spanned. Reserved for D8; unused today. Every tile being span 1
      * is what lets the wall ship ONE `sizes` value per breakpoint (§8.1), so
@@ -91,6 +119,50 @@ export const PROJECT_FILTERS: { value: CloudFilter; label: string }[] = [
 ];
 
 const dir = "/portfolio/cloud";
+
+/**
+ * The wall's two image presets, both emitted by
+ * scripts/build-portfolio-presets.mjs from the uncropped exports in
+ * `portfolio-src/` (see that file's header for why they are built from the
+ * originals and not from `dir` above).
+ *
+ *   grid  — cropped to the tile's SLOT aspect before the size cap, so the wall
+ *           is not cropping an image that was already downscaled. Recovers the
+ *           resolution §18.2 measured as lost: the worst tile goes 0.68× → 0.78×
+ *           of the raster a 380px column needs at 2×, and the 16:9 web shots go
+ *           1.05× → 1.18×.
+ *   full  — UNCROPPED, for the expanded panel, which shows the whole design
+ *           rather than the wall's crop (§15.3).
+ *
+ * The globe keeps reading `src` (`/portfolio/cloud`) and is untouched by both.
+ */
+const gridDir = "/portfolio/grid";
+const fullDir = "/portfolio/full";
+
+/**
+ * Resolve a project's wall/expand file.
+ *
+ * Derived from `src` by slug rather than listed per entry: the preset script
+ * emits exactly one file per project under the same name, so the mapping is
+ * mechanical, and 24 literal paths in the registry would be 24 chances to point
+ * at a file that does not exist — a typo that still type-checks and only shows
+ * up as a broken tile. `grid.src` / `grid.full` remain as explicit overrides for
+ * the case the convention cannot express.
+ */
+function preset(project: CloudProject, into: string): string {
+  const slug = project.src.slice(project.src.lastIndexOf("/") + 1);
+  return `${into}/${slug}`;
+}
+
+/** The tile as the WALL draws it — slot-cropped. */
+export function gridSrc(project: CloudProject): string {
+  return project.grid?.src ?? preset(project, gridDir);
+}
+
+/** The whole design, for the expanded panel — uncropped. */
+export function fullSrc(project: CloudProject): string {
+  return project.grid?.full ?? preset(project, fullDir);
+}
 
 // Entries rotate web → branding → misc rather than sitting in per-type blocks:
 // registry order IS formation order, so a contiguous run would clump one type
@@ -119,6 +191,20 @@ export const cloudProjects: CloudProject[] = [
   { src: `${dir}/laptop-mockup.webp`, name: "laptop mockup", type: "misc", form: "portrait" },
   { src: `${dir}/tasktrox-webapp.webp`, name: "Tasktrox — web app", type: "web", form: "landscape" },
   { src: `${dir}/circle-mark.webp`, name: "circle mark", type: "branding", form: "square" },
+  // THE FIRST FULL-LENGTH DESIGN (D8) — 1440×4816, an aspect of 0.299.
+  //
+  // The two modes disagree about its shape on purpose. `form: "portrait"` is
+  // for the GLOBE, which has no tall slot and must not grow one (see
+  // `GridForm`); its cloud asset is cropped from the TOP by the CROPS entry in
+  // optimize-portfolio-images.mjs, so the sphere shows the hero rather than a
+  // centred slice of the testimonials. `grid.form: "tall"` gives the WALL its
+  // 0.6 slot — and 0.6 is a cap, not the real aspect: see GRID_ASPECT.tall for
+  // why a 0.299 tile would be taller than the wall it travels through.
+  //
+  // The whole 4816px page lives in the expand, which scrolls (§15.3, §24).
+  // Placed between a branding and a misc entry so the added `web` does not
+  // extend the run of them at the end of this list.
+  { src: `${dir}/troxride-landing.webp`, name: "TroxRide", type: "web", form: "portrait", grid: { form: "tall" } },
   // 4:3 source, PORTRAIT slot — the frame is landscape but its subject is a
   // vertical phone on black, so the landscape slot would spend half the tile on
   // empty background. Cropping to portrait fills it with the device.
