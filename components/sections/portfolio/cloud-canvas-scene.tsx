@@ -44,7 +44,12 @@ export default function CloudCanvasScene({
     // `min(cssW, cssH) × 0.45 × spread × zoom` (cloud-canvas-engine.ts), so a
     // canvas that grew with that padding would scale the sphere up by the same
     // amount and hand back exactly the clearance the padding bought.
-    <div className="absolute inset-0">
+    // data-portfolio-globe: the handle the section's mode transition fades
+    // (portfolio-swap.ts). It marks "the globe as it is mounted", which is why
+    // it sits on this wrapper and not inside the reusable view — the wall's
+    // counterpart is [data-portfolio-grid], and a mode swap animates whichever
+    // of the two the DOM currently has.
+    <div data-portfolio-globe className="absolute inset-0">
       {/* The edge fade lives IN the engine (config.edgeFade): tiles dissolve
           into the sky as they rise toward the header — the pills section's
           edge-mask device, but composited in-canvas. The old CSS mask-image on

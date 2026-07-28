@@ -6,11 +6,13 @@ import {
 } from "../cloud-canvas/cloud-canvas-data";
 import GridExpand from "./grid-expand";
 import GridMarquee from "./grid-marquee";
+import GridReveal from "./grid-reveal";
 import {
   assignColumns,
   columnCount,
   columnDrift,
   GRID_ASPECT,
+  GRID_TILE_SIZES,
   MAT_RATIO,
   RADIUS_RATIO,
   wallForm,
@@ -73,6 +75,11 @@ export default function PortfolioGrid({
       ? cloudProjects
       : cloudProjects.filter((p) => p.type === filter);
   const columns = assignColumns(projects, columnCount(projects.length, isMobile));
+  // The wall's identity: anything that changes it invalidates both the marquee's
+  // measured advances (its clones belong to the OLD wall) and the reveal's armed
+  // start values. One key, two consumers, so they can never disagree about what
+  // counts as a new wall.
+  const rebuildKey = `${filter}:${columns.length}`;
 
   return (
     // The wall is its OWN in-flow box BELOW the header, not a full-bleed layer
@@ -190,7 +197,10 @@ export default function PortfolioGrid({
                     fill
                     // Real responsive sources — the thing the canvas could never
                     // do (FAST_MAX_SIDE is one global 900px for every device).
-                    sizes="(max-width: 768px) 45vw, (max-width: 1600px) 23vw, 380px"
+                    // Shared with the expand's under-layer rather than written
+                    // out twice: two `sizes` for the same file means two srcset
+                    // picks, two URLs and two downloads. See GRID_TILE_SIZES.
+                    sizes={GRID_TILE_SIZES}
                     className="object-cover"
                   />
                 </div>
@@ -207,7 +217,14 @@ export default function PortfolioGrid({
           attributes above and animates the tracks (steps 2–3). Keyed on the
           wall's identity so it rebuilds when the filter or the breakpoint
           changes the columns out from under it. */}
-      <GridMarquee rebuildKey={`${filter}:${columns.length}`} />
+      <GridMarquee rebuildKey={rebuildKey} />
+
+      {/* The entrance — on load, and again on the far side of every filter
+          swap (portfolio-swap.ts plays the old wall OUT, this plays the new one
+          IN). Renders nothing. After the marquee on purpose: the marquee
+          measures group heights to size its clone count, and doing that before
+          anything is armed hidden keeps the two passes independent. */}
+      <GridReveal rebuildKey={rebuildKey} />
 
       {/* Click-to-expand (step 5). Renders nothing until a tile is opened, then
           portals a centred panel to <body>. It takes the FILTERED list because

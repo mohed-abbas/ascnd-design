@@ -43,6 +43,8 @@
  * (No "see all work" button: the section is the whole body of work.)
  */
 import {
+  useEffect,
+  useLayoutEffect,
   useState,
   useSyncExternalStore,
   type ReactElement,
@@ -56,6 +58,17 @@ import {
   type CloudFilter,
 } from "./cloud-canvas/cloud-canvas-data";
 import PortfolioGrid from "./grid/portfolio-grid";
+import {
+  enterScene,
+  exitMode,
+  exitWall,
+  restoreMode,
+  restoreWall,
+  useStagedSwap,
+} from "./portfolio-swap";
+
+const useIsomorphicLayoutEffect =
+  typeof window !== "undefined" ? useLayoutEffect : useEffect;
 
 /** The two display modes. See docs/portfolio-grid-mode.md. */
 type PortfolioMode = "globe" | "grid";
@@ -91,10 +104,13 @@ function subscribeSmallScreen(callback: () => void) {
 }
 
 /**
- * Is this a phone-width screen? Feeds the wall's COLUMN COUNT (D3).
+ * Is this a phone-width screen? Two consumers:
  *
- * It no longer picks the mode — grid is the default on every device since
- * 2026-07-28 (see the note at the `mode` line below).
+ *  • the wall's COLUMN COUNT (D3, 4 vs 2)
+ *  • the globe's AVAILABILITY — it is desktop-only, so below 768px `mode` is
+ *    pinned to grid. Note the shape of that: it is a ceiling on what can be
+ *    picked, not the default (grid has been the default on every device since
+ *    2026-07-28). See the note at the `mode` line below.
  *
  * useSyncExternalStore with a `false` SERVER snapshot, the same idiom
  * cloud-layer.tsx uses for its device gate: SSR and the hydration render both
@@ -137,9 +153,54 @@ export default function Portfolio() {
   // it just no longer decides the mode.
   const isSmallScreen = useIsSmallScreen();
   const [chosen, setChosen] = useState<PortfolioMode | null>(null);
-  const mode: PortfolioMode = chosen ?? "grid";
+  // THE GLOBE IS DESKTOP-ONLY (2026-07-28). Below 768px the switcher is not
+  // offered at all (see `max-md:hidden` on the mode group), so `grid` is not a
+  // default there — it is the only mode.
+  //
+  // Yes, this puts the breakpoint back into `mode`, which §25.1 of the record
+  // took out. The distinction is that it is now a CEILING rather than a default:
+  // it can only ever move someone TO grid, never away from it, and only because
+  // the globe is not on offer at that width. The bug §25.1 removed was a
+  // visitor who had chosen NOTHING being flipped by a window drag; a visitor who
+  // chose the globe on a desktop and then narrows past 768px is being moved off
+  // a mode that no longer exists for them, and `chosen` is kept so widening
+  // again gives it straight back.
+  //
+  // Server-side this changes nothing: the snapshot is `false`, and a non-mobile
+  // render already resolved to `chosen ?? "grid"` = "grid" on first paint.
+  const mode: PortfolioMode = isSmallScreen ? "grid" : (chosen ?? "grid");
   const { groupRef: modeGroupRef, pillRef: modePillRef } =
     useSlidingHighlight(mode);
+
+  // ── THE STAGED HALF OF THE STATE (portfolio-swap.ts) ──
+  //
+  // `filter` and `mode` above are the CONTROLS: they commit the instant they
+  // are clicked, which is what drives the pill, the highlight and aria-pressed.
+  // `activeFilter` and `activeMode` are the CONTENT: they lag by exactly one
+  // exit animation, so the outgoing wall (or canvas) gets to leave before the
+  // incoming one arrives. Everything below the header renders the ACTIVE pair;
+  // everything in the header renders the control pair. Mixing the two up is the
+  // one way to break this — a control that waits reads as an unresponsive
+  // button, and content that doesn't wait is the abrupt cut being fixed.
+  //
+  // A filter change only stages in GRID mode. The globe already animates its
+  // own: setFilter re-forms the sphere toward new targets and evaporates the
+  // tiles that dropped out (cloud-canvas-engine.ts), so fading the canvas out
+  // first would hide the very transition it has.
+  const activeMode = useStagedSwap(mode, exitMode, restoreMode);
+  const activeFilter = useStagedSwap(
+    filter,
+    () => (activeMode === "grid" ? exitWall() : null),
+    restoreWall,
+  );
+
+  // The globe's arrival. The wall brings its own (grid-reveal.tsx), so this is
+  // deliberately one-sided rather than a symmetric container fade — see the
+  // SCENE_ENTER note in portfolio-swap.ts.
+  useIsomorphicLayoutEffect(() => {
+    if (activeMode !== "globe") return;
+    return enterScene();
+  }, [activeMode]);
 
   return (
     // ASYMMETRIC padding, and the only section that can't just take `py-section`
@@ -199,9 +260,13 @@ export default function Portfolio() {
           GRID_BAND is the one number to turn. Everything downstream is
           derived — the wall takes the remainder, the mask's fades stay 12% of
           it, and grid-marquee.tsx re-measures its clone count on the resize. */}
+      {/* activeMode, NOT mode: the band must not resize until the content it is
+          sizing for is actually the content on screen. Reading the control here
+          would snap the band from 100dvh to 130dvh under a globe that is still
+          mid-fade, and the page below would jump before anything had changed. */}
       <div
         className={`relative flex w-full flex-col ${
-          mode === "grid"
+          activeMode === "grid"
             ? // svh on mobile for the same URL-bar reason as the globe: a dvh
               // band would resize mid-scroll and rebuild the whole marquee.
               "h-[130dvh] max-md:h-[124svh]"
@@ -224,8 +289,14 @@ export default function Portfolio() {
               drawing it. The grid has no canvas, so here it shows.
               Keep the words in sync with config.coreLabel. */}
           <h2
+            // The handle the transitions use: grid-reveal.tsx fades it up with
+            // the wall it belongs to, and portfolio-swap.ts fades it out with
+            // the mode it is leaving. Always present, in both modes — while the
+            // globe owns it the element is sr-only and any tween on it is
+            // invisible, which is simpler than conditionally tagging it.
+            data-portfolio-heading
             className={
-              mode === "grid"
+              activeMode === "grid"
                 ? // pointer-events-auto: the header row is none (so it can't
                   // block the globe's drag), which would also make this text
                   // unselectable. The heading is not interactive, but it should
@@ -289,12 +360,27 @@ export default function Portfolio() {
                 more segments in the filter pill: these are orthogonal axes (what
                 you're looking at vs. how it's arranged), and merging them would
                 imply picking "grid" deselects "brandings". The filter state is
-                shared across both modes for exactly that reason. */}
+                shared across both modes for exactly that reason.
+
+                ⚠️ DESKTOP ONLY. `max-md:hidden` (display:none) takes the whole
+                control out below 768px — out of the tab order and out of the
+                accessibility tree, not merely invisible — because the globe is
+                not offered on a phone. A one-option segmented control would be
+                the alternative, and it is just noise.
+
+                CSS rather than an unmount, for two reasons. It applies on the
+                FIRST PAINT: `useIsSmallScreen`'s server snapshot is `false`, so
+                a JS-gated unmount would render the switcher on the server and
+                pull it back after hydration — a visible flash on exactly the
+                device that is never allowed to use it. And keeping the group
+                mounted keeps `useSlidingHighlight`'s geometry alive, so a
+                desktop visitor who drags past the breakpoint and back doesn't
+                get a pill sliding in from the corner on the way out. */}
             <div
               ref={modeGroupRef}
               role="group"
               aria-label="Choose how the work is displayed"
-              className="pointer-events-auto relative flex items-center gap-[2px] rounded-full border border-white/30 bg-white/10 p-[4px] shadow-[inset_0_0_18px_0_rgba(255,255,255,0.25)] backdrop-blur-[10px]"
+              className="pointer-events-auto relative flex items-center gap-[2px] rounded-full border border-white/30 bg-white/10 p-[4px] shadow-[inset_0_0_18px_0_rgba(255,255,255,0.25)] backdrop-blur-[10px] max-md:hidden"
             >
               <span
                 ref={modePillRef}
@@ -335,10 +421,14 @@ export default function Portfolio() {
             to stop it dead: CloudCanvasView's cleanup removes its ticker
             function, disposes the engine and disconnects every observer.
             Both read the SAME `filter` — switching modes never resets the tab. */}
-        {mode === "globe" ? (
-          <CloudCanvasScene filter={filter} />
+        {/* activeMode / activeFilter — the STAGED pair (see the note where they
+            are declared). The swap still happens in one frame, exactly as
+            before; what changed is only WHEN that frame is, which is now after
+            the outgoing side has animated away. */}
+        {activeMode === "globe" ? (
+          <CloudCanvasScene filter={activeFilter} />
         ) : (
-          <PortfolioGrid filter={filter} isMobile={isSmallScreen} />
+          <PortfolioGrid filter={activeFilter} isMobile={isSmallScreen} />
         )}
       </div>
     </section>
