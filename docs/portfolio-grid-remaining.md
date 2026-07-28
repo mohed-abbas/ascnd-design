@@ -20,8 +20,10 @@ components/sections/portfolio/
     grid-spec.ts           aspects, column count, assignment, drift, mat ratios
     portfolio-grid.tsx     the wall: columns → track → group → tiles
     grid-marquee.tsx       renders null; drift + per-column hover pause
+    grid-reveal.tsx        renders null; the wall's entrance (load + every swap)
     grid-expand.tsx        renders null until a tile opens; two-stage flight + panel
     grid-freeze.ts         the one contract between marquee and expand
+  portfolio-swap.ts        staged state: exit → commit → enter, for filter and mode
 scripts/build-portfolio-presets.mjs    the wall's two image presets
 public/portfolio/grid/     slot-cropped tiles      (committed)
 public/portfolio/full/     uncropped shots         (committed)
@@ -35,6 +37,14 @@ verification table is ADR §22.1. No layout constant needed changing.
 on a phone (§25). The globe is now the mode you opt into. One line in
 `portfolio.tsx`; it also removed a resize-swaps-your-mode bug and a
 canvas-mounted-then-disposed-on-hydration cost on phones.
+
+**And revised again the same day: the globe is DESKTOP-ONLY** (§28.1). Below
+768px the switcher is `display:none` and `mode` is pinned to grid. That is a
+ceiling on what can be picked, not a default — it can only move someone toward
+grid, and `chosen` survives so widening gives the globe back.
+
+**The expand has no caption** (§28.3). The project name under the open panel is
+gone; `aria-label` + `alt` still carry it for screen readers.
 
 Two decisions the ADR had left open are now closed:
 
@@ -95,6 +105,10 @@ in `grid-marquee.tsx` except where noted:
 
 - **`prefers-reduced-motion`** → build the wall, skip the tweens entirely. Mask
   and expand stay. `logos-marquee.tsx` shows the house shape for the bail-out.
+  As of the transitions pass (§26) this is FOUR things to bail out of, not one:
+  the drift, the entrance, the two exits. The three new ones are one-shots that
+  can simply not play — leave the content at its resting state and commit the
+  swap immediately (`useStagedSwap` already has that path: return `null`).
 - **No-JS / pre-hydration resting state** — the wall is server-rendered and only
   the drift is JS, so this is mostly confirming it reads as deliberate.
 - **Tier knobs** — `lib/perf/tiers.ts` has the registry row and reads NO knob,
@@ -152,6 +166,38 @@ collected here so they are not rediscovered the hard way.
 15. **The preset cap is on WIDTH, not the longer side.** Width is what the
     layout constrains and what `sizes` describes; a long-side cap turns a
     1440×4816 page into a 418px-wide file. (§24.4)
+16. **The section's state is SPLIT: controls commit instantly, content lags by
+    one exit animation.** Header reads `filter`/`mode`, everything below reads
+    `activeFilter`/`activeMode` — including the band's height. Mixing them up
+    gives you either an unresponsive button or the abrupt cut back. (§26.1)
+17. **A filter change in GLOBE mode must NOT be staged.** The engine re-forms
+    the sphere itself; fading the canvas out first hides the transition it
+    already has. That is what `exit` returning `null` is for. (§26.2)
+18. **Do NOT tween the band's height on a mode swap.** The wall is `flex-1`
+    inside it, so every frame fires the marquee's ResizeObserver and a full
+    rebuild. The 295px jump is also invisible — the switcher is only reachable
+    when the band's bottom is off-screen. (§26.8)
+19. **Two elements showing the same file must declare the same `sizes`.**
+    next/image picks a srcset candidate from it, so the expand's under-layer
+    asking for `86vw` while the tile asked for `380px` made the "already
+    downloaded" layer a 553ms cold fetch — and the panel's white backing plate
+    was visible for all of it. That is `GRID_TILE_SIZES`. (§27.1)
+20. **The mat is a FRAME WEIGHT, not a feature of the picture.** It gets its own
+    ratio on the panel (`PANEL_MAT_RATIO`), and it is divided back out of the
+    flight's scale so it holds one thickness from the wall to the centre. The
+    RADIUS is the opposite and must NOT be compensated — it belongs to the
+    shape. (§27.3)
+21. **The expand's origin is usually a CLONE, and that has now caused three
+    separate bugs** — the click (§19.1), the detached origin (§21) and focus
+    return into an `aria-hidden` subtree (§27.4). Treat any code that handles
+    the origin as an ordinary element as wrong until checked.
+22. **The mode switcher is hidden with CSS, NOT unmounted.** A JS-gated unmount
+    would flash it on mobile (the server snapshot is `false`) and would strand
+    `useSlidingHighlight`'s `placed` ref on a destroyed pill, so the next
+    desktop render slides it in from the corner. (§28.2)
+23. **The expand's caption removal is visual only.** The name still reaches
+    assistive tech through the dialog's `aria-label` and the shot's `alt` —
+    don't "restore it for a11y". (§28.3)
 
 ---
 

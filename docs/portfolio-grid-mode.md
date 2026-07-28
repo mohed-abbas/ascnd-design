@@ -1519,3 +1519,363 @@ longer true.
 - The filter state is still shared across modes.
 - D3's column counts, D4's per-column pause, everything from §22 onward: all
   unchanged. This is a one-line change to which branch is picked first.
+
+---
+
+## 26. Transitions — the entrance, the filter swap, the mode swap (2026-07-28)
+
+Everything up to §25 built *states*. This section builds the *handovers between
+them*, which had all been instant: the wall was simply there when you scrolled
+to it, a filter change replaced 25 tiles with 11 between two paints, and the
+mode switcher cut from a canvas to a wall in one frame. Each was correct and
+each read as a glitch.
+
+Three new pieces, and a deliberate fourth that does nothing:
+
+| what | where | plays |
+| --- | --- | --- |
+| the wall's entrance | `grid/grid-reveal.tsx` | on load, and after every filter swap |
+| the wall's exit | `portfolio-swap.ts` `exitWall` | before a filter commits, in grid mode |
+| the mode handover | `portfolio-swap.ts` `exitMode` / `enterScene` | both directions |
+| a filter change in GLOBE mode | — | nothing new; the engine already re-forms |
+
+### 26.1 The state had to split in two
+
+React has no "about to unmount", so there is no exit animation without holding
+the state back. But holding ALL of it back means the control you just pressed
+does not respond for a third of a second, which reads as a broken button. So the
+section now carries two versions of the same two facts:
+
+```
+filter / mode          the CONTROLS — commit instantly, drive the pill,
+                       the sliding highlight and aria-pressed
+activeFilter / activeMode   the CONTENT — lag by exactly one exit animation
+```
+
+`useStagedSwap` (portfolio-swap.ts) is the whole mechanism: take a value, play an
+exit, then commit. Everything in the section header renders the control pair;
+everything below it renders the active pair. **Mixing the two up is the one way
+to break this.** The band's own height is on the ACTIVE side for the same reason
+— sizing it from the control would snap 130dvh → 100dvh under a globe that had
+not arrived yet.
+
+The commit runs in a **layout** effect, not a passive one. The opt-out path
+(below) returns no animation and commits immediately, and a passive effect would
+still have cost it a visible frame at the old value — the abrupt swap this
+section removes, one frame later.
+
+### 26.2 The globe opts out of the filter transition
+
+`exit` returning `null` means "commit with no animation", and a filter change in
+globe mode takes that path. The engine already has a transition for exactly this
+— `setFilter` re-forms the sphere toward new targets and evaporates the tiles
+that dropped out (cloud-canvas-engine.ts) — so staging on top of it would blank
+the canvas *before* its own animation started, and the visitor would see less
+motion than they do today, not more.
+
+This is why the exit is a callback rather than a constant: it reads `activeMode`
+at click time.
+
+### 26.3 The targets are DOM queries, not refs
+
+The two modes are mutually exclusive mounts with incompatible boxes (§5): the
+wall is a `flex-1` block below the header, the globe is `absolute inset-0` across
+the whole band. **A shared wrapper to animate would have to be one or the other
+and would break whichever it was not.** So the swap queries for whichever is
+mounted:
+
+```
+[data-portfolio-grid]      the wall          (portfolio-grid.tsx, already existed)
+[data-portfolio-globe]     the canvas        (cloud-canvas-scene.tsx, new)
+[data-portfolio-heading]   the <h2>          (portfolio.tsx, new)
+```
+
+Only one of the first two can match. One selector per swap, both layouts left
+alone, and it is how every other motion component in this feature reaches its
+targets.
+
+The heading is tagged because it is NOT unmounted by a mode swap — it changes
+between visible and `sr-only`, and letting it blink out under a fading wall was
+the one part of the handover that still cut. Tweening it while the globe owns it
+is invisible and harmless, which is simpler than conditionally tagging it.
+
+### 26.4 The entrance moves four elements, not seventy
+
+The obvious first idea is a per-tile stagger. It is the wrong one here: the
+marquee has already cloned every group two or three times over (§17.4), so "the
+tiles" is 50–70 nodes each fading on its own schedule — a lot of compositing for
+a section that shares every frame with the fixed sky and the cloud canvas.
+
+Four columns of opacity + transform is the same visual idea for a fraction of
+the cost, and it is what the wall already animates in its steady state: one
+number per column. The column carries the reveal's transform; the TRACK inside
+it carries the marquee's. Separate elements, so they compose and neither has to
+know the other is running.
+
+**Direction is the drift's.** A column enters from the side it is travelling
+FROM — a falling column drops in from above, a rising one comes up from below —
+reading the same `data-drift-direction` the marquee does, so the entrance
+decelerates straight into the loop. The exit leaves the other way, WITH the
+drift, so the outgoing wall looks carried off on the same current the incoming
+one arrives on.
+
+### 26.5 Timings, and why the exit is the short one
+
+```
+entrance   heading 0.7s   columns 1.0s, stagger 0.09, power3.out   (grid-reveal.tsx)
+wall exit  0.34s, stagger 0.035, power2.in                        (portfolio-swap.ts)
+mode exit  0.32s, power2.in
+globe in   0.55s, power2.out
+```
+
+An exit that lingers is dead time between a click and its answer; an entrance IS
+the answer. So the exits are short, sharp and `power2.in` (accelerating away,
+which reads as *pulled off* rather than *faded down*) and the entrances are long
+and `power3.out`. Measured end to end, a filter swap is ~1.4s from click to
+settled, with the new wall's first column already moving at ~500ms.
+
+The globe's arrival is deliberately **one-sided**: the wall brings its own
+entrance, and running a container fade under that stagger would flatten it back
+into a single cross-fade. The canvas has nothing equivalent — the engine's
+formation is a steady state, not an arrival — so without `enterScene` the sphere
+pops in at full strength the instant the mode commits.
+
+### 26.6 The change-of-mind path
+
+Press "brandings", then press "web" again before the wall has finished
+leaving. `next` is back to `committed`, so from React's side nothing changed and
+nothing will re-render to re-arm the columns — they would sit stranded at 40%
+opacity for the rest of the session. `useStagedSwap` keeps the in-flight
+animation in a ref and calls `restore` on that path, which eases them back and
+`clearProps` them.
+
+The ref is deliberately NOT the effect's cleanup function. The effect re-runs
+when `committed` lands, and a passive cleanup there fires AFTER the incoming
+content's layout effects — it would stomp the entrance grid-reveal.tsx had just
+armed.
+
+Verified in the browser at 1512×982: change-of-mind restores to opacity 1 with
+the tile count unchanged; three tab presses in 240ms land on the last one with
+the right column count and no stranded inline styles.
+
+### 26.7 The reveal is gated on visibility, with a reach
+
+The portfolio sits ~7,500px down the page, so an entrance that fired at mount
+would play to nobody. An `IntersectionObserver` holds the timeline until the wall
+is on screen and then disconnects — a one-shot, not the marquee's idle gate. On a
+filter swap the wall is on screen by definition (the controls are inside the
+section), so it fires on the observer's first callback and the entrance is
+immediate.
+
+`rootMargin: "0px 0px 20% 0px"` reaches a fifth of a viewport down, and the
+reason is the HEADING rather than the wall. `[data-portfolio-grid]` starts ~350px
+below the band's top, so an un-margined observer left the heading — armed by the
+same timeline — sitting on screen and blank for ~250px of scroll. Reaching
+further, or watching `[data-portfolio]` instead, would run the whole entrance
+below the fold and the visitor would arrive at a wall that was already there.
+
+The heading animates on the reveal's FIRST run only. A ref survives `rebuildKey`
+changes (GridReveal is not keyed, so it stays mounted across them) but not a mode
+swap, which unmounts the wall — exactly the right scope. Re-fading "stuff we've
+shipped" every time a tab is pressed made the header look unstable.
+
+### 26.8 Considered and NOT built: animating the band's height
+
+A mode swap changes the band from `130dvh` to `100dvh`, and that 295px commits in
+one frame. It looks like an obvious thing to tween, and it is a trap:
+
+- the wall is `flex-1` inside the band, so a height tween resizes it every frame,
+  and grid-marquee.tsx's `ResizeObserver` answers each one with a **full
+  rebuild** — re-cloning and re-measuring every column ~20 times over 0.35s.
+- avoiding that means teaching the marquee to distinguish a width change (which
+  invalidates every measured advance) from a height change (which only changes
+  how many clones are needed), plus a way to top up clones without rebuilding.
+  Real work, on the hot path, for this.
+
+And the jump is **not visible**. The band is at least one viewport tall, and the
+switcher sits ~278px below its top; for the control to be clickable at all the
+band's top must be within ~280px of the fold, which puts its bottom off-screen in
+every case on desktop. Nothing the visitor can see moves. (On a 390×844 phone the
+margin narrows to roughly 20px at the extreme — noted, still not worth the
+rebuild storm.)
+
+### 26.9 Still not handled, deliberately
+
+`prefers-reduced-motion`. Per CLAUDE.md's "feature first, degrade later" it joins
+the list in §11 / `portfolio-grid-remaining.md` §3 — and it is now three tweens
+to bail out of rather than one, all of them one-shots that can simply not play.
+
+---
+
+## 27. The expand, tuned — pacing, mat weight, and the white flash (2026-07-28)
+
+Three things reported from looking at the built mode, and one defect found while
+verifying them.
+
+### 27.1 The white flash was a `sizes` mismatch
+
+**Symptom:** open a tile and the panel shows white for a beat, then the design
+appears.
+
+§23.3's whole design is that the panel stacks TWO files: the wall's cropped tile
+underneath — already downloaded, already decoded, so it paints on the first
+frame — and the uncropped shot over it, fading in when it arrives. That is what
+is supposed to make the flight carry a picture instead of an empty box.
+
+The under-layer was declaring `sizes="86vw"` while the wall's tile declares
+`(max-width: 768px) 45vw, (max-width: 1600px) 23vw, 380px`. **`sizes` is what
+next/image resolves a srcset candidate from**, so the two elements pointed at the
+same source file and requested two different URLs. The "already decoded" layer
+was a cold fetch.
+
+Measured at 1512×982, opening one tile:
+
+| layer | complete at | transferred |
+| --- | --- | --- |
+| under-layer (the "free" one) | **553 ms** | 15.8 KB |
+| the uncropped shot | 185 ms | 16.0 KB |
+
+The placeholder arrived *after* the thing it was meant to be a placeholder for,
+and `bg-white` — the panel's backing plate, §17's "empty lit frame" — was what
+filled the gap. Now one exported constant, `GRID_TILE_SIZES` in grid-spec.ts,
+used by both. Re-measured: the under-layer is `complete` on the first sampled
+frame (6 ms), and the fetch is a cache hit.
+
+It renders upscaled at panel size, which is correct and is the point: it stands
+in for the moment before the real file lands, and soft beats blank.
+
+**The rule:** two elements showing the same file must say the same `sizes`, or
+they are not showing the same file.
+
+### 27.2 The flight was fast because of the ease, not only the duration
+
+```
+FLIGHT  0.62 → 0.85        EASE_OPEN  power3.inOut → power2.inOut
+MORPH   0.5  → 0.65
+```
+
+A cubic in-out spends most of its budget in a fast middle, so 0.62s on
+`power3.inOut` arrives before the eye has finished following it. Lengthening
+alone would not have fixed it — 0.85s still snaps through the middle on a
+cubic — and softening alone would not either, because 0.62s on a quadratic is
+still brisk. Both moved together.
+
+`inOut` rather than `out` is deliberate: an out-ease starts at maximum velocity,
+which reads as the tile being *flung* out of the wall rather than lifted from it.
+
+Open, end to end, is now FLIGHT + MORPH ≈ 1.5s, against ~1.1s before.
+
+### 27.3 The mat is a frame weight, and it was neither thin nor constant
+
+Two separate faults under one symptom ("the glass frame is too thick, especially
+on the expanded version"):
+
+**It was twice the wall's weight when open.** The panel resolves the same
+fractions against its own short edge, because it has no `cqw` source outside a
+column container. An open panel's short edge is ~766px against a ~348px column,
+so one shared `MAT_RATIO` drew 18.8px on the panel against 9.3px on the tile it
+came from. `PANEL_MAT_RATIO = 0.0105` is a *separate* number chosen so the two
+land together (~8px vs ~6.8px). `MAT_RATIO` itself also came down 0.0245 → 0.0195
+— the house ratio is authored against a 261px shot on the design-shots conveyor,
+and a 348–380px column made the same fraction read heavier here than the identical
+recipe reads anywhere else on the page. `SHOT_MAT_RATIO` is untouched.
+
+**It changed thickness during the flight.** The mat was applied once at the
+landed size and then carried by the flight's uniform scale, so at launch
+(scale ≈ 0.3–0.6) it RENDERED at a fraction of its value and thickened all the
+way in — the tile left the wall wearing a thinner frame than the tile it had just
+been. `applyMat` now takes the live scale and divides it back out, so the frame
+holds one weight for the whole flight and that weight starts at the wall's.
+Verified: constant 6.17px across scale 0.59 → 1.00, against the wall tile's
+6.79px.
+
+**The RADIUS is deliberately not compensated.** A corner belongs to the shape and
+is supposed to grow with the panel; holding the open panel's ~41px corner through
+a launch at tile size would round a 348px box into a pill.
+
+### 27.4 Found while verifying: focus returned into an `aria-hidden` subtree
+
+Pre-existing, not caused by the above. On close, focus went back to
+`originRef.current` — which is usually a marquee CLONE, and clones carry
+`aria-hidden="true"` and `tabIndex = -1` so a screen reader doesn't read the
+portfolio three times (§17.4). Moving focus into an aria-hidden subtree is a
+contradiction the browser refuses: Chrome logged *"Blocked aria-hidden on an
+element because its descendant retained focus"* and the keyboard was left on the
+body.
+
+Close now resolves the ORIGINAL tile for the same project — same button, same
+project, and the one copy actually in the tab order — via
+`[data-grid-group]:not([data-grid-clone]) [data-tile-key=…]`, with
+`preventScroll` because it may be a loop away from where the clone was.
+
+This is the third distinct bug caused by "the origin is usually a clone" (§19.1
+the click, §21 the detached origin, now the focus). Anything that treats the
+origin as an ordinary element should be assumed wrong until checked.
+
+---
+
+## 28. The globe is desktop-only, and the expand has no caption (2026-07-28)
+
+Two scope decisions, both narrowing what the section shows.
+
+### 28.1 D2, final form: no globe below 768px
+
+§25 made grid the default everywhere and left the globe one tap away on any
+device. It is now **not offered at all on a phone**:
+
+```ts
+const mode = isSmallScreen ? "grid" : (chosen ?? "grid");
+```
+
+plus `max-md:hidden` on the mode-switcher group.
+
+**This puts the breakpoint back into `mode`, which §25.1 deliberately took out** —
+so the distinction matters. What §25.1 removed was the breakpoint acting as the
+DEFAULT: a visitor who had chosen nothing got flipped between modes by a window
+drag. What it is now is a CEILING. It can only ever move someone toward grid,
+never away from it, and only because the globe is not on offer at that width.
+`chosen` is kept rather than cleared, so widening past 768px hands a
+desktop visitor their globe straight back — verified, including the sliding pill
+landing back on the globe segment rather than sliding in from the corner.
+
+Nothing changes on the server: `useIsSmallScreen`'s snapshot is `false`, and a
+non-mobile render already resolved to `"grid"`.
+
+### 28.2 Why the switcher is hidden in CSS and not unmounted
+
+`max-md:hidden` is `display: none`, which takes the control out of the tab order
+and out of the accessibility tree — inert, not merely invisible. Two reasons it
+beats a JS-gated unmount here:
+
+- **It applies on the first paint.** `useIsSmallScreen`'s server snapshot is
+  `false`, so an unmount gated on it would render the switcher on the server and
+  pull it back after hydration — a visible flash of a control on precisely the
+  device that may never use it.
+- **It keeps `useSlidingHighlight`'s geometry alive.** The hook's `placed` ref
+  lives in `Portfolio`, which stays mounted; unmounting only the group would
+  leave `placed = true` pointing at a destroyed pill, so the next desktop render
+  would animate the new pill in from 0×0 in the corner instead of snapping.
+
+Note this is NOT in tension with §5's mount contract. That rule is about the two
+MODES — each a repaint source for the same visible section — never both being
+mounted with one hidden by CSS. Two buttons behind `display: none` cost nothing
+and repaint nothing.
+
+### 28.3 The expand's caption is gone
+
+The project's name used to sit under the open panel. Removed: the wall already
+declines to label its tiles — a tile reads as work, a labelled tile reads as a
+catalogue (§15.3) — and the expand was contradicting its own section at the one
+moment the work is largest.
+
+**Purely visual.** The dialog's `aria-label` is the project name and the shot's
+`alt` is too, so a screen reader still announces which project opened. Anything
+re-adding a visible caption should be a design decision, not a fix for an
+accessibility gap that is not there.
+
+One thing improved for free: the dialog is now a plain centring box rather than a
+`flex-col` with a caption and an 18px gap, so the panel's centre is the
+viewport's centre exactly (measured 422 vs 422 at 390×844). It used to sit
+~18px high — the caption and the gap pushed it up. The close's fold-and-fly was
+unaffected either way: the panel's centre is independent of its own height under
+`justify-center`, which is what §23.2 relies on.
