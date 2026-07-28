@@ -42,7 +42,13 @@
  *
  * (No "see all work" button: the section is the whole body of work.)
  */
-import { useState, useSyncExternalStore } from "react";
+import {
+  useState,
+  useSyncExternalStore,
+  type ReactElement,
+  type SVGProps,
+} from "react";
+import { GlobeMode, GridMode } from "@/components/ui/icons";
 import { useSlidingHighlight } from "@/components/ui/sliding-highlight";
 import CloudCanvasScene from "./cloud-canvas-scene";
 import {
@@ -54,9 +60,26 @@ import PortfolioGrid from "./grid/portfolio-grid";
 /** The two display modes. See docs/portfolio-grid-mode.md. */
 type PortfolioMode = "globe" | "grid";
 
-const MODES: { value: PortfolioMode; label: string }[] = [
-  { value: "globe", label: "globe" },
-  { value: "grid", label: "grid" },
+/**
+ * The switcher's two options, as ICONS rather than the words "globe"/"grid"
+ * (Figma "Startup" 862:850).
+ *
+ * `label` survives as the accessible name — it is no longer painted, so without
+ * it each button would announce as "button" and the control would be unusable
+ * by anyone not looking at it. It is the ONLY thing naming these now, which is
+ * why it is required rather than optional here.
+ *
+ * The filter tabs beside them stay as words on purpose: "all / web designs /
+ * brandings / misc" have no glyphs that would read faster than the words, and
+ * two icon groups side by side would leave the row with nothing legible in it.
+ */
+const MODES: {
+  value: PortfolioMode;
+  label: string;
+  Icon: (props: SVGProps<SVGSVGElement>) => ReactElement;
+}[] = [
+  { value: "globe", label: "globe", Icon: GlobeMode },
+  { value: "grid", label: "grid", Icon: GridMode },
 ];
 
 const SMALL_SCREEN = "(max-width: 768px)";
@@ -68,13 +91,19 @@ function subscribeSmallScreen(callback: () => void) {
 }
 
 /**
- * Is this a phone-width screen? Decides the DEFAULT mode (D2).
+ * Is this a phone-width screen? Feeds the wall's COLUMN COUNT (D3).
+ *
+ * It no longer picks the mode — grid is the default on every device since
+ * 2026-07-28 (see the note at the `mode` line below).
  *
  * useSyncExternalStore with a `false` SERVER snapshot, the same idiom
  * cloud-layer.tsx uses for its device gate: SSR and the hydration render both
- * see "not mobile" (→ globe, exactly what shipped before this feature), then
- * React re-renders with the real answer. Reading matchMedia in the render path
- * instead would be a hydration mismatch.
+ * see "not mobile", then React re-renders with the real answer. Reading
+ * matchMedia in the render path instead would be a hydration mismatch.
+ *
+ * What that costs is now bounded: a phone renders 4 columns on the server and
+ * re-deals to 2 after hydration, which rebuilds the marquee once. It used to
+ * additionally mount and tear down the globe canvas, which this no longer does.
  */
 function useIsSmallScreen() {
   return useSyncExternalStore(
@@ -88,12 +117,27 @@ export default function Portfolio() {
   const [filter, setFilter] = useState<CloudFilter>("all");
   const { groupRef, pillRef } = useSlidingHighlight(filter);
 
-  // MODE (D2). The default is per-device — globe on desktop, grid on a phone —
-  // but a visitor who picks a mode OWNS it: `chosen` wins from then on, and a
-  // later resize across the breakpoint no longer moves it under them.
+  // MODE (D2, revised 2026-07-28). GRID IS THE DEFAULT EVERYWHERE. It used to
+  // be per-device — globe on desktop, grid on a phone — and the switcher still
+  // offers both; only which one you land on changed. A visitor who picks a mode
+  // OWNS it: `chosen` wins from then on.
+  //
+  // Two things fall out of this that are worth not re-deriving:
+  //
+  //  • The default no longer reads the breakpoint, so a resize across it can no
+  //    longer swap modes under someone who never touched the switcher. That
+  //    used to happen — dragging a desktop window narrow flipped the globe to
+  //    the wall mid-look.
+  //  • SSR now renders the SAME mode as the client on every device. The old
+  //    rule had a phone render the globe on the server (the server snapshot is
+  //    `false`) and then swap to the wall on hydration, which mounted and tore
+  //    down a canvas for nothing on exactly the devices least able to afford it.
+  //
+  // `isSmallScreen` is still needed below — it feeds the wall's column count —
+  // it just no longer decides the mode.
   const isSmallScreen = useIsSmallScreen();
   const [chosen, setChosen] = useState<PortfolioMode | null>(null);
-  const mode: PortfolioMode = chosen ?? (isSmallScreen ? "grid" : "globe");
+  const mode: PortfolioMode = chosen ?? "grid";
   const { groupRef: modeGroupRef, pillRef: modePillRef } =
     useSlidingHighlight(mode);
 
@@ -139,7 +183,31 @@ export default function Portfolio() {
           the remaining height (portfolio-grid.tsx is `flex-1 min-h-0`). The
           globe is unaffected — its canvas is `absolute inset-0`, out of flow,
           and keeps floating its controls over a full-bleed sphere. */}
-      <div className="relative flex h-dvh w-full flex-col max-md:h-svh">
+      {/* ⚠️ THE HEIGHT IS MODE-DEPENDENT, and only the GRID side is free.
+          The globe's band must stay exactly 100dvh (the note above) — its
+          preset is tuned against that number, and a taller band rescales the
+          sphere instead of clearing it. The wall has no such coupling: it is
+          `flex-1` inside the band, so whatever the band gains, the wall gains.
+
+          Grid runs taller because a masonry wall reads as a WALL only when it
+          runs past the edges of what you can see. At 100dvh the wall was 745px
+          of a 982px screen with the header above it — enough to show four
+          columns, not enough to feel like a body of work you are looking
+          THROUGH. The drift compounds this: a short wall loops visibly sooner,
+          because a column's travel is its own height.
+
+          GRID_BAND is the one number to turn. Everything downstream is
+          derived — the wall takes the remainder, the mask's fades stay 12% of
+          it, and grid-marquee.tsx re-measures its clone count on the resize. */}
+      <div
+        className={`relative flex w-full flex-col ${
+          mode === "grid"
+            ? // svh on mobile for the same URL-bar reason as the globe: a dvh
+              // band would resize mid-scroll and rebuild the whole marquee.
+              "h-[130dvh] max-md:h-[124svh]"
+            : "h-dvh max-md:h-svh"
+        }`}
+      >
         {/* Top row — the controls. In GLOBE mode the heading lives at the
             sphere's core (painted by the engine), so this row carries the tabs
             alone, exactly as before. In GRID mode there is no canvas to paint
@@ -233,7 +301,7 @@ export default function Portfolio() {
                 aria-hidden
                 className="pointer-events-none absolute left-0 top-0 rounded-full bg-white/25 opacity-0"
               />
-              {MODES.map(({ value, label }) => {
+              {MODES.map(({ value, label, Icon }) => {
                 const isActive = value === mode;
                 return (
                   <button
@@ -242,11 +310,17 @@ export default function Portfolio() {
                     data-highlight={value}
                     onClick={() => setChosen(value)}
                     aria-pressed={isActive}
-                    className={`relative rounded-full px-5 py-[7px] text-[14px] lowercase leading-none transition-colors duration-300 max-md:px-3.5 max-md:text-[13px] ${
+                    // The glyph is decorative; `aria-label` carries the name the
+                    // words used to. Padding is symmetric (px == py) so the
+                    // segments are square and the travelling pill stays round,
+                    // rather than the lozenges the wider text labels produced.
+                    aria-label={label}
+                    title={label}
+                    className={`relative flex items-center justify-center rounded-full p-[7px] transition-colors duration-300 ${
                       isActive ? "text-white" : "text-white/60 hover:text-white/90"
                     }`}
                   >
-                    {label}
+                    <Icon aria-hidden className="size-[18px] max-md:size-[17px]" />
                   </button>
                 );
               })}
