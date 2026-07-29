@@ -16,19 +16,19 @@ const PRICING_DESCRIPTION =
   "Two ways to work with us, same senior team either way. Subscribe and pause anytime, or scope a fixed sprint.";
 
 // `title` is just the leaf — the root layout's title.template wraps it into
-// "pricing — ascnd". Canonical/OG URLs are relative, resolved against the
+// "pricing - ascnd". Canonical/OG URLs are relative, resolved against the
 // layout's metadataBase.
 export const metadata: Metadata = {
   title: "pricing",
   description: PRICING_DESCRIPTION,
   alternates: { canonical: "/pricing" },
   openGraph: {
-    title: "pricing — ascnd",
+    title: "pricing - ascnd",
     description: PRICING_DESCRIPTION,
     url: "/pricing",
   },
   twitter: {
-    title: "pricing — ascnd",
+    title: "pricing - ascnd",
     description: PRICING_DESCRIPTION,
   },
 };

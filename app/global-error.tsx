@@ -40,7 +40,7 @@ export default function GlobalError({
             "ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif",
         }}
       >
-        <title>something went wrong — ascnd</title>
+        <title>something went wrong - ascnd</title>
 
         <span style={{ fontSize: 28, fontWeight: 500, letterSpacing: "-0.03em" }}>
           ascnd
