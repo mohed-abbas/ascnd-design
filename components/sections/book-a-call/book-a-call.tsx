@@ -1,4 +1,5 @@
 import BookACallReveal from "./book-a-call-reveal";
+import CalEmbed from "./cal-embed";
 
 /**
  * "not sure which fits? talk to us." — Figma frame 746:4592.
@@ -18,11 +19,9 @@ import BookACallReveal from "./book-a-call-reveal";
  *     rounded-20, black 10→5 gradient, the site's inset-white veil in place of
  *     the Figma backdrop-blur (frost-swept convention, matching the FAQ pills).
  *
- * ⚠️ The live Cal.com inline embed is built and PARKED in cal-embed.tsx — it's
- * held out until the real ascnd booking link is provided (its placeholder link
- * 404s, and Cal's embed.js resize logic hijacks page scroll on a failed load).
- * For now the box shows a "coming soon" placeholder, matching the Figma frame.
- * Swap the placeholder for <CalEmbed /> once NEXT_PUBLIC_CAL_LINK is set.
+ * The calendar box hosts the LIVE Cal.com inline embed (cal-embed.tsx →
+ * cal.com/ascndd/intro-session, lazy-loaded on approach). The embed keeps
+ * Cal's own light look regardless of the site's sky mode — deliberate.
  *
  * The reveal (book-a-call-reveal.tsx) drives [data-book-a-call-head/-sub/-box]
  * with the shared word-by-word blur-rise; markup renders FINISHED (SSR / no-JS /
@@ -61,16 +60,29 @@ export default function BookACall() {
           </p>
         </div>
 
-        {/* Calendar box (746:4550) — dashed glass frame. Holds the Cal embed
-            once wired; a "coming soon" placeholder until then. */}
+        {/* Calendar box (746:4550) — dashed glass frame hosting the Cal.com
+            inline embed. No height of its own: while loading, CalEmbed's
+            placeholder holds the design height; once ready the frame hugs the
+            booker card exactly (CalEmbed clips Cal's in-iframe branding strip
+            off the bottom — the overflow-hidden here is what does the crop).
+            Cal's credit is re-rendered in white BELOW the box instead. */}
         <div
           data-book-a-call-box
-          className="flex h-[563px] w-full items-center justify-center overflow-hidden rounded-[20px] border border-dashed border-white/40 bg-gradient-to-b from-black/10 to-black/5 shadow-[inset_0_0_0_999px_rgba(255,255,255,0.06)] max-md:h-[70svh]"
+          className="flex w-full items-center justify-center overflow-hidden rounded-[20px] border border-dashed border-white/40 bg-gradient-to-b from-black/10 to-black/5 shadow-[inset_0_0_0_999px_rgba(255,255,255,0.06)]"
         >
-          <p className="text-body font-light tracking-[0.02em] text-white/50">
-            cal.me calendar — coming soon
-          </p>
+          <CalEmbed />
         </div>
+
+        {/* The Cal.com credit the clip above removes — same destination link,
+            but white and OUTSIDE the frame. -mt tightens the column gap. */}
+        <a
+          href="https://go.cal.com/booking"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="-mt-[24px] text-[14px] font-bold tracking-[0.01em] text-white/80 transition-colors hover:text-white max-md:-mt-[16px]"
+        >
+          Cal.com
+        </a>
       </div>
     </section>
   );
