@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import BookCallButton from "@/components/ui/book-call-button";
+import BookCallLink from "@/components/ui/book-call-link";
 import Button, { type ButtonVariant } from "@/components/ui/button";
 import PricingReveal from "./pricing-reveal";
 import { CheckMark, ConnectorArrow } from "./pricing-icons";
@@ -148,20 +149,26 @@ export default function Pricing({ bookingHref }: { bookingHref?: string }) {
         </p>
 
         {/* Custom-scope catch-all — for work that fits neither plan (node
-            546:655). 615px, centred; "book a call" is the underlined link,
-            pointing at the same #book target the navbar CTA uses. */}
+            546:655). 615px, centred, with "book a call" as the underlined link.
+            It goes through <BookCallLink>, exactly like the nav/footer entry it
+            mirrors: glides to this page's calendar on /pricing, opens the modal
+            on the homepage. It used to be a bare href="#book", so on the
+            homepage — where no #book exists — it silently did nothing.
+            A LINK, so it decides by route internally rather than through the
+            `bookingHref` prop above: that prop exists to keep the plan cards'
+            <Button> server-rendered, and this one has an href to fall back on. */}
         <p
           data-pricing-foot
           className="w-[615px] max-w-full text-center text-body-lg font-light leading-[normal] text-white"
         >
           got something that doesn&apos;t fit either of these? tell us what
           you&apos;re building and we&apos;ll scope it to you.{" "}
-          <a
-            href="#book"
+          <BookCallLink
+            href="/pricing#book"
             className="font-medium underline decoration-solid [text-underline-position:from-font] transition-opacity hover:opacity-80"
           >
             book a call
-          </a>
+          </BookCallLink>
         </p>
       </div>
 
