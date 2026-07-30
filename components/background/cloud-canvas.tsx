@@ -413,6 +413,21 @@ function SectionRig({
     // re-runs on resize (width/height deps), so it stays current.
     const viewH = window.innerHeight;
 
+    // The scroll position as it stood when a refresh began. ScrollTrigger
+    // reverts the scroller to 0 to measure, so from "refreshInit" until the
+    // refresh completes window.scrollY reads 0 and can't answer "where is the
+    // reader right now?" — which is exactly what the freeze rule below needs.
+    let scrollAtRefresh: number | null = null;
+    const onRefreshInit = () => {
+      scrollAtRefresh = window.scrollY || 0;
+    };
+    const onRefreshDone = () => {
+      scrollAtRefresh = null;
+    };
+    ScrollTrigger.addEventListener("refreshInit", onRefreshInit);
+    ScrollTrigger.addEventListener("refresh", onRefreshDone);
+    const readerAt = () => scrollAtRefresh ?? (window.scrollY || 0);
+
     clouds.forEach((c, i) => {
       const bind = c.section;
       if (!bind) return;
@@ -440,6 +455,35 @@ function SectionRig({
       // toggling a row can't remap it. Re-measured on resize via the effect deps.
       const secH = section.offsetHeight;
 
+      // …and the START gets the same treatment, because freezing the span only
+      // closed half the hole. A section's TOP is immune to its OWN rows, but not
+      // to anything ABOVE it: expanding a homepage FAQ answer pushes final-cta
+      // down, and the height watchdog in lenis-provider.tsx answers that with a
+      // global ScrollTrigger.refresh() (it has to — pins below the growth would
+      // otherwise sit on stale positions). That re-measure moved this start by
+      // the 49px the section moved, and the scrub snapped the cloud 76px down
+      // while the reader sat perfectly still. Measured, not estimated.
+      //
+      // So the crossing is resolved into a fixed document range, and re-measured
+      // only when the reader is OUTSIDE it. Inside, the mapping is held: nothing
+      // can move the sky out from under someone looking at it. Outside, there is
+      // no frame to disturb, so late-settling layout (fonts, images, the Cal
+      // embed on /pricing growing the section above this one) is still picked up
+      // and the range self-heals on the next refresh. The residue of holding is
+      // that the drift runs at most one accordion's worth early relative to its
+      // section, on clouds whose whole job is atmosphere.
+      let range: { start: number; end: number } | null = null;
+      const crossing = () => {
+        const reader = readerAt();
+        if (!range || reader < range.start || reader > range.end) {
+          // rect.top + scrollY is the document position at any scroll, so this
+          // reads the same during a refresh's reverted-to-0 measure pass.
+          const top = section.getBoundingClientRect().top + (window.scrollY || 0);
+          range = { start: top - viewH, end: top + secH };
+        }
+        return range;
+      };
+
       const apply = (self: ScrollTrigger) => {
         const g = cloudRefs.current[i];
         if (!g) return;
@@ -466,8 +510,8 @@ function SectionRig({
 
       const st = ScrollTrigger.create({
         trigger: section,
-        start: "top bottom",
-        end: `+=${viewH + secH}`,
+        start: () => crossing().start,
+        end: () => crossing().end,
         scrub: true,
         invalidateOnRefresh: true,
         onUpdate: (self) => apply(self),
@@ -481,6 +525,8 @@ function SectionRig({
 
     const active = activeClouds.current;
     return () => {
+      ScrollTrigger.removeEventListener("refreshInit", onRefreshInit);
+      ScrollTrigger.removeEventListener("refresh", onRefreshDone);
       triggers.forEach((t) => t.kill());
       active.clear();
       onActiveChange();
