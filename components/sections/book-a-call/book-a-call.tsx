@@ -66,9 +66,14 @@ export default function BookACall() {
             booker card exactly (CalEmbed clips Cal's in-iframe branding strip
             off the bottom — the overflow-hidden here is what does the crop).
             Cal's credit is re-rendered in white BELOW the box instead. */}
+        {/* `@container`: this box is the Cal iframe's viewport, and Cal changes
+            BOTH its layout and its chrome on that width — see the branding-strip
+            clip in cal-embed.tsx, which queries this container rather than the
+            page's. Only inline-size is contained; the box still takes its height
+            from the embed, which is what lets it hug the card. */}
         <div
           data-book-a-call-box
-          className="relative flex w-full items-center justify-center overflow-hidden rounded-[20px]"
+          className="@container relative flex w-full items-center justify-center overflow-hidden rounded-[20px]"
         >
           {/* The frame itself is a LAYER, not the box's own border, so it can
               narrow to the card without the box (and its overflow-hidden) ever

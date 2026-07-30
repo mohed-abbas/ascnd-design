@@ -192,14 +192,29 @@ export default function CalEmbed() {
       // below the parent's overflow-hidden clip — an invisible calendar. And
       // because Cal's embed page keeps a TRANSPARENT body, the embed itself is
       // lifted (relative z-10) so the note can't ghost through the calendar.
-      // The -mb clip: Cal renders its branding footer INSIDE the iframe, ~80px
-      // below the booker card (measured: card 471.5px, iframe 552px). It can't
-      // be recolored cross-origin, so once ready the embed is pulled up by that
-      // strip and the parent box's overflow-hidden crops it; the white Cal.com
-      // credit below the box replaces it. Re-measure if Cal restyles the strip.
+      // The -mb clip: in its WIDE layout Cal renders a branding footer INSIDE
+      // the iframe, 80px below the booker card (measured: card 471.5, iframe
+      // 552 — and 80px at the slots and booking-form steps too). It can't be
+      // recolored cross-origin, so the embed is pulled up by that strip and the
+      // parent box's overflow-hidden crops it; the white Cal.com credit below
+      // the box replaces it.
+      //
+      // ONLY in the wide layout. Below ~768px Cal switches the booker to its
+      // stacked layout and DROPS the branding — the card then fills the iframe
+      // exactly (measured across month / slots / form: strip 0–0.9px). So an
+      // unconditional -80px cropped 80px of real calendar off phones, which is
+      // what this @container query fixes.
+      //
+      // Keyed to the BOX's width, not the viewport's, because the box IS the
+      // iframe's viewport — that's the width Cal lays itself out against, and
+      // it stops the rule quietly breaking if the section's column ever changes.
+      // 769 is measured, not Tailwind's `md`: at a box of exactly 768 Cal is
+      // already stacked, and 768 is iPad-portrait width, so the off-by-one is
+      // a real device rather than a hypothetical. Re-measure both numbers if
+      // Cal restyles the booker.
       className={`relative size-full [&_cal-inline]:relative [&_cal-inline]:z-10 [&_iframe]:rounded-[18px] ${
         ready
-          ? "[&_cal-inline]:-mb-[80px]"
+          ? "@min-[769px]:[&_cal-inline]:-mb-[80px]"
           : "min-h-[563px] max-md:min-h-[70svh]"
       }`}
     >
