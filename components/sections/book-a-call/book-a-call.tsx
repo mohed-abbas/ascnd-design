@@ -68,8 +68,25 @@ export default function BookACall() {
             Cal's credit is re-rendered in white BELOW the box instead. */}
         <div
           data-book-a-call-box
-          className="flex w-full items-center justify-center overflow-hidden rounded-[20px] border border-dashed border-white/40 bg-gradient-to-b from-black/10 to-black/5 shadow-[inset_0_0_0_999px_rgba(255,255,255,0.06)]"
+          className="relative flex w-full items-center justify-center overflow-hidden rounded-[20px]"
         >
+          {/* The frame itself is a LAYER, not the box's own border, so it can
+              narrow to the card without the box (and its overflow-hidden) ever
+              closing in on the embed — the booking form can't be clipped by a
+              frame that doesn't contain it.
+
+              Cal's booker doesn't keep one width: the month view fills the
+              iframe, but picking a slot swaps in a 660px card centred in the
+              same iframe, which used to leave the frame standing ~120px proud
+              on each side. CalEmbed drives `--cal-frame-w` off Cal's own step
+              signal (see there); `inset-0` + `mx-auto` keeps this centred on
+              whatever that resolves to, and the width transitions so the glass
+              closes in with the card rather than snapping. Default 100% covers
+              SSR, the loading state, and any browser that never gets an event. */}
+          <span
+            aria-hidden
+            className="pointer-events-none absolute inset-0 mx-auto w-[var(--cal-frame-w,100%)] rounded-[20px] border border-dashed border-white/40 bg-gradient-to-b from-black/10 to-black/5 shadow-[inset_0_0_0_999px_rgba(255,255,255,0.06)] transition-[width] duration-300 ease-out motion-reduce:transition-none"
+          />
           <CalEmbed />
         </div>
 

@@ -24,7 +24,56 @@ import {
  * with the page's first paint) rather than lazily on approach — a deliberate
  * trade: /pricing exists to get the call booked, so by the time the visitor
  * scrolls to the section the calendar must already be sitting there loaded.
+ *
+ * It also drives `--cal-frame-w` on the section's glass box so the dashed frame
+ * follows the booker instead of standing at one fixed width — see the two
+ * constants below.
  */
+
+/**
+ * How wide Cal draws the booker card once you pick a slot and it swaps to the
+ * booking FORM: 660px, centred, regardless of the iframe's own width. Measured
+ * in the live embed — an 898px iframe renders a 660px card with 119px of
+ * TRANSPARENT gutter down each side, which is what left the glass frame standing
+ * out past the card. In the month view the card FILLS the iframe instead (898 →
+ * 898), which is why the frame hugs it perfectly there.
+ *
+ * `min(100%, …)` because the card is only 660 where there's room for 660: below
+ * that Cal fills whatever it's given, and so should the frame.
+ */
+const CAL_FORM_CARD_WIDTH = "min(100%, 660px)";
+
+/** Frame width when the card fills the iframe (month view, and while loading). */
+const CAL_FULL_WIDTH = "100%";
+
+/**
+ * Ignore iframe-width changes smaller than this when deciding "the window was
+ * resized". Cal reports every dimension change TWICE, once with and once
+ * without its scrollbar — measured, the pair differs by 10px (890/900) — and
+ * treating that flicker as a resize made the tracker re-learn the booking
+ * FORM's height as the month view's, which inverted the frame on every step.
+ */
+const CAL_WIDTH_NOISE = 24;
+
+/**
+ * Read a Cal `__dimensionChanged` payload. Cal's own typings aren't imported
+ * here (the loader is the vanilla one — lib/cal/embed.ts), so the payload is
+ * narrowed by hand rather than cast. NB `iframeWidth` is the iframe's OWN width,
+ * not the booker card's — that's the whole reason the card's width has to be
+ * inferred rather than read.
+ */
+function dimension(event: unknown): { height: number; width: number } | null {
+  const data = (
+    event as {
+      detail?: { data?: { iframeHeight?: unknown; iframeWidth?: unknown } };
+    }
+  )?.detail?.data;
+  const height = data?.iframeHeight;
+  const width = data?.iframeWidth;
+  return typeof height === "number" && typeof width === "number"
+    ? { height, width }
+    : null;
+}
 
 export default function CalEmbed() {
   const boxRef = useRef<HTMLDivElement>(null);
@@ -37,8 +86,20 @@ export default function CalEmbed() {
   useEffect(() => {
     const box = boxRef.current;
     if (!box) return;
+    // The section's glass box — the element carrying the dashed frame layer
+    // whose width this drives. Falls back to our own box so a missing wrapper
+    // can't null-crash the callback.
+    const frame =
+      box.closest<HTMLElement>("[data-book-a-call-box]") ?? box;
 
     let started = false;
+    // Frame-tracking state (see the __dimensionChanged handler below): the
+    // month view's height once learned, whether the visitor has navigated the
+    // booker yet, the last iframe width seen, and whether the narrow card is up.
+    let monthHeight: number | null = null;
+    let navigated = false;
+    let lastWidth: number | null = null;
+    let compact = false;
 
     const start = () => {
       if (started) return;
@@ -56,6 +117,47 @@ export default function CalEmbed() {
       ns("on", {
         action: "linkReady",
         callback: () => setReady(true),
+      });
+
+      // ── Keep the glass frame on the card ────────────────────────────────
+      // Cal reports only its HEIGHT across the origin boundary, so the card's
+      // width can't be read from out here — but a height change is an exact
+      // proxy for "the booker changed STEP". Measured against the live embed:
+      // the month view holds ONE height across month navigation, duration
+      // switches and day picks (none of which fire this event at all), while
+      // stepping to the booking form does, and back again.
+      //
+      // So the whole job is knowing the month view's height, and it's LEARNED
+      // rather than hard-coded — Cal reports its loading skeleton first (571)
+      // and the real card ~330ms later (552), so the first value is a lie. The
+      // rule that works: keep re-learning until the visitor first navigates,
+      // because `__routeChanged` never fires during load — only a real
+      // navigation produces one. Whatever we've learned by then IS the month
+      // view. A resize while the calendar is still showing re-lays it out, so
+      // that re-learns too.
+      ns("on", {
+        action: "__routeChanged",
+        callback: () => {
+          navigated = true;
+        },
+      });
+      ns("on", {
+        action: "__dimensionChanged",
+        callback: (event: unknown) => {
+          const next = dimension(event);
+          if (!next) return;
+          const resized =
+            lastWidth != null &&
+            Math.abs(next.width - lastWidth) > CAL_WIDTH_NOISE;
+          lastWidth = next.width;
+          if (!navigated || (!compact && resized)) monthHeight = next.height;
+          compact =
+            monthHeight != null && Math.abs(next.height - monthHeight) > 1;
+          frame.style.setProperty(
+            "--cal-frame-w",
+            compact ? CAL_FORM_CARD_WIDTH : CAL_FULL_WIDTH,
+          );
+        },
       });
     };
 
@@ -76,6 +178,7 @@ export default function CalEmbed() {
       // Clear the injected iframe so Fast Refresh / route changes don't stack
       // embeds into the same box.
       if (box) box.innerHTML = "";
+      frame.style.removeProperty("--cal-frame-w");
     };
   }, []);
 
