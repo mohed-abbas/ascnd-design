@@ -49,6 +49,11 @@ const HAIRLINE = "h-px bg-gradient-to-r from-transparent via-white/25 to-transpa
 // half-width track. Variant utilities win over the button's own base ones.
 const CTA_MOBILE = "max-md:px-[14px] max-md:py-[6px] max-md:text-[14px]";
 
+// The dashed split between the two plans, repeated from the header pair so the
+// body's values sit under the plan they belong to with the same rule between
+// them. Both halves are 50%, so this always lands on the same midline.
+const SPLIT = "border-l-[1.5px] border-dashed border-white/40";
+
 export default function PlanCompare() {
   // Independent open state per category, keyed by category key. "how it works"
   // starts open (the design's shown state).
@@ -218,7 +223,11 @@ function CategoryBody({ rows }: { rows: readonly CompareRow[] }) {
         ))}
       </div>
 
-      {/* Mobile: label over a two-up subscription / fixed-sprint pair. */}
+      {/* Mobile: label over a two-up subscription / fixed-sprint pair. The label
+          stays flush with the row's left edge (it is NOT indented to the
+          category title — deliberate); the value pair keeps the full width and
+          splits on the midline, which is where the header's plan rule falls, so
+          one continuous seam runs down the section. */}
       <div className="hidden flex-col gap-[14px] pb-[20px] max-md:flex">
         {rows.map((row) => (
           <div key={row.label} className="border-t border-white/10 pt-[12px]">
@@ -228,8 +237,8 @@ function CategoryBody({ rows }: { rows: readonly CompareRow[] }) {
                 {row.note}
               </p>
             )}
-            <div className="mt-[8px] grid grid-cols-2 gap-[12px]">
-              <div>
+            <div className="mt-[8px] grid grid-cols-2">
+              <div className="pr-[12px]">
                 <span className="block text-[11px] uppercase tracking-[0.08em] text-white/40">
                   subscription
                 </span>
@@ -239,7 +248,7 @@ function CategoryBody({ rows }: { rows: readonly CompareRow[] }) {
                   iconClass="block size-[18px]"
                 />
               </div>
-              <div>
+              <div className={`pl-[12px] ${SPLIT}`}>
                 <span className="block text-[11px] uppercase tracking-[0.08em] text-white/40">
                   fixed sprint
                 </span>
