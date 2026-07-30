@@ -28,11 +28,24 @@
  * yet, not navigation.
  */
 
-export type NavLink = { label: string; href: string };
+export type NavLink = {
+  label: string;
+  href: string;
+  /**
+   * The BOOKING entry. Both consumers render it through <BookCallLink>
+   * (components/ui/book-call-link.tsx) instead of a bare <AnchorLink>, because
+   * it's the one link whose destination depends on the current route: on
+   * /pricing the href below is a same-page hash and glides to that page's
+   * calendar, while on every other route it opens the Cal.com booking modal
+   * instead (there's no calendar to scroll to). The href stays meaningful in
+   * both cases — it's what cmd/middle click and JS-less visitors follow.
+   */
+  booking?: boolean;
+};
 
 export const NAV_LINKS: NavLink[] = [
   { label: "home", href: "/" },
   { label: "work", href: "/#work" },
   { label: "pricing", href: "/pricing" },
-  { label: "book a call", href: "/pricing#book" },
+  { label: "book a call", href: "/pricing#book", booking: true },
 ];

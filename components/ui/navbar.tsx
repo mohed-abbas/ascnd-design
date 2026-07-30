@@ -7,6 +7,7 @@ import { setMode } from "@/lib/theme/mode-store";
 import { useMode } from "@/lib/theme/use-mode";
 import AnchorLink from "./anchor-link";
 import BackToTop from "./back-to-top";
+import BookCallLink from "./book-call-link";
 import { InstagramSocial, XSocial } from "./icons";
 import Logo from "./logo";
 import MenuToggleIcon from "./menu-toggle-icon";
@@ -226,18 +227,23 @@ export default function Navbar() {
             md they sit top-left, leaving room to the right for the theme column
             and below for the bottom toggle bar. */}
         <ul className="absolute left-[26px] top-1/2 flex -translate-y-1/2 flex-col gap-[10px] text-[25px] font-light leading-[1.1] tracking-[-0.03em] max-md:top-[84px] max-md:translate-y-0">
-          {NAV_LINKS.map((link) => (
-            <li key={link.label} data-menu-item className="opacity-0">
-              <AnchorLink
-                href={link.href}
-                tabIndex={open ? 0 : -1}
-                onClick={() => setOpen(false)}
-                className="inline-block transition-opacity hover:opacity-70"
-              >
-                {link.label}
-              </AnchorLink>
-            </li>
-          ))}
+          {NAV_LINKS.map((link) => {
+            // The booking entry routes through <BookCallLink> — same link, but
+            // it opens the Cal.com modal off /pricing (see lib/nav-links.ts).
+            const Link = link.booking ? BookCallLink : AnchorLink;
+            return (
+              <li key={link.label} data-menu-item className="opacity-0">
+                <Link
+                  href={link.href}
+                  tabIndex={open ? 0 : -1}
+                  onClick={() => setOpen(false)}
+                  className="inline-block transition-opacity hover:opacity-70"
+                >
+                  {link.label}
+                </Link>
+              </li>
+            );
+          })}
         </ul>
 
         {/* Theme column (MOBILE ONLY) — the sky-mode picker folded into the menu

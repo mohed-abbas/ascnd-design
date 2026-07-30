@@ -139,3 +139,23 @@ export function initCalNamespace(namespace: string): CalApi {
   Cal("init", namespace, { origin: CAL_ORIGIN });
   return Cal.ns![namespace];
 }
+
+/**
+ * Open the booking modal imperatively — the same `modal` command embed.js issues
+ * from its own `data-cal-link` click listener.
+ *
+ * For surfaces that must stay real LINKS and so can't use those data attributes:
+ * embed.js never calls preventDefault(), so a `data-cal-link` <a> would open the
+ * modal AND navigate. The nav/footer "book a call" entries (ui/book-call-link.tsx)
+ * go through here instead, preventing default themselves.
+ *
+ * Safe to call before embed.js has loaded — ensureCal()'s command queue replays
+ * on load, so the modal opens as soon as the script lands. `ui` is re-sent each
+ * time (idempotent; Cal's own colour-scheme watcher does the same) so the theme
+ * is right even if CalProvider's idle warm-up hasn't run yet.
+ */
+export function openBookingModal(): void {
+  const ns = initCalNamespace(POPUP_NS);
+  ns("ui", CAL_UI_CONFIG);
+  ns("modal", { calLink: CAL_LINK, config: CAL_BOOKING_CONFIG });
+}

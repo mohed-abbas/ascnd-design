@@ -1,5 +1,6 @@
 import Image from "next/image";
 import AnchorLink from "@/components/ui/anchor-link";
+import BookCallLink from "@/components/ui/book-call-link";
 import { InstagramSocial, XSocial } from "@/components/ui/icons";
 import { NAV_LINKS } from "@/lib/nav-links";
 import FooterReveal from "./footer-reveal";
@@ -109,16 +110,21 @@ export default function Footer() {
           {/* Row 1 (746:4721) — nav links (left) + social icons (right). */}
           <div className="flex w-full items-center justify-between max-md:flex-col max-md:gap-[16px]">
             <ul className="flex items-start gap-[13px] whitespace-nowrap text-[16px] text-[#f7f4f0] max-md:flex-wrap max-md:justify-center max-md:gap-x-[18px] max-md:gap-y-[8px]">
-              {NAV_LINKS.map(({ label, href }) => (
-                <li key={label}>
-                  <AnchorLink
-                    href={href}
-                    className="inline-block transition-opacity hover:opacity-70"
-                  >
-                    {label}
-                  </AnchorLink>
-                </li>
-              ))}
+              {NAV_LINKS.map(({ label, href, booking }) => {
+                // The booking entry routes through <BookCallLink> — same link,
+                // but it opens the Cal.com modal off /pricing (lib/nav-links.ts).
+                const Link = booking ? BookCallLink : AnchorLink;
+                return (
+                  <li key={label}>
+                    <Link
+                      href={href}
+                      className="inline-block transition-opacity hover:opacity-70"
+                    >
+                      {label}
+                    </Link>
+                  </li>
+                );
+              })}
             </ul>
 
             <div className="flex items-center gap-[7px] text-[#f7f4f0]">

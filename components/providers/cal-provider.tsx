@@ -42,8 +42,13 @@ export default function CalProvider() {
     const start = () => {
       if (started) return;
       started = true;
-      // Nothing on this route can open the booker — don't fetch embed.js.
-      if (!document.querySelector("[data-cal-link]")) return;
+      // Nothing on this route can open the modal — don't fetch embed.js.
+      // Two markers, one per kind of booking surface: `data-cal-link` is the
+      // declarative <BookCallButton> (Cal's own listener opens it) and
+      // `data-cal-booking` is the nav/footer link that opens it from an onClick
+      // instead (ui/book-call-link.tsx). Cal only ever reads the former, so the
+      // marker can't trip its listener.
+      if (!document.querySelector("[data-cal-link], [data-cal-booking]")) return;
       initCalNamespace(POPUP_NS)("ui", CAL_UI_CONFIG);
     };
 
