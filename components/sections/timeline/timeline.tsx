@@ -376,9 +376,31 @@ export default function Timeline() {
           </div>
 
           {/* ── Floating "Designs in review" label on the curve (746:4425). ── */}
+          {/* BOTTOM-anchored, not top — the one place the type-runs-hot tradeoff
+              above actually bites. This label wraps to two lines beside a spine
+              that is DESCENDING left-to-right here, so the lower a line sits, the
+              further right the curve has travelled to meet it. Its box is sized
+              in --tl-u, so at the hot type scale the pair of lines stands 52.2
+              frame units tall instead of Figma's 38.4 — and top-anchored at
+              16.09% that extra 13.8 pushed line two down to where the curve had
+              already crossed under it (measured: 15 sampled path points inside
+              the text box, second line 2 units left of the dots).
+              Figma's box bottom is 196.4 of the 982 frame = exactly 80%, so
+              anchoring THAT edge reproduces the design 1:1 at the artwork's own
+              scale and grows upward — away from the curve — as the type runs
+              hotter. Don't switch this back to `top`.
+
+              `left` is then nudged 58.73% → 59.5%. The anchor alone takes the
+              second line from 0px (literally touching the dots) to 3.6 frame
+              units, but that IS the Figma gap — measured identical with the type
+              unit pinned to the artwork's own 1cqw — and at this size the line
+              still reads as grazing the spine. The spine runs diagonally here
+              (~0.87 units of x per unit of y), so 0.77% of stage width buys 9.5
+              units of daylight: line two clears by 13.1, line one by 27.7, or
+              roughly two dashes of the 6-6 dash pattern. */}
           <p
             data-tl-float
-            className="absolute left-[58.73%] top-[16.09%] w-[calc(4.7*var(--tl-u))] text-[calc(1.058*var(--tl-u))] leading-[1.2] text-white/90"
+            className="absolute bottom-[80%] left-[59.5%] w-[calc(4.7*var(--tl-u))] text-[calc(1.058*var(--tl-u))] leading-[1.2] text-white/90"
           >
             {DESIGNS_IN_REVIEW}
           </p>
