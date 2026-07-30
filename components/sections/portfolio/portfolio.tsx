@@ -400,9 +400,20 @@ export default function Portfolio() {
                     // words used to. Padding is symmetric (px == py) so the
                     // segments are square and the travelling pill stays round,
                     // rather than the lozenges the wider text labels produced.
+                    //
+                    // 5px is not a look, it's an ALIGNMENT: this pill sits
+                    // directly beside the filter pill and the two must read as
+                    // one control strip, so their outer heights have to match.
+                    // Both wrappers add the same 1px border + 4px padding, which
+                    // leaves the SEGMENTS to agree — and a filter segment is 28px
+                    // (py-[7px] + 14px text at leading-none). So this one has to
+                    // be 28px too: 5 + an 18px glyph + 5. At the 7px it used to
+                    // carry it came out 32px and the mode pill stood 4px prouder
+                    // than the filters. Change the glyph size or the filters'
+                    // type scale and this number has to move with it.
                     aria-label={label}
                     title={label}
-                    className={`relative flex items-center justify-center rounded-full p-[7px] transition-colors duration-300 ${
+                    className={`relative flex items-center justify-center rounded-full p-[5px] transition-colors duration-300 ${
                       isActive ? "text-white" : "text-white/60 hover:text-white/90"
                     }`}
                   >
