@@ -6,6 +6,7 @@ import { getMode, setMode } from "@/lib/theme/mode-store";
 import { useMode } from "@/lib/theme/use-mode";
 import { THEME_MODES, type ThemeMode } from "@/lib/theme/palette";
 import { MoonIcon, SunIcon, SunriseIcon, SunsetIcon } from "./icons";
+import { registerAbsorbable } from "./menu-absorb";
 
 // See sliding-highlight.tsx for why this pair exists.
 const useIsomorphicLayoutEffect =
@@ -93,9 +94,19 @@ const PATH_SELECTOR = "svg > path";
  * Measured against the compiled CSS: all three 52px wide on a shared 55.2px
  * right inset and 81.2px centre-line, gaps 12.49 / 12.5.
  *
- * An OPEN menu covers this: the nav glass expands to fill its whole 365×406
- * frame at z-999, over this z-900. Pre-existing behaviour for the back-to-top
- * disc, not a new quirk.
+ * AN OPEN MENU SWALLOWS THIS. The nav glass expands to fill its whole 365×406
+ * frame, which covers this disc completely (and the back-to-top one below the
+ * pill). Rather than let it show through as a ghost puck, the glass ABSORBS it:
+ * the chrome — border, fill, veil, blur — is a separate layer that dissolves as
+ * the panel sweeps over it, leaving the icon sitting on the menu's own surface.
+ * See menu-absorb.ts; the navbar publishes the geometry, this registers a
+ * target. That's also why the disc sits ABOVE the panel (z-1000, not z-900):
+ * dissolving underneath would drag the panel's edge across it as a visible seam,
+ * while on top it stays whole and simply melts in.
+ *
+ * `data-menu-keep-open` exempts it from the navbar's click-outside close, so
+ * picking a sky with the panel open previews it instead of dismissing the menu —
+ * matching the in-panel theme column on mobile, which behaves the same way.
  *
  * It's a sibling of the fixed sky layers in layout.tsx (never an ancestor), so
  * it doesn't trip the no-filter-ancestor rule that governs those layers.
@@ -167,6 +178,17 @@ export default function ModeSwitcher() {
   const prevIndex = useRef(index);
   const tlRef = useRef<gsap.core.Timeline | null>(null);
   const mounted = useRef(false);
+  const rootRef = useRef<HTMLButtonElement>(null);
+  const chromeRef = useRef<HTMLSpanElement>(null);
+  const selectedRef = useRef<HTMLSpanElement>(null);
+
+  // Offer this disc's glass to the navbar's expanding panel (see menu-absorb.ts).
+  useEffect(() => {
+    const root = rootRef.current;
+    const chrome = chromeRef.current;
+    if (!root || !chrome) return;
+    return registerAbsorbable(root, chrome, selectedRef.current);
+  }, []);
 
   useIsomorphicLayoutEffect(() => {
     const els = iconRefs.current;
@@ -270,12 +292,37 @@ export default function ModeSwitcher() {
 
   return (
     <button
+      ref={rootRef}
       type="button"
       onClick={() => setMode(next.mode)}
       aria-label={`Switch to ${next.label.toLowerCase()} sky`}
       title={`Switch to ${next.label.toLowerCase()} sky`}
-      className="pointer-events-auto fixed right-[55px] bottom-[calc(37.6%_+_87px)] z-[900] flex size-[52px] items-center justify-center rounded-full border border-white/30 bg-white/10 text-white shadow-[inset_0_0_28.3px_0_rgba(255,255,255,0.25)] backdrop-blur-[10px] transition-colors duration-200 hover:bg-white/20 max-md:hidden"
+      // Clicking this with the menu open previews a sky instead of closing it.
+      data-menu-keep-open
+      className="group pointer-events-auto fixed right-[55px] bottom-[calc(37.6%_+_87px)] z-[1000] flex size-[52px] items-center justify-center rounded-full text-white max-md:hidden"
     >
+      {/* The glass, as its own layer so the menu can dissolve it while the icon
+          stays. Everything that makes this read as a puck lives here — the
+          button itself is now just placement, hit area and focus ring. */}
+      <span
+        ref={chromeRef}
+        aria-hidden
+        className="pointer-events-none absolute inset-0 rounded-full border border-white/30 bg-white/10 shadow-[inset_0_0_28.3px_0_rgba(255,255,255,0.25)] backdrop-blur-[10px] transition-colors duration-200 group-hover:bg-white/20"
+      />
+
+      {/* …and what it becomes once the menu has it: the SELECTED chip from the
+          panel's own theme column — the 36px bg-white/20 lit disc that marks the
+          active mode on mobile (useSlidingHighlight's pill, same token, same
+          size). Absorbed, this stops being a standalone puck and starts being a
+          selected item in the menu, so it should look like one. Fades in on the
+          coverage the chrome fades out on; `opacity-0` is its resting state, and
+          the absorb module hands the property back to this class on close. */}
+      <span
+        ref={selectedRef}
+        aria-hidden
+        className="pointer-events-none absolute left-1/2 top-1/2 size-[36px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-white/20 opacity-0"
+      />
+
       {/* Stacking box. No overflow clip — the ray pop overshoots past scale 1. */}
       <span
         className="relative block"

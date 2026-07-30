@@ -10,6 +10,7 @@ import BackToTop from "./back-to-top";
 import BookCallLink from "./book-call-link";
 import { InstagramSocial, XSocial } from "./icons";
 import Logo from "./logo";
+import { publishGlass } from "./menu-absorb";
 import MenuToggleIcon from "./menu-toggle-icon";
 import { MODE_ITEMS } from "./mode-switcher";
 import { useSlidingHighlight } from "./sliding-highlight";
@@ -97,6 +98,11 @@ export default function Navbar() {
   const mounted = useRef(false);
   const panelId = useId();
 
+  // If the navbar itself goes away (a route without one), release anything its
+  // glass was holding absorbed — otherwise a chrome could stay dissolved with no
+  // panel left to have eaten it.
+  useEffect(() => () => publishGlass(null), []);
+
   // Close on Escape and on click outside.
   useEffect(() => {
     if (!open) return;
@@ -105,7 +111,16 @@ export default function Navbar() {
       if (e.key === "Escape") setOpen(false);
     }
     function onPointerDown(e: PointerEvent) {
-      if (navRef.current && !navRef.current.contains(e.target as Node)) {
+      const target = e.target instanceof Element ? e.target : null;
+      // Controls the open panel has ABSORBED (the sky switcher — menu-absorb.ts)
+      // are outside this <nav> in the DOM but inside it on screen, so an
+      // unqualified outside-click would dismiss the menu the moment you used
+      // one. `data-menu-keep-open` marks the ones that shouldn't: picking a sky
+      // previews it with the panel open, exactly as the in-panel theme column
+      // does on mobile. Back-to-top is deliberately NOT marked — it acts and
+      // you're done, so closing behind it is right.
+      if (target?.closest("[data-menu-keep-open]")) return;
+      if (navRef.current && !navRef.current.contains(target)) {
         setOpen(false);
       }
     }
@@ -135,11 +150,41 @@ export default function Navbar() {
     const items = nav.querySelectorAll<HTMLElement>("[data-menu-item]");
     const reduce = window.matchMedia(REDUCE_MOTION).matches;
 
+    // ── Absorption ──────────────────────────────────────────────────────────
+    // Feed the glass's live edges to the standalone controls it swallows — the
+    // sky switcher above the pill, the back-to-top disc below it. They dissolve
+    // their own chrome in step with the coverage, so the expanding panel takes
+    // them in instead of showing them through as ghost pucks (menu-absorb.ts).
+    //
+    // The rect is COMPUTED from the nav frame plus the insets GSAP is tweening,
+    // never measured: reading layout inside onUpdate would force a synchronous
+    // document layout on every frame of the one animation that already has a
+    // big blurred surface resizing.
+    //
+    // Desktop only. Below md the panel is bottom-CENTRE and the disc bottom-
+    // RIGHT, so it laps only ~81% of it — dissolving a partly-covered control
+    // would strand its icon off the panel's corner.
+    const absorbs = !window.matchMedia(MOBILE_MQ).matches;
+    const frame = nav.getBoundingClientRect();
+    const inset = (side: "top" | "right" | "bottom" | "left") =>
+      parseFloat(String(gsap.getProperty(surface, side))) || 0;
+    const publish = () => {
+      if (!absorbs) return publishGlass(null);
+      publishGlass({
+        top: frame.top + inset("top"),
+        right: frame.right - inset("right"),
+        bottom: frame.bottom - inset("bottom"),
+        left: frame.left + inset("left"),
+      });
+    };
+
     // No entrance on first mount (or reduced motion): snap to current state.
     if (!mounted.current || reduce) {
       mounted.current = true;
       gsap.set(surface, open ? OPEN : closedState(nav));
       gsap.set(items, { autoAlpha: open ? 1 : 0, y: 0 });
+      if (open) publish();
+      else publishGlass(null);
       return;
     }
 
@@ -147,7 +192,17 @@ export default function Navbar() {
     const tl = gsap.timeline();
 
     if (open) {
-      tl.to(surface, { ...OPEN, duration: DURATION, ease: EASE }, 0).fromTo(
+      tl.to(
+        surface,
+        {
+          ...OPEN,
+          duration: DURATION,
+          ease: EASE,
+          onUpdate: publish,
+          onComplete: publish,
+        },
+        0,
+      ).fromTo(
         items,
         { autoAlpha: 0, y: 10 },
         { autoAlpha: 1, y: 0, duration: 0.4, ease: "power2.out", stagger: 0.06 },
@@ -162,7 +217,19 @@ export default function Navbar() {
         duration: 0.22,
         ease: "power2.in",
         stagger: 0.04,
-      }).to(surface, { ...closedState(nav), duration: DURATION, ease: EASE }, 0.14);
+      }).to(
+        surface,
+        {
+          ...closedState(nav),
+          duration: DURATION,
+          ease: EASE,
+          onUpdate: publish,
+          // Fully closed: hand every absorbed chrome back to CSS and drop the
+          // cached rects, so the next open re-measures.
+          onComplete: () => publishGlass(null),
+        },
+        0.14,
+      );
     }
 
     tlRef.current = tl;

@@ -1,8 +1,9 @@
 "use client";
 
-import { useSyncExternalStore } from "react";
+import { useEffect, useRef, useSyncExternalStore } from "react";
 import { useLenis } from "lenis/react";
 import { ArrowUp } from "./icons";
+import { registerAbsorbable } from "./menu-absorb";
 
 /**
  * Back-to-top control — a 52px glass disc parked directly under the navbar pill.
@@ -38,6 +39,18 @@ import { ArrowUp } from "./icons";
  * navbar surface and the mode-switcher rail. It's a sibling of the fixed sky
  * layers, never an ancestor, so its backdrop-filter can't break their
  * `position: fixed` (see CLAUDE.md).
+ *
+ * ABSORPTION (desktop): an open menu's glass covers this disc completely, so
+ * rather than show through it as a ghost puck, the panel eats it — the chrome is
+ * a separate layer that dissolves as the glass sweeps over it, leaving the arrow
+ * on the menu's own surface. See menu-absorb.ts. Below md the panel only laps
+ * ~81% of this disc (it's the bottom-RIGHT corner there, the panel bottom-CENTRE),
+ * so the navbar doesn't publish on mobile and this stays a puck — dissolving a
+ * partly-covered control would strand the icon off the panel's corner.
+ *
+ * The chrome's absorb opacity and the button's own show/hide opacity MULTIPLY,
+ * which is what we want: a disc that hasn't been scrolled into view stays hidden
+ * no matter what the menu is doing.
  */
 
 // Fraction of a viewport height that must be scrolled before the disc appears.
@@ -60,6 +73,16 @@ const serverSnapshot = () => false;
 export default function BackToTop() {
   const visible = useSyncExternalStore(subscribe, isScrolled, serverSnapshot);
   const lenis = useLenis();
+  const rootRef = useRef<HTMLButtonElement>(null);
+  const chromeRef = useRef<HTMLSpanElement>(null);
+
+  // Offer this disc's glass to the navbar's expanding panel (see menu-absorb.ts).
+  useEffect(() => {
+    const root = rootRef.current;
+    const chrome = chromeRef.current;
+    if (!root || !chrome) return;
+    return registerAbsorbable(root, chrome);
+  }, []);
 
   function toTop() {
     if (lenis) lenis.scrollTo(0);
@@ -79,6 +102,7 @@ export default function BackToTop() {
 
   return (
     <button
+      ref={rootRef}
       type="button"
       onClick={toTop}
       aria-label="Back to top"
@@ -99,13 +123,23 @@ export default function BackToTop() {
       // takes it out of compositing entirely, so the cost is only paid once
       // the control is actually on screen. The opacity transition still runs —
       // visibility animates discretely and flips at the start of the fade-in.
-      className={`fixed right-[55px] top-[calc(62.4%_+_87px)] z-[900] flex size-[52px] items-center justify-center rounded-full border border-white/30 bg-white/10 text-white shadow-[inset_0_0_28.3px_0_rgba(255,255,255,0.25)] backdrop-blur-[10px] transition-[opacity,transform] duration-300 ease-out hover:bg-white/20 max-md:bottom-[20px] max-md:right-[20px] max-md:top-auto ${
+      // z-1000 (over the z-999 nav, not under it) so the menu dissolves this
+      // disc from ON TOP as it swallows it — underneath, the panel's edge would
+      // drag across the disc as a visible seam. See menu-absorb.ts.
+      className={`group fixed right-[55px] top-[calc(62.4%_+_87px)] z-[1000] flex size-[52px] items-center justify-center rounded-full text-white transition-[opacity,transform] duration-300 ease-out max-md:bottom-[20px] max-md:right-[20px] max-md:top-auto ${
         visible
           ? "pointer-events-auto visible translate-y-0 opacity-100"
           : "pointer-events-none invisible translate-y-[10px] opacity-0"
       }`}
     >
-      <ArrowUp className="h-[16px] w-[14px]" />
+      {/* The glass, as its own layer so the menu can dissolve it while the arrow
+          stays. The button itself is placement, hit area and focus ring. */}
+      <span
+        ref={chromeRef}
+        aria-hidden
+        className="pointer-events-none absolute inset-0 rounded-full border border-white/30 bg-white/10 shadow-[inset_0_0_28.3px_0_rgba(255,255,255,0.25)] backdrop-blur-[10px] transition-colors duration-200 group-hover:bg-white/20"
+      />
+      <ArrowUp className="relative h-[16px] w-[14px]" />
     </button>
   );
 }
