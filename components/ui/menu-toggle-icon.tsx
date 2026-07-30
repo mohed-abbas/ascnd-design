@@ -12,6 +12,15 @@ const DURATION = 0.45;
 const EASE = "power2.inOut";
 
 /**
+ * Each line's rotation pivot, in the SVG's user space. Applied ONCE per element
+ * on mount and never re-sent — see the note on the effect below; re-declaring an
+ * svgOrigin on an already-rotated element is what used to walk the glyph off the
+ * navbar pill.
+ */
+const TOP_ORIGIN = "8.5 1";
+const BOTTOM_ORIGIN = "8.5 6";
+
+/**
  * The navbar pill's menu glyph: two hamburger lines that ROTATE into the ✕
  * rather than being swapped for a different icon.
  *
@@ -41,7 +50,8 @@ const EASE = "power2.inOut";
  * also changes width mid-tween, so an explicit pivot is the safe one. GSAP
  * composes SVG transforms as translate ∘ rotate-about-origin (CSSPlugin's
  * `_renderSVGTransforms`), so the pivot lands at origin + (x, y) — i.e. both
- * centres converge on (8.5, 3.5).
+ * centres converge on (8.5, 3.5). It is set ONCE, on mount, and deliberately
+ * never re-sent in the toggle tweens — see the warning in the effect.
  *
  * The bottom line is the SHORT one, so it also has to grow 9 → 15.5. That's
  * animated on the x1/x2 ATTRIBUTES, not scaleX: scaling would stretch the round
@@ -81,22 +91,31 @@ export default function MenuToggleIcon({
       attr: open ? { x1: 0.75, x2: 16.25 } : { x1: 4, x2: 13 },
     };
 
-    // First render: snap. There is no toggle to animate yet, and the markup is
-    // already the closed state.
+    // First render: snap, and establish each line's pivot for good. There is no
+    // toggle to animate yet, and the markup is already the closed state.
     if (!mounted.current) {
       mounted.current = true;
-      gsap.set(top, { ...topState, svgOrigin: "8.5 1" });
-      gsap.set(bottom, { ...bottomState, svgOrigin: "8.5 6" });
+      gsap.set(top, { ...topState, svgOrigin: TOP_ORIGIN });
+      gsap.set(bottom, { ...bottomState, svgOrigin: BOTTOM_ORIGIN });
       return;
     }
 
+    // ⚠️ NO svgOrigin IN THESE TWEENS. The pivot is a constant and it is already
+    // recorded on the element by the mount `set` above, so re-sending it here is
+    // not a no-op — it made the glyph WALK. GSAP's smoothOrigin keeps an element
+    // visually still when its origin moves by folding a compensating translate
+    // into the matrix; re-declaring an origin on a line that is currently
+    // rotated makes it recompute that compensation and bake in a little more
+    // offset every time. It accumulates and never comes back, because the drift
+    // lives in the matrix rather than in x (which still reads 0) — so nothing
+    // resets it. Measured before the fix: ~0.14px per interrupted toggle and
+    // ~3.5px per completed one, unbounded, until the ✕ slid out of the navbar
+    // pill entirely (the `overflow-visible` above lets it escape). Setting the
+    // origin once and animating only rotate/y/strokeWidth/attr holds the glyph
+    // dead still with pixel-identical open and closed geometry.
     tlRef.current?.kill();
     const tl = gsap.timeline({ defaults: { duration: DURATION, ease: EASE } });
-    tl.to(top, { ...topState, svgOrigin: "8.5 1" }, 0).to(
-      bottom,
-      { ...bottomState, svgOrigin: "8.5 6" },
-      0,
-    );
+    tl.to(top, topState, 0).to(bottom, bottomState, 0);
 
     tlRef.current = tl;
     return () => {
