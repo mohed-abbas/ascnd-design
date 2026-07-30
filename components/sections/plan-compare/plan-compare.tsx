@@ -44,6 +44,11 @@ const COLS = "grid-cols-[447px_358px_325px]";
 // A faint full-width rule (Figma Line229 / Line230), fading at both ends.
 const HAIRLINE = "h-px bg-gradient-to-r from-transparent via-white/25 to-transparent";
 
+// The plan CTAs sit two-up on a phone, so the shared button's desktop padding
+// and 16px label are trimmed to keep the longer "book a call" on one line in a
+// half-width track. Variant utilities win over the button's own base ones.
+const CTA_MOBILE = "max-md:px-[14px] max-md:py-[6px] max-md:text-[14px]";
+
 export default function PlanCompare() {
   // Independent open state per category, keyed by category key. "how it works"
   // starts open (the design's shown state).
@@ -65,40 +70,64 @@ export default function PlanCompare() {
         <PlanCompareReveal />
 
         {/* Header — heading (col 1) + the two plan columns (col 2 / col 3). Below
-            md it stacks: heading centred, then the plan columns. */}
+            md the heading takes a full-width row of its own and the two plans sit
+            SIDE BY SIDE beneath it, split by a dashed rule: the section's whole
+            job is comparison, and stacking them made the phone read as two
+            unrelated offers you had to scroll between. items-stretch is what
+            lets that rule run the full height of the taller column. */}
         <div
-          className={`grid ${COLS} items-end max-md:grid-cols-1 max-md:justify-items-center max-md:gap-y-[28px]`}
+          className={`grid ${COLS} items-end max-md:grid-cols-2 max-md:items-stretch max-md:gap-y-[28px]`}
         >
           <h2
             data-plan-compare-head
-            className="whitespace-nowrap text-display leading-[1.1] tracking-[-0.03em] text-white max-md:whitespace-normal max-md:text-center"
+            className="whitespace-nowrap text-display leading-[1.1] tracking-[-0.03em] text-white max-md:col-span-2 max-md:whitespace-normal max-md:text-center"
           >
             <span className="font-light">compare plan </span>
             <span className="font-instrument">details</span>
           </h2>
 
-          {PLAN_COLUMNS.map((col) => (
+          {PLAN_COLUMNS.map((col, i) => (
             <div
               key={col.key}
               data-plan-compare-col
-              className="flex flex-col items-center gap-[25px]"
+              // The divider is the second column's left border, with matching
+              // inner padding on both sides, so it lands exactly on the midline
+              // (a grid gap-x would push it off-centre). Same dash geometry as
+              // the timeline's mobile spine (timeline.tsx).
+              className={`flex flex-col items-center gap-[25px] max-md:gap-[16px] max-md:px-[10px] ${
+                i > 0
+                  ? "max-md:border-l-[1.5px] max-md:border-dashed max-md:border-white/40"
+                  : ""
+              }`}
             >
-              <div className="flex flex-col items-center gap-[5px] text-center text-white">
-                <p className="font-instrument text-[31px] leading-normal">
+              <div className="flex flex-col items-center gap-[5px] text-center text-white max-md:gap-[3px]">
+                {/* Two columns on a phone is roughly 150px of track each, which
+                    the desktop 31px serif overruns — measured, "subscription"
+                    alone needs ~156px. Stepped down so both titles hold one line
+                    down to a 320px viewport. */}
+                <p className="font-instrument text-[31px] leading-normal max-md:text-[22px]">
                   {col.title}
                 </p>
-                <p className="text-[16px] font-light leading-normal tracking-[-0.05em]">
+                <p className="text-[16px] font-light leading-normal tracking-[-0.05em] max-md:text-[13px]">
                   {col.note}
                 </p>
               </div>
               {/* The booking column links to this page's calendar; the other is
-                  still unwired (see PlanColumn.ctaHref). */}
+                  still unwired (see PlanColumn.ctaHref). CTA_MOBILE trims the
+                  shared button's padding/size so "book a call" clears a half-
+                  width track without wrapping. */}
               {col.ctaHref ? (
-                <Button variant={col.ctaVariant} href={col.ctaHref}>
+                <Button
+                  variant={col.ctaVariant}
+                  href={col.ctaHref}
+                  className={CTA_MOBILE}
+                >
                   {col.cta}
                 </Button>
               ) : (
-                <Button variant={col.ctaVariant}>{col.cta}</Button>
+                <Button variant={col.ctaVariant} className={CTA_MOBILE}>
+                  {col.cta}
+                </Button>
               )}
             </div>
           ))}
