@@ -65,8 +65,10 @@ export default function Home() {
             <Testimonials />
             {/* Two-tier pricing ("simple pricing, pause anytime"): subscription +
           fixed-sprint glass cards joined by a dashed connector, over the shared
-          sky. */}
-            <Pricing />
+          sky. `detailsHref` adds the small "see exactly what you're paying for"
+          link under each CTA — homepage only, since it points at /pricing, which
+          renders this same section as its own hero. */}
+            <Pricing detailsHref="/pricing" />
             {/* "questions, answered straight": six glass FAQ pills that expand on click
           (single-open accordion), under a mixed-font heading, over the shared
           sky. */}

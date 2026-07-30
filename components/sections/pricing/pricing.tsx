@@ -1,10 +1,15 @@
 import type { ReactNode } from "react";
+import AnchorLink from "@/components/ui/anchor-link";
 import BookCallButton from "@/components/ui/book-call-button";
 import BookCallLink from "@/components/ui/book-call-link";
 import Button, { type ButtonVariant } from "@/components/ui/button";
 import PricingReveal from "./pricing-reveal";
 import { CheckMark, ConnectorArrow } from "./pricing-icons";
 import { FIXED_SPRINT, SUBSCRIPTION, type Plan } from "./pricing-data";
+
+/** Label for the under-CTA link. Both cards share it — one destination, one
+ *  promise, so it reads as the same offer wherever you are in the section. */
+const DETAILS_CTA = "see exactly what you're paying for";
 
 /**
  * "simple pricing, pause anytime" — the two-tier pricing section (Figma node
@@ -36,8 +41,21 @@ import { FIXED_SPRINT, SUBSCRIPTION, type Plan } from "./pricing-data";
  *     is just a second copy of the same booker.
  * It's an explicit prop from the composing route rather than a usePathname()
  * check so this stays a Server Component with no client boundary of its own.
+ *
+ * `detailsHref` is the same idea for the small under-CTA link in each card:
+ *   • "/pricing" (the homepage) — a quiet "see exactly what you're paying for →"
+ *     under both plan buttons, sending anyone who wants the full breakdown
+ *     (costs, plan comparison, first-month timeline) to that route.
+ *   • omitted (/pricing) — no link at all, since you're already standing on the
+ *     page it would point to.
  */
-export default function Pricing({ bookingHref }: { bookingHref?: string }) {
+export default function Pricing({
+  bookingHref,
+  detailsHref,
+}: {
+  bookingHref?: string;
+  detailsHref?: string;
+}) {
   return (
     <section
       // NAVIGATION target for every "see plans" / "choose a plan" CTA (pills,
@@ -72,13 +90,26 @@ export default function Pricing({ bookingHref }: { bookingHref?: string }) {
         </div>
 
         {/* ── Cards ──────────────────────────────────────────────────────── */}
-        <div className="relative h-[772.535px] w-full max-md:h-auto max-md:flex max-md:flex-col max-md:items-center">
+        {/* Both cards are absolutely positioned, so this box carries their
+            height itself: it has to clear the LOWER (sprint) card — its 169.54px
+            offset plus its own content-driven height, which 772.535px does with
+            ~1px to spare. The under-CTA link adds 28.8px to a card (12px gap +
+            a 16.8px line), so the box grows by the same amount when it's shown;
+            without that the sprint card's bottom edge runs 28px past the box and
+            into the footer line sitting 20px below it. Mobile stacks (h-auto),
+            so neither number applies there. */}
+        <div
+          className={`relative w-full max-md:h-auto max-md:flex max-md:flex-col max-md:items-center ${
+            detailsHref ? "h-[801.35px]" : "h-[772.535px]"
+          }`}
+        >
           {/* Subscription — anchored plan (node 469:783) */}
           <PlanCard
             data-pricing-card
             plan={SUBSCRIPTION}
             cta="start your subscription"
             ctaVariant="solid"
+            detailsHref={detailsHref}
             className="left-0 top-[79px] max-md:mb-[40px]"
             price={
               <p className="min-w-full">
@@ -114,6 +145,7 @@ export default function Pricing({ bookingHref }: { bookingHref?: string }) {
             // calendar (/pricing) — see `bookingHref` in the header comment.
             ctaBooking
             ctaHref={bookingHref}
+            detailsHref={detailsHref}
             className="left-[591px] top-[169.54px]"
             columnPadY="py-[48px]"
             price={
@@ -204,6 +236,7 @@ function PlanCard({
   ctaVariant,
   ctaBooking = false,
   ctaHref,
+  detailsHref,
   className,
   columnPadY = "py-[42.5px]",
   ...rest
@@ -221,6 +254,9 @@ function PlanCard({
   /** Booking CTAs only: when set the CTA LINKS here (/pricing → its own inline
    *  calendar); when omitted it opens the Cal.com modal. */
   ctaHref?: string;
+  /** Where the small "see exactly what you're paying for →" link under the CTA
+   *  goes. Omitted → no link (see `detailsHref` on <Pricing>). */
+  detailsHref?: string;
   className?: string;
   /** Column top/bottom padding — differs per plan to match each Figma card. */
   columnPadY?: string;
@@ -242,17 +278,42 @@ function PlanCard({
           </p>
         </div>
 
-        {/* Booking CTA → either an anchor to a calendar on this page, or the
-            modal. Anything else → the plain, still-unwired <Button>. */}
-        {ctaBooking && ctaHref ? (
-          <Button variant={ctaVariant} href={ctaHref}>
-            {cta}
-          </Button>
-        ) : ctaBooking ? (
-          <BookCallButton variant={ctaVariant}>{cta}</BookCallButton>
-        ) : (
-          <Button variant={ctaVariant}>{cta}</Button>
-        )}
+        {/* CTA + its optional under-link, in their own tight column: as siblings
+            in the outer column they'd take its 30px gap, and the link is meant
+            to read as an appendix to the button, not the next block down. */}
+        <div className="flex flex-col items-center gap-[12px]">
+          {/* Booking CTA → either an anchor to a calendar on this page, or the
+              modal. Anything else → the plain, still-unwired <Button>. */}
+          {ctaBooking && ctaHref ? (
+            <Button variant={ctaVariant} href={ctaHref}>
+              {cta}
+            </Button>
+          ) : ctaBooking ? (
+            <BookCallButton variant={ctaVariant}>{cta}</BookCallButton>
+          ) : (
+            <Button variant={ctaVariant}>{cta}</Button>
+          )}
+
+          {/* Quiet secondary route to the full breakdown. Same underline
+              treatment as the section's "book a call" link, one size down and
+              light, so it stays subordinate to the button above it. */}
+          {detailsHref && (
+            <AnchorLink
+              href={detailsHref}
+              className="group inline-flex items-center gap-[6px] text-[14px] font-light leading-[normal] text-white transition-opacity hover:opacity-80"
+            >
+              <span className="underline decoration-solid [text-underline-position:from-font]">
+                {DETAILS_CTA}
+              </span>
+              <span
+                aria-hidden
+                className="transition-transform duration-200 group-hover:translate-x-[3px]"
+              >
+                →
+              </span>
+            </AnchorLink>
+          )}
+        </div>
 
         <div aria-hidden className="h-px w-full bg-white/20" />
 
