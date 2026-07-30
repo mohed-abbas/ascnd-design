@@ -1,3 +1,4 @@
+import BookCallButton from "@/components/ui/book-call-button";
 import Button from "@/components/ui/button";
 import FinalCtaReveal from "./final-cta-reveal";
 
@@ -28,8 +29,9 @@ import FinalCtaReveal from "./final-cta-reveal";
  * it knows it'll animate.
  *
  * "choose a plan" glides to the Pricing section (#plans). "book a 15-min intro
- * call" is still unwired — it waits on Cal.com, and until that lands it has no
- * destination on this route (see CLAUDE.md's Stripe / Cal.com note).
+ * call" opens the Cal.com booking modal — it goes through the shared
+ * <BookCallButton> (components/ui/book-call-button.tsx), so the event link and
+ * booker config are configured once in lib/cal/embed.ts.
  */
 export default function FinalCta() {
   return (
@@ -80,9 +82,9 @@ export default function FinalCta() {
           <Button variant="solid" href="#plans" className="max-md:w-full">
             choose a plan
           </Button>
-          <Button variant="clear" className="max-md:w-full">
+          <BookCallButton className="max-md:w-full">
             book a 15-min intro call
-          </Button>
+          </BookCallButton>
         </div>
       </div>
     </section>

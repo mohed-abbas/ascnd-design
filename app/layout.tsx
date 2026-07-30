@@ -9,6 +9,7 @@ import Cursor from "@/components/cursor/cursor";
 import { FLAGS } from "@/lib/flags";
 import { DEFAULT_MODE, PALETTES } from "@/lib/theme/palette";
 import { SITE_DESCRIPTION, SITE_NAME, SITE_TAGLINE, SITE_URL } from "@/lib/site";
+import CalProvider from "@/components/providers/cal-provider";
 import LenisProvider from "@/components/providers/lenis-provider";
 import QualityController from "@/components/providers/quality-controller";
 import ThemeDriver from "@/components/providers/theme-driver";
@@ -257,6 +258,10 @@ export default function RootLayout({
         {/* Crossfades the DOM sky (--sky-* vars) when the mode changes; renders
             nothing. Pairs with ThemeRig inside the cloud canvas (same CROSSFADE). */}
         <ThemeDriver />
+        {/* Warms the Cal.com embed + booking namespace behind every
+            <BookCallButton>, at idle and only on routes that have one. Renders
+            nothing. */}
+        <CalProvider />
         <LenisProvider>
           {/* Two independent fixed layers at the root: the sky backdrop
               (-z-20) and the volumetric clouds (-z-10), with page content

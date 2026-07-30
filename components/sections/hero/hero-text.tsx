@@ -1,3 +1,4 @@
+import BookCallButton from "@/components/ui/book-call-button";
 import Button from "@/components/ui/button";
 
 /**
@@ -50,9 +51,12 @@ export default function HeroText() {
           data-reveal-order={5}
           className="inline-flex max-md:w-full"
         >
-          <Button variant="clear" href="#book" className="max-md:w-full">
+          {/* Opens the Cal.com booking modal (book-call-button.tsx). It used to
+              be href="#book" — an id that only exists on /pricing, so on the
+              homepage the CTA did nothing at all. */}
+          <BookCallButton className="max-md:w-full">
             book a 15-min intro call
-          </Button>
+          </BookCallButton>
         </span>
       </div>
     </div>

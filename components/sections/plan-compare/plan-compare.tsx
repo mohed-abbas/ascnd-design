@@ -91,7 +91,15 @@ export default function PlanCompare() {
                   {col.note}
                 </p>
               </div>
-              <Button variant={col.ctaVariant}>{col.cta}</Button>
+              {/* The booking column links to this page's calendar; the other is
+                  still unwired (see PlanColumn.ctaHref). */}
+              {col.ctaHref ? (
+                <Button variant={col.ctaVariant} href={col.ctaHref}>
+                  {col.cta}
+                </Button>
+              ) : (
+                <Button variant={col.ctaVariant}>{col.cta}</Button>
+              )}
             </div>
           ))}
         </div>

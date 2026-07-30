@@ -1,92 +1,30 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import {
+  CAL_BOOKING_CONFIG,
+  CAL_LINK,
+  CAL_UI_CONFIG,
+  INLINE_NS,
+  initCalNamespace,
+} from "@/lib/cal/embed";
 
 /**
  * The Cal.com inline booking embed that fills the section's glass box
  * (Figma 746:4550).
  *
- * WHY THE VANILLA INLINE LOADER (not @calcom/embed-react): the site avoids
- * runtime dependencies for third-party widgets, so this uses Cal's official
- * inline-embed snippet — it injects app.cal.com/embed/embed.js ONCE and queues
- * commands — ported into a typed helper so we control exactly WHEN it loads.
+ * The loader, the event link and the booker/theme config are all shared with the
+ * site's booking BUTTONS (ui/book-call-button.tsx) — they live in
+ * lib/cal/embed.ts, which is also where the "why the vanilla loader, not
+ * @calcom/embed-react" reasoning and the light-theme pinning are documented.
+ * This file owns only what is specific to the INLINE embed: when it boots and
+ * how its container is sized/clipped.
  *
  * LOADING: the embed boots on MOUNT (deferred to idle so it never competes
  * with the page's first paint) rather than lazily on approach — a deliberate
  * trade: /pricing exists to get the call booked, so by the time the visitor
  * scrolls to the section the calendar must already be sitting there loaded.
- *
- * THEME: pinned to Cal's LIGHT theme, always. Without an explicit `theme`,
- * Cal's booker follows the visitor's OS prefers-color-scheme — a dark-mode
- * device got a dark calendar over the bright day sky. The embed deliberately
- * does NOT follow the site's sky mode either (one stable white calendar
- * across sunrise/day/sunset/night); `cssVarsPerTheme` pushes the brand
- * accent, mirroring the config generated in the Cal.com dashboard.
  */
-
-// "<cal-username>/<event-type-slug>". Env override for previews/staging.
-const CAL_LINK = process.env.NEXT_PUBLIC_CAL_LINK ?? "ascndd/intro-session";
-
-// Namespace scoping this embed instance (lets Cal keep multiple embeds apart).
-// Matches the namespace in the dashboard-generated snippet for this event.
-const NS = "intro-session";
-
-// The brand accent pushed into Cal's UI — the sky-tint blue configured on the
-// ascnd Cal.com event (dashboard snippet), used for selected dates / buttons.
-const BRAND = "#9EC8FC";
-
-type CalApi = ((...args: unknown[]) => void) & {
-  loaded?: boolean;
-  ns?: Record<string, CalApi>;
-  q?: unknown[];
-};
-
-declare global {
-  interface Window {
-    Cal?: CalApi;
-  }
-}
-
-/**
- * Cal's official inline-embed bootstrap (faithful port of their snippet): defines
- * window.Cal as a command queue, injecting embed.js on first use. Idempotent —
- * safe to call on every scroll-in; only the first injects the script.
- */
-function ensureCal(): CalApi {
-  const w = window;
-  if (!w.Cal) {
-    const queue = function (api: CalApi, args: IArguments | unknown[]) {
-      (api.q ??= []).push(args);
-    };
-    const cal = function (this: unknown, ...args: unknown[]) {
-      const c = w.Cal as CalApi;
-      if (!c.loaded) {
-        c.ns = {};
-        c.q = c.q || [];
-        document.head
-          .appendChild(document.createElement("script"))
-          .setAttribute("src", "https://app.cal.com/embed/embed.js");
-        c.loaded = true;
-      }
-      if (args[0] === "init") {
-        const api = function (this: unknown, ...a: unknown[]) {
-          queue(api as unknown as CalApi, a);
-        } as unknown as CalApi;
-        const namespace = args[1];
-        api.q = api.q || [];
-        if (typeof namespace === "string") {
-          c.ns![namespace] = c.ns![namespace] || api;
-          queue(c.ns![namespace], args);
-          queue(c, ["initNamespace", namespace]);
-        } else queue(c, args);
-        return;
-      }
-      queue(c, args);
-    } as CalApi;
-    w.Cal = cal;
-  }
-  return w.Cal;
-}
 
 export default function CalEmbed() {
   const boxRef = useRef<HTMLDivElement>(null);
@@ -106,28 +44,13 @@ export default function CalEmbed() {
       if (started) return;
       started = true;
 
-      const Cal = ensureCal();
-      Cal("init", NS, { origin: "https://app.cal.com" });
-      const ns = Cal.ns![NS];
+      const ns = initCalNamespace(INLINE_NS);
       ns("inline", {
         elementOrSelector: box,
         calLink: CAL_LINK,
-        config: {
-          layout: "month_view",
-          // Pin the LIGHT theme here, in the booker's boot config — the
-          // later ui() call alone loses to the device's prefers-color-scheme
-          // (a dark-mode phone rendered a dark calendar over the day sky).
-          theme: "light",
-          // Cal's dashboard snippet ships this as a string, not a boolean.
-          useSlotsViewOnSmallScreen: "true",
-        },
+        config: CAL_BOOKING_CONFIG,
       });
-      ns("ui", {
-        theme: "light",
-        cssVarsPerTheme: { light: { "cal-brand": BRAND } },
-        hideEventTypeDetails: false,
-        layout: "month_view",
-      });
+      ns("ui", CAL_UI_CONFIG);
       // Once the booker has fully loaded, flip to the "ready" layout: the
       // loading min-height comes off and the branding clip goes on (below).
       ns("on", {

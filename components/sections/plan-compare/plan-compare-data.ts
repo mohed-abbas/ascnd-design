@@ -30,6 +30,11 @@ export type PlanColumn = {
   /** CTA label + which shared <Button> skin it uses. */
   readonly cta: string;
   readonly ctaVariant: ButtonVariant;
+  /** Where the CTA points. This section is /pricing-only, so the booking CTA
+   *  glides to that page's own inline calendar (#book, book-a-call.tsx) rather
+   *  than opening the Cal.com modal — the homepage is the only place that
+   *  modal is used. Omitted → the CTA is still unwired (waiting on Stripe). */
+  readonly ctaHref?: string;
 };
 
 export const PLAN_COLUMNS: readonly PlanColumn[] = [
@@ -46,6 +51,7 @@ export const PLAN_COLUMNS: readonly PlanColumn[] = [
     note: "let’s talk",
     cta: "book a call",
     ctaVariant: "clear",
+    ctaHref: "#book",
   },
 ];
 

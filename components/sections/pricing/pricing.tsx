@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import BookCallButton from "@/components/ui/book-call-button";
 import Button, { type ButtonVariant } from "@/components/ui/button";
 import PricingReveal from "./pricing-reveal";
 import { CheckMark, ConnectorArrow } from "./pricing-icons";
@@ -24,8 +25,18 @@ import { FIXED_SPRINT, SUBSCRIPTION, type Plan } from "./pricing-data";
  * re-rastered ~340k px² each per scrolled frame over a sky-only backdrop
  * (docs/backdrop-filter-sweep.md). CTAs reuse the shared <Button> (solid =
  * white gradient + rainbow hover aura; clear = liquid glass).
+ *
+ * THIS SECTION RENDERS ON BOTH ROUTES, so the fixed-sprint plan's "book a 15-min
+ * intro call" CTA can't hard-code one behaviour — hence `bookingHref`:
+ *   • omitted (the homepage) — the CTA opens the Cal.com booking MODAL, because
+ *     the homepage has no calendar of its own to send anyone to.
+ *   • "#book" (/pricing) — it glides to that page's inline calendar
+ *     (book-a-call.tsx). A modal over a page already showing the full calendar
+ *     is just a second copy of the same booker.
+ * It's an explicit prop from the composing route rather than a usePathname()
+ * check so this stays a Server Component with no client boundary of its own.
  */
-export default function Pricing() {
+export default function Pricing({ bookingHref }: { bookingHref?: string }) {
   return (
     <section
       // NAVIGATION target for every "see plans" / "choose a plan" CTA (pills,
@@ -97,6 +108,11 @@ export default function Pricing() {
             plan={FIXED_SPRINT}
             cta="book a 15-min intro call"
             ctaVariant="clear"
+            // This plan is priced "from", so the scope is set on the call:
+            // either the booking modal (homepage) or this page's own inline
+            // calendar (/pricing) — see `bookingHref` in the header comment.
+            ctaBooking
+            ctaHref={bookingHref}
             className="left-[591px] top-[169.54px]"
             columnPadY="py-[48px]"
             price={
@@ -179,6 +195,8 @@ function PlanCard({
   priceNoteClassName,
   cta,
   ctaVariant,
+  ctaBooking = false,
+  ctaHref,
   className,
   columnPadY = "py-[42.5px]",
   ...rest
@@ -189,6 +207,13 @@ function PlanCard({
   priceNoteClassName?: string;
   cta: string;
   ctaVariant: ButtonVariant;
+  /** Marks this plan's CTA as the BOOKING CTA (the fixed-sprint plan). Without
+   *  it the CTA is a plain <Button> with nothing wired — which is what the
+   *  subscription plan still is, waiting on Stripe. */
+  ctaBooking?: boolean;
+  /** Booking CTAs only: when set the CTA LINKS here (/pricing → its own inline
+   *  calendar); when omitted it opens the Cal.com modal. */
+  ctaHref?: string;
   className?: string;
   /** Column top/bottom padding — differs per plan to match each Figma card. */
   columnPadY?: string;
@@ -210,7 +235,17 @@ function PlanCard({
           </p>
         </div>
 
-        <Button variant={ctaVariant}>{cta}</Button>
+        {/* Booking CTA → either an anchor to a calendar on this page, or the
+            modal. Anything else → the plain, still-unwired <Button>. */}
+        {ctaBooking && ctaHref ? (
+          <Button variant={ctaVariant} href={ctaHref}>
+            {cta}
+          </Button>
+        ) : ctaBooking ? (
+          <BookCallButton variant={ctaVariant}>{cta}</BookCallButton>
+        ) : (
+          <Button variant={ctaVariant}>{cta}</Button>
+        )}
 
         <div aria-hidden className="h-px w-full bg-white/20" />
 

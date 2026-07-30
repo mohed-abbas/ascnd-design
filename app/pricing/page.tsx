@@ -82,8 +82,11 @@ export default function PricingPage() {
         </span>
       </div>
 
-      {/* Hero — the homepage pricing section, reused verbatim. */}
-      <Pricing />
+      {/* Hero — the homepage pricing section, reused. `bookingHref` is the one
+          difference: this page carries the calendar itself (<BookACall/>, below),
+          so the fixed-sprint CTA glides down to it instead of opening the modal
+          the homepage uses. */}
+      <Pricing bookingHref="#book" />
 
       {/* Supersize statement ("looking cheap costs more.") — same format and
           reveal as the hero tagline, different copy (Figma 792:438). */}
