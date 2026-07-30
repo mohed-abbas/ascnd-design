@@ -43,7 +43,7 @@ const DETAILS_CTA = "see exactly what you're paying for";
  * check so this stays a Server Component with no client boundary of its own.
  *
  * `detailsHref` is the same idea for the small under-CTA link in each card:
- *   • "/pricing" (the homepage) — a quiet "see exactly what you're paying for →"
+ *   • "/pricing" (the homepage) — a quiet "see exactly what you're paying for"
  *     under both plan buttons, sending anyone who wants the full breakdown
  *     (costs, plan comparison, first-month timeline) to that route.
  *   • omitted (/pricing) — no link at all, since you're already standing on the
@@ -254,7 +254,7 @@ function PlanCard({
   /** Booking CTAs only: when set the CTA LINKS here (/pricing → its own inline
    *  calendar); when omitted it opens the Cal.com modal. */
   ctaHref?: string;
-  /** Where the small "see exactly what you're paying for →" link under the CTA
+  /** Where the small "see exactly what you're paying for" link under the CTA
    *  goes. Omitted → no link (see `detailsHref` on <Pricing>). */
   detailsHref?: string;
   className?: string;
@@ -300,17 +300,9 @@ function PlanCard({
           {detailsHref && (
             <AnchorLink
               href={detailsHref}
-              className="group inline-flex items-center gap-[6px] text-[14px] font-light leading-[normal] text-white transition-opacity hover:opacity-80"
+              className="text-[14px] font-light leading-[normal] text-white underline decoration-solid [text-underline-position:from-font] transition-opacity hover:opacity-80"
             >
-              <span className="underline decoration-solid [text-underline-position:from-font]">
-                {DETAILS_CTA}
-              </span>
-              <span
-                aria-hidden
-                className="transition-transform duration-200 group-hover:translate-x-[3px]"
-              >
-                →
-              </span>
+              {DETAILS_CTA}
             </AnchorLink>
           )}
         </div>
