@@ -153,7 +153,10 @@ export default function PlanCompare() {
                   aria-expanded={isOpen}
                   className="group flex w-full items-center justify-between py-[25px] text-left max-md:py-[20px]"
                 >
-                  <span className="flex items-center gap-[9px] pl-[9px] text-white transition-opacity group-hover:opacity-80">
+                  {/* The 9px inset is the Figma desktop metric; on a phone the
+                      body rows sit flush left, so the icon drops it to share
+                      their edge. */}
+                  <span className="flex items-center gap-[9px] pl-[9px] text-white transition-opacity group-hover:opacity-80 max-md:pl-0">
                     <cat.Icon className="size-[30px] shrink-0" />
                     <span className="text-[25px] leading-none tracking-[-0.05em] max-md:text-[21px]">
                       {cat.name}
@@ -239,23 +242,17 @@ function CategoryBody({ rows }: { rows: readonly CompareRow[] }) {
             )}
             <div className="mt-[8px] grid grid-cols-2">
               <div className="pr-[12px]">
-                <span className="block text-[11px] uppercase tracking-[0.08em] text-white/40">
-                  subscription
-                </span>
                 <CompareValue
                   value={row.subscription}
-                  textClass="text-[13px] leading-snug text-white/70"
-                  iconClass="block size-[18px]"
+                  textClass="block text-center text-[13px] leading-snug text-white/70"
+                  iconClass="mx-auto block size-[18px]"
                 />
               </div>
               <div className={`pl-[12px] ${SPLIT}`}>
-                <span className="block text-[11px] uppercase tracking-[0.08em] text-white/40">
-                  fixed sprint
-                </span>
                 <CompareValue
                   value={row.fixedSprint}
-                  textClass="text-[13px] leading-snug text-white/70"
-                  iconClass="block size-[18px]"
+                  textClass="block text-center text-[13px] leading-snug text-white/70"
+                  iconClass="mx-auto block size-[18px]"
                 />
               </div>
             </div>
