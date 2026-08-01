@@ -2080,3 +2080,51 @@ The `full` directory is now 2.8M across 27 files, and three of those files are
 1.6M of it. That directory is fetched **one file at a time, only on expand**,
 and never by the wall or the globe — it is not page weight. Revisit only if a
 future change makes the expand preload.
+
+---
+
+## 31. An open panel now locks the page (2026-08-01)
+
+Reported from a screenshot: a tile opened at the portfolio, and the wheel kept
+driving the document underneath, so the panel was left floating over the
+plan-compare table two sections down. The panel is `aria-modal`; the page was
+not behaving like it.
+
+`data-lenis-prevent` (§24.6) was doing exactly what it was written for and
+nothing more. It is an opt-OUT for the one element that IS allowed to scroll —
+the full-length sheet — not a lock on everything else. Over the backdrop, or
+anywhere at all on a fitted panel that has no sheet, the wheel reached the page.
+
+### 31.1 Why not `overflow: hidden` on the body
+
+The reflex answer, and it is the wrong one HERE specifically. Removing the
+scrollbar narrows the layout by its width; the columns are a ratio of the column
+width, so they re-flow; the marquee's ResizeObserver fires and rebuilds the wall.
+That rebuild **destroys the clone the panel flew from**, which is the detached-
+origin case §21 exists to survive — the close would fall back to a fade in place
+instead of flying home. A lock that loses the tile it opened is not a lock.
+
+### 31.2 `lenis.stop()`, plus one listener for phones
+
+A stopped Lenis `preventDefault`s the wheel and touch events it is already
+listening to (lenis.mjs:584-587) and **still honours `data-lenis-prevent` first**
+(:578-583). So one call gives both halves of the behaviour with zero layout
+cost: the page cannot move, and a full-length design still scrolls inside its
+sheet. No scrollbar disappears, so nothing re-flows and no rebuild fires.
+
+Touch devices have no instance to ask — `LenisProvider` skips Lenis entirely on
+a coarse pointer — so a non-passive `touchmove` listener applies the same policy
+there, reading the SAME attribute rather than a selector of its own. Grid is the
+only mode below 768px, so this is not an edge case; it is half the traffic.
+
+`useLenis()` is mirrored into a ref (intro.tsx's idiom) because it can return a
+fresh reference across renders, and depending on it directly would tear the lock
+down and rebuild it — a frame of unlocked page for nothing.
+
+### 31.3 Left knowingly: the keyboard
+
+Space / PageDown / arrows with focus outside the sheet still scroll the page.
+Swallowing them would take the arrow keys away from a full-length design, which
+has no other way to scroll — the scroller is a plain `div` and takes no focus.
+This belongs with the focus trap already deferred to the lightbox variant (§10),
+which is the pass where the dialog becomes a real modal.

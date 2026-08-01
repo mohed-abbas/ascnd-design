@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import Image from "next/image";
+import { useLenis } from "lenis/react";
 import gsap from "gsap";
 import {
   fullSrc,
@@ -177,6 +178,18 @@ export default function GridExpand({ projects }: { projects: CloudProject[] }) {
   const trueAspect = useRef<number | null>(null);
   /** The tile's aspect — the shape the panel opens at and returns to. */
   const tileAspect = useRef(1);
+
+  // The page's smooth-scroll instance, for the lock below. Mirrored into a ref
+  // the way intro.tsx does: useLenis() can hand back a fresh reference across
+  // renders, and depending on it directly would tear the lock down and rebuild
+  // it — a frame of unlocked page for nothing. Undefined on touch devices,
+  // where LenisProvider never instantiates at all; the fallback listener below
+  // is what covers those.
+  const lenis = useLenis();
+  const lenisRef = useRef(lenis);
+  useEffect(() => {
+    lenisRef.current = lenis;
+  }, [lenis]);
 
   /**
    * Fit an aspect into the panel's viewport envelope. One rule for both stages,
@@ -462,6 +475,53 @@ export default function GridExpand({ projects }: { projects: CloudProject[] }) {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [project, close]);
+
+  // ── Scroll lock while open ────────────────────────────────────────────────
+  //
+  // An open panel OWNS the viewport, and until this existed the page behind it
+  // did not know that: the wheel over the backdrop — or anywhere at all, for a
+  // fitted panel that has no scroller — kept driving the document, so a tile
+  // opened at the portfolio could be left floating over the pricing table.
+  // `data-lenis-prevent` on the scrolling sheet was never a page lock; it is the
+  // opposite, an opt-OUT for the one element that is allowed to scroll.
+  //
+  // WHY NOT `overflow: hidden` ON THE BODY, the usual modal answer. Removing the
+  // scrollbar narrows the layout by its width, the columns re-flow, and the
+  // marquee's ResizeObserver rebuilds the wall — which DESTROYS the clone the
+  // panel flew from and is exactly the detached-origin case §21 has a fallback
+  // for. Locking a modal must not be the thing that loses the tile it opened.
+  //
+  // `lenis.stop()` costs no layout at all: a stopped Lenis preventDefaults the
+  // wheel and touch it already listens for, and it keeps honouring
+  // `data-lenis-prevent`, so a full-length design still scrolls inside its sheet
+  // while the page underneath cannot move. One rule, both behaviours, no reflow.
+  //
+  // The touchmove listener is the same policy for phones, where there is no
+  // Lenis to ask (LenisProvider skips it on a coarse pointer). It reads the SAME
+  // attribute rather than a selector of its own, so the sheet and the page agree
+  // about what is scrollable in both worlds. Non-passive, or preventDefault is
+  // ignored.
+  //
+  // Keyboard scrolling (space / PageDown with focus outside the sheet) is NOT
+  // covered here and is left knowingly: swallowing those keys would take the
+  // arrow keys away from a full-length design, which has no other way to scroll.
+  // It belongs with the focus trap the record already defers.
+  useEffect(() => {
+    if (!project) return;
+    lenisRef.current?.stop();
+
+    const onTouchMove = (e: TouchEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target?.closest?.("[data-lenis-prevent]")) return;
+      if (e.cancelable) e.preventDefault();
+    };
+    document.addEventListener("touchmove", onTouchMove, { passive: false });
+
+    return () => {
+      document.removeEventListener("touchmove", onTouchMove);
+      lenisRef.current?.start();
+    };
+  }, [project]);
 
   // ── Resize while open ─────────────────────────────────────────────────────
   // The panel is sized in PIXELS so the morph has something to tween; CSS units

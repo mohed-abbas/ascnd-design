@@ -138,8 +138,10 @@ in `grid-marquee.tsx` except where noted:
 - **Tier knobs** — `lib/perf/tiers.ts` has the registry row and reads NO knob,
   with the reasoning written out. Revisit only if the wall gets heavier.
 - **A focus trap on the expand.** It is `aria-modal` but tab still reaches the
-  controls behind. A real trap belongs with the deferred lightbox variant
-  (§10), which is when this becomes a true modal.
+  controls behind, and space/PageDown still scroll the page past the wheel lock
+  (§31.3) — swallowing those keys would take the arrows away from a full-length
+  sheet, which has no other way to scroll. A real trap belongs with the deferred
+  lightbox variant (§10), which is when this becomes a true modal.
 
 ---
 
@@ -235,7 +237,14 @@ collected here so they are not rediscovered the hard way.
     tiles in one column, and nothing in the registry line hinted at which. It
     has changed the decision three times now — it is part of adding a project,
     not verification of one. (§29.3, §29.4, §30.3)
-27. **The `full` preset has a hard ceiling at 16383px** (WebP's max dimension),
+27. **An open panel locks the page with `lenis.stop()`, NOT `overflow: hidden`.**
+    Hiding the body's scrollbar narrows the layout, re-flows the columns and
+    fires the marquee's ResizeObserver — which destroys the clone the panel flew
+    from (§21). A stopped Lenis still honours `data-lenis-prevent`, so the
+    full-length sheet keeps scrolling inside a frozen page. Phones get the same
+    policy from a non-passive `touchmove` listener, because there is no Lenis
+    instance there at all. (§31)
+28. **The `full` preset has a hard ceiling at 16383px** (WebP's max dimension),
     which at `FULL_MAX = 1400` means a source no taller than ~16851px. Opus is
     at 87%. It throws rather than corrupting, but the next long design may not
     build — §30.2 costs the three ways out. (§30.2)
