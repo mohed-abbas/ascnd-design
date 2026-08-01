@@ -550,11 +550,19 @@ function TimelineMobile() {
             at the mark — the same relationship the drawn spine has on desktop,
             where the mark IS the pen that finishes the line. `bottom-[10px]` is
             half the endnote row's line box, i.e. the mark's vertical centre.
-            1.5px white/85 dashed matches the drawn spine's stroke. */}
+
+            The dashes are a repeating-gradient BACKGROUND on a real 1.5px-wide
+            column, NOT `border-l-[1.5px] border-dashed` on a zero-width box:
+            WebKit skips painting a dashed border when the box it belongs to has
+            no width, so on iOS Safari the spine disappeared entirely while
+            Blink (desktop Chrome and its device emulation) drew it — the bug
+            can't be seen in devtools. The painted result is the same 1.5px
+            column at left:0, so the dot centreline arithmetic below is
+            unchanged, and 6/6 is the desktop spine's own strokeDasharray. */}
         <div className="relative pl-[26px]">
           <span
             aria-hidden
-            className="absolute bottom-[10px] left-0 top-0 border-l-[1.5px] border-dashed border-white/85"
+            className="absolute bottom-[10px] left-0 top-0 w-[1.5px] bg-[image:repeating-linear-gradient(to_bottom,rgba(255,255,255,0.85)_0_6px,transparent_6px_12px)]"
           />
 
           <ol className="m-0 flex list-none flex-col gap-[30px]">
