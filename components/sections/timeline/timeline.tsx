@@ -625,23 +625,39 @@ function TimelineMobileWidget({ k }: { k: Parameters<typeof beat>[0] }) {
     // the stage's copy has, so timeline-micro.ts drives the identical
     // loading→done loop here. The done row is the in-markup resting state
     // (SSR / no-JS / reduced-motion); the loop flips them on start.
+    //
+    // Sized in LITERAL PX — the only widget here that isn't on --tl-u/--tl-g,
+    // and deliberately so. This is a replica of the site's real CTA, and on a
+    // phone it stands beside real ones (the plan cards' buttons, a scroll
+    // away), so it has to be that button's size exactly, not a unit-scaled
+    // approximation of it. The values below ARE button.tsx's SHAPE, copied:
+    // rounded-[32px] px-[20px] py-[7px] text-[16px], measured on /pricing at
+    // 390px as a 38px-tall pill. Keep them in step with SHAPE if it ever moves.
+    //
+    // Why not the units. The stage's copy expresses the same button as factors
+    // of the design's own 15.12px unit (1.323 → px, 0.463 → py, 1.058 → text,
+    // 2.116 → radius), which is right there — the artwork scales as one piece.
+    // On a phone that indirection only loses precision: 1.323 × 15.12 = 20.004,
+    // 2.116 × 15.12 = 31.994. Riding --tl-u (18px, the deliberately hot TYPE
+    // unit) was worse still — a 19px label in 23.8px of padding, 19% over the
+    // button it imitates.
+    //
+    // leading-[1.5] on the rows below is part of the match, not styling: the
+    // real button's 16px label sits in a 24px line box, so 1.2 made this pill
+    // 33px tall next to its 38px. The aura numbers are likewise button.tsx's
+    // own — a 3px ring, a 3px-inset glow, blur(9px).
     return (
-      <div className="relative inline-flex items-center justify-center self-start whitespace-nowrap rounded-[calc(2.116*var(--tl-g))] bg-gradient-to-b from-white to-[#efefef] px-[calc(1.323*var(--tl-u))] py-[calc(0.463*var(--tl-u))] text-[calc(1.058*var(--tl-u))] text-[#263138] shadow-[inset_0px_-2px_1px_0px_#f2f2f2,inset_0px_-2px_2px_0px_rgba(0,0,0,0.5)]">
-        <TimelineAura
-          radius="calc(2.116*var(--tl-g))"
-          ring="calc(0.2*var(--tl-g))"
-          spread="calc(0.44*var(--tl-g))"
-          blur="calc(0.62*var(--tl-g))"
-        />
+      <div className="relative inline-flex items-center justify-center self-start whitespace-nowrap rounded-[32px] bg-gradient-to-b from-white to-[#efefef] px-[20px] py-[7px] text-[16px] text-[#263138] shadow-[inset_0px_-2px_1px_0px_#f2f2f2,inset_0px_-2px_2px_0px_rgba(0,0,0,0.5)]">
+        <TimelineAura radius="32px" ring="3px" spread="3px" blur="9px" />
         <span className="relative flex">
           {/* loading — in-flow, reserves the (wider) width */}
           <span
             data-tl-board-loading
-            className="pointer-events-none flex items-center gap-[calc(0.5*var(--tl-u))] leading-[1.2] opacity-0"
+            className="pointer-events-none flex items-center gap-[7.5px] leading-[1.5] opacity-0"
           >
             <Spinner
               data-tl-board-spinner
-              className="size-[calc(1.058*var(--tl-u))] shrink-0"
+              className="size-[16px] shrink-0"
             />
             <span className="inline-block">
               <RollingText text="creating your board" />
@@ -650,11 +666,11 @@ function TimelineMobileWidget({ k }: { k: Parameters<typeof beat>[0] }) {
           {/* done — absolute overlay; resting default */}
           <span
             data-tl-board-done
-            className="pointer-events-none absolute inset-0 flex items-center justify-center gap-[calc(0.4*var(--tl-u))] leading-[1.2]"
+            className="pointer-events-none absolute inset-0 flex items-center justify-center gap-[6px] leading-[1.5]"
           >
             <Check
               data-tl-board-check
-              className="size-[calc(1.058*var(--tl-u))] shrink-0 text-[#34c759]"
+              className="size-[16px] shrink-0 text-[#34c759]"
             />
             <span className="inline-block">
               <RollingText text="board created" />
