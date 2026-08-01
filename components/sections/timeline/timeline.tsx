@@ -627,37 +627,36 @@ function TimelineMobileWidget({ k }: { k: Parameters<typeof beat>[0] }) {
     // (SSR / no-JS / reduced-motion); the loop flips them on start.
     //
     // Sized in LITERAL PX — the only widget here that isn't on --tl-u/--tl-g,
-    // and deliberately so. This is a replica of the site's real CTA, and on a
-    // phone it stands beside real ones (the plan cards' buttons, a scroll
-    // away), so it has to be that button's size exactly, not a unit-scaled
-    // approximation of it. The values below ARE button.tsx's SHAPE, copied:
-    // rounded-[32px] px-[20px] py-[7px] text-[16px], measured on /pricing at
-    // 390px as a 38px-tall pill. Keep them in step with SHAPE if it ever moves.
+    // and deliberately so. This is a replica of the site's CTA, and on a phone
+    // it stands beside real ones a scroll away, so it takes the size the site's
+    // OWN phone CTAs take: the CTA_MOBILE trim (plan-compare.tsx) — px-14 /
+    // py-6 / text-14 on the shared 32px radius, a 33px-tall pill (measured on
+    // /pricing at 390px against "start now"). The full desktop SHAPE (20/7/16,
+    // 38px tall) was tried first and read oversized inside a timeline card —
+    // it's a widget in an illustration, not a page-level CTA. Keep these in
+    // step with CTA_MOBILE if that trim ever moves.
     //
-    // Why not the units. The stage's copy expresses the same button as factors
-    // of the design's own 15.12px unit (1.323 → px, 0.463 → py, 1.058 → text,
-    // 2.116 → radius), which is right there — the artwork scales as one piece.
-    // On a phone that indirection only loses precision: 1.323 × 15.12 = 20.004,
-    // 2.116 × 15.12 = 31.994. Riding --tl-u (18px, the deliberately hot TYPE
-    // unit) was worse still — a 19px label in 23.8px of padding, 19% over the
-    // button it imitates.
+    // Why not the units. The stage's copy expresses the button as factors of
+    // the design's own 15.12px unit, which is right there — the artwork scales
+    // as one piece. On a phone the indirection only loses precision, and
+    // riding --tl-u (18px, the hot TYPE unit, the original bug) ran it 19%
+    // over the real thing — a 19px label in 23.8px of padding.
     //
     // leading-[1.5] on the rows below is part of the match, not styling: the
-    // real button's 16px label sits in a 24px line box, so 1.2 made this pill
-    // 33px tall next to its 38px. The aura numbers are likewise button.tsx's
-    // own — a 3px ring, a 3px-inset glow, blur(9px).
+    // real buttons' labels sit in a 1.5 line box, so 1.2 left the pill short
+    // of its height. Aura ring/glow stay button.tsx's own 3px + blur(9px).
     return (
-      <div className="relative inline-flex items-center justify-center self-start whitespace-nowrap rounded-[32px] bg-gradient-to-b from-white to-[#efefef] px-[20px] py-[7px] text-[16px] text-[#263138] shadow-[inset_0px_-2px_1px_0px_#f2f2f2,inset_0px_-2px_2px_0px_rgba(0,0,0,0.5)]">
+      <div className="relative inline-flex items-center justify-center self-start whitespace-nowrap rounded-[32px] bg-gradient-to-b from-white to-[#efefef] px-[14px] py-[6px] text-[14px] text-[#263138] shadow-[inset_0px_-2px_1px_0px_#f2f2f2,inset_0px_-2px_2px_0px_rgba(0,0,0,0.5)]">
         <TimelineAura radius="32px" ring="3px" spread="3px" blur="9px" />
         <span className="relative flex">
           {/* loading — in-flow, reserves the (wider) width */}
           <span
             data-tl-board-loading
-            className="pointer-events-none flex items-center gap-[7.5px] leading-[1.5] opacity-0"
+            className="pointer-events-none flex items-center gap-[6.5px] leading-[1.5] opacity-0"
           >
             <Spinner
               data-tl-board-spinner
-              className="size-[16px] shrink-0"
+              className="size-[14px] shrink-0"
             />
             <span className="inline-block">
               <RollingText text="creating your board" />
@@ -666,11 +665,11 @@ function TimelineMobileWidget({ k }: { k: Parameters<typeof beat>[0] }) {
           {/* done — absolute overlay; resting default */}
           <span
             data-tl-board-done
-            className="pointer-events-none absolute inset-0 flex items-center justify-center gap-[6px] leading-[1.5]"
+            className="pointer-events-none absolute inset-0 flex items-center justify-center gap-[5px] leading-[1.5]"
           >
             <Check
               data-tl-board-check
-              className="size-[16px] shrink-0 text-[#34c759]"
+              className="size-[14px] shrink-0 text-[#34c759]"
             />
             <span className="inline-block">
               <RollingText text="board created" />
