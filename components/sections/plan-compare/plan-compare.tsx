@@ -52,7 +52,22 @@ const CTA_MOBILE = "max-md:px-[14px] max-md:py-[6px] max-md:text-[14px]";
 // The dashed split between the two plans, repeated from the header pair so the
 // body's values sit under the plan they belong to with the same rule between
 // them. Both halves are 50%, so this always lands on the same midline.
-const SPLIT = "border-l-[1.5px] border-dashed border-white/40";
+//
+// Painted as a 1.5px-wide gradient tile pinned to the left edge, NOT as
+// `border-l-[1.5px] border-dashed`: WEBKIT WILL NOT PAINT A DASHED BORDER AT A
+// FRACTIONAL WIDTH, so on iPhones every 1.5px dashed rule on this page was
+// simply absent, while Blink — desktop Chrome AND its device emulation, which
+// shares the same renderer — rounded it up and drew it. The bug is invisible in
+// devtools; it only shows on the device. Same treatment as the mobile timeline
+// spine (timeline.tsx), and 6/6 is the dash rhythm the desktop spine uses.
+//
+// Both strings are written out literally rather than composed, because
+// Tailwind scans the source text for class names — a template-built
+// `max-md:${SPLIT}` would generate no CSS at all.
+const SPLIT =
+  "bg-[image:repeating-linear-gradient(to_bottom,rgba(255,255,255,0.4)_0_6px,transparent_6px_12px)] bg-[length:1.5px_100%] bg-left bg-no-repeat";
+const SPLIT_MOBILE =
+  "max-md:bg-[image:repeating-linear-gradient(to_bottom,rgba(255,255,255,0.4)_0_6px,transparent_6px_12px)] max-md:bg-[length:1.5px_100%] max-md:bg-left max-md:bg-no-repeat";
 
 export default function PlanCompare() {
   // Independent open state per category, keyed by category key. "how it works"
@@ -95,14 +110,12 @@ export default function PlanCompare() {
             <div
               key={col.key}
               data-plan-compare-col
-              // The divider is the second column's left border, with matching
+              // The divider sits on the second column's left EDGE, with matching
               // inner padding on both sides, so it lands exactly on the midline
               // (a grid gap-x would push it off-centre). Same dash geometry as
               // the timeline's mobile spine (timeline.tsx).
               className={`flex flex-col items-center gap-[25px] max-md:gap-[16px] max-md:px-[10px] ${
-                i > 0
-                  ? "max-md:border-l-[1.5px] max-md:border-dashed max-md:border-white/40"
-                  : ""
+                i > 0 ? SPLIT_MOBILE : ""
               }`}
             >
               <div className="flex flex-col items-center gap-[5px] text-center text-white max-md:gap-[3px]">
