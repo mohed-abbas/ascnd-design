@@ -68,15 +68,29 @@ import FooterReveal from "./footer-reveal";
  * order), so they share the list. Each routes through <AnchorLink> (client-side
  * next/link that keeps the shared sky/cloud canvas alive and smooth-scrolls
  * in-page anchors via Lenis) — see nav-links.ts for the per-href behaviour.
- * The LEGAL links below stay LOCAL and stay placeholder <a>s: no privacy/terms
- * pages exist yet (unwired until routing lands, matching the rest of the site),
- * so they're placeholders rather than navigation. The social icons are the
- * shared currentColor glyphs (ui/icons.tsx — same glyphs as the V4 node's 20px
- * frames).
+ * The LEGAL links below stay LOCAL — they're document links, not navigation, so
+ * they don't belong in the nav list the glass menu also renders. The social
+ * icons are the shared currentColor glyphs (ui/icons.tsx — same glyphs as the
+ * V4 node's 20px frames).
+ */
+
+/**
+ * The legal row. Real routes since the pages landed (app/terms, app/privacy) —
+ * these were dead "#privacy"/"#terms" placeholder <a>s while the pages didn't
+ * exist. Two changes came with wiring them up:
+ *   • <AnchorLink>, not a bare <a>: a full page load here would tear down and
+ *     rebuild the shared fixed sky + WebGL cloud canvas, which is the whole
+ *     reason every other internal link on the site routes through it.
+ *   • "terms of service", not the V4 mock's "terms of payment" — the document
+ *     these point at covers the entire engagement (scope, IP, liability), not
+ *     just payment, so the mock's label would have misdescribed it.
+ * The Refund & Cancellation Policy is deliberately NOT here: it's reached from
+ * the cancellation section of the terms (components/sections/legal/terms.tsx
+ * §6), keeping this row to the two documents a visitor expects to find.
  */
 const LEGAL = [
-  { label: "privacy policy", href: "#privacy" },
-  { label: "terms of payment", href: "#terms" },
+  { label: "terms of service", href: "/terms" },
+  { label: "privacy policy", href: "/privacy" },
 ];
 
 const SOCIALS = [
@@ -151,13 +165,13 @@ export default function Footer() {
           <div className="flex w-full items-center justify-between whitespace-nowrap text-[16px] font-light max-md:flex-col max-md:gap-[8px]">
             <div className="flex items-start gap-[13px] text-[#f7f4f0]">
               {LEGAL.map(({ label, href }) => (
-                <a
+                <AnchorLink
                   key={label}
                   href={href}
                   className="inline-block transition-opacity hover:opacity-70"
                 >
                   {label}
-                </a>
+                </AnchorLink>
               ))}
             </div>
             {/* Brand name corrected from the mock's "asnd." typo. */}

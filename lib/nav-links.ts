@@ -21,11 +21,13 @@
  * shared): a same-page click glides via Lenis, a cross-page click navigates and
  * the App Router lands on the anchor.
  *
- * A hash here MUST match a real element id or the link is a silent no-op — that
- * is the deliberate no-target behaviour AnchorLink relies on for the footer's
- * unbuilt legal links, so it will not warn you. The footer's LEGAL list stays
- * local to the footer: those are placeholder anchors for pages that don't exist
- * yet, not navigation.
+ * A hash here MUST match a real element id or the link is a silent no-op, and
+ * nothing will warn you — the missing-target case is a deliberate no-op in
+ * AnchorLink, not an error. Check the id exists when you add an entry.
+ *
+ * The footer's LEGAL list stays local to the footer. Those are document links
+ * (/terms, /privacy) rather than site navigation, and the glass menu shouldn't
+ * render them.
  */
 
 export type NavLink = {

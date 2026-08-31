@@ -29,8 +29,17 @@ export const SITE_DESCRIPTION =
 /**
  * Every indexable route, in nav order. The sitemap maps over this; adding a
  * route here is the ONLY step needed to get it crawled.
+ *
+ * The three legal routes sit at the bottom on a low priority and a yearly
+ * change frequency: they're indexable (a policy nobody can find is a problem),
+ * but they should never outrank the pages that do the selling. /refunds isn't
+ * in the footer — it's linked from the cancellation section of /terms — which
+ * is exactly why it needs to be here, or nothing would point a crawler at it.
  */
 export const SITE_ROUTES = [
   { path: "/", priority: 1, changeFrequency: "weekly" },
   { path: "/pricing", priority: 0.8, changeFrequency: "monthly" },
+  { path: "/terms", priority: 0.2, changeFrequency: "yearly" },
+  { path: "/privacy", priority: 0.2, changeFrequency: "yearly" },
+  { path: "/refunds", priority: 0.2, changeFrequency: "yearly" },
 ] as const;

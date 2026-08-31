@@ -23,11 +23,12 @@ import type { MouseEvent, ReactNode } from "react";
  *
  * Same-page hashes are intercepted (preventDefault → `lenis.scrollTo`) so they
  * glide with the site's scroll feel instead of the browser's instant jump; a
- * missing target id is a safe no-op (nothing scrolls), which is why the footer's
- * not-yet-built legal links can route through here harmlessly. Cross-route hashes
- * are left to next/link + the App Router, which scrolls to the id after the new
- * route renders. Modifier/non-left clicks fall through to default behaviour so
- * open-in-new-tab still works.
+ * missing target id is a safe no-op (nothing scrolls) rather than an error, so a
+ * broken anchor fails quietly — see the warning in lib/nav-links.ts. Cross-route
+ * hashes are left to next/link + the App Router, which scrolls to the id after
+ * the new route renders (this is how /refunds reaches /terms#pausing). Modifier
+ * /non-left clicks fall through to default behaviour so open-in-new-tab still
+ * works.
  *
  * `useLenis()` reads the instance from LenisProvider's context (same source as
  * intro.tsx); it can be null before the provider mounts, so every call is
