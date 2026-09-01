@@ -82,7 +82,13 @@ export function LegalPage({
         </span>
       </div>
 
-      <section className="relative w-full pb-section pt-[calc(var(--gap-section)+80px)]">
+      {/* data-legal-prose is the cloud bind for these routes — the legal scene in
+          cloud-specs.ts / static-cloud-specs.ts rests its body cloud against this
+          column's scroll crossing, so the three documents can be any length. */}
+      <section
+        data-legal-prose
+        className="relative w-full pb-section pt-[calc(var(--gap-section)+80px)]"
+      >
         <div className="mx-auto flex w-full max-w-[720px] flex-col px-6 text-white">
           <h1 className="text-display font-light leading-[1.1] tracking-[-0.03em]">
             {title}

@@ -441,6 +441,7 @@ function SectionRig({
 
       const persp = !!c.perspectiveScroll;
       const travel = (bind.travel ?? 1) * (persp ? vwh : upSpan);
+      const at = bind.at ?? 0.5;
 
       // FROZEN crossing span. This used to run "top bottom" → "bottom top", whose
       // END tracks the section's BOTTOM — so an accordion (plan-compare / FAQ)
@@ -487,7 +488,11 @@ function SectionRig({
       const apply = (self: ScrollTrigger) => {
         const g = cloudRefs.current[i];
         if (!g) return;
-        const d = -1 + 2 * self.progress; // offset from rest, in [-1, 1] x travel
+        // Offset from rest, in travel units. Zero at progress `at` (the section
+        // centre by default), so a stagger of `at`s spreads several clouds
+        // through one tall section — see SectionBind.at. Range is
+        // [-2·at, 2·(1−at)], i.e. the familiar [-1, 1] when at is 0.5.
+        const d = 2 * (self.progress - at);
         const off = d * travel;
         if (persp) {
           g.position.set(restX, restY + off, restZ);

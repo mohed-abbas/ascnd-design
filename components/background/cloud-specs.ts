@@ -71,6 +71,20 @@ export type SectionBind = {
    * section-centre, `travel` above at section-exit. Bigger = a longer, slower drift.
    */
   travel?: number;
+  /**
+   * The crossing progress [0..1] at which the cloud sits at its `ndc` rest spot.
+   * Default 0.5 = the section centred. Stagger it (0.25 / 0.5 / 0.75) to spread
+   * several clouds through ONE tall section so the sky is never empty across it —
+   * this is what the legal documents use, and it mirrors `at` on the mobile specs
+   * (static-cloud-specs.ts), which has always had it.
+   *
+   * ⚠️ Off-centre `at` costs parking clearance on one side: the cloud parks
+   * `2·at·travel` viewport-heights BELOW rest while the section is still down-page
+   * and `2·(1−at)·travel` above it once passed, and BOTH have to push it off
+   * screen or it hangs in view on unrelated scroll. Off-centre clouds want a
+   * bigger `travel`.
+   */
+  at?: number;
 };
 
 export const SKY_CLOUDS: CloudSpec[] = [
@@ -286,6 +300,105 @@ export const PRICING_SKY_CLOUDS: CloudSpec[] = [
 
 export const PRICING_ROCK_CLOUDS: CloudSpec[] = [];
 
+// ── Legal routes (/terms, /privacy, /refunds) ──────────────────────────────
+// These pages are one long prose column, and they were falling through to the
+// home scene — which piled EVERY homepage cloud onto the top of the document at
+// once: the hero bank plus five section clouds whose triggers
+// ([data-working-with], [data-testimonials], [data-final-cta]) don't exist here.
+// A section cloud whose trigger is missing is skipped by <SectionRig> and so
+// never leaves its rest spot, i.e. it sits on screen forever. Three of them rest
+// in the top-right, which is the wall of cloud that was covering the page.
+//
+// Six clouds, SPREAD DOWN the document rather than stacked at the top: two in
+// the corners at load, three staggered through the body, one closing over the
+// footer. The four body/footer clouds are bound to sections, so the count is per
+// PAGE, not per screen — a couple are in view at a time and the sky keeps
+// turning over as you read, without any of them crowding the 720px column.
+//
+// The stagger is `at` on the prose bind (the crossing progress where the cloud
+// rests): 0.28 / 0.5 / 0.74 ≈ a quarter, half and three-quarters of the way
+// through the document, whatever that document's length. Off-centre `at` needs a
+// wide `travel` to stay parked off screen at both ends of the crossing — hence
+// travel 2.2 rather than the default 1 (see SectionBind.at).
+//
+// Everything sits at dist ≥ 24 (the hero's banks are at 22) so these read as
+// smaller and further off, which is what keeps a page of body text readable.
+export const LEGAL_SKY_CLOUDS: CloudSpec[] = [
+  // ——— On screen at load: two corners, both well clear of the title block ———
+  {
+    key: "legal-hero-tr",
+    ndc: [0.9, 0.8],
+    dist: 26,
+    seed: 4,
+    bounds: [4, 1.2, 1],
+    volume: 4,
+    anchorVh: 0,
+    perspectiveScroll: false,
+  },
+  // Low left, mostly below the fold — it reads as the top of a bank the reader
+  // scrolls up past, and balances the top-right corner diagonally.
+  {
+    key: "legal-hero-bl",
+    ndc: [-0.85, -0.95],
+    dist: 24,
+    seed: 7,
+    bounds: [5.5, 1.2, 1],
+    volume: 5,
+    anchorVh: 0,
+    perspectiveScroll: false,
+  },
+
+  // ——— Through the body ———
+  // Bound to the prose column rather than counted in anchorVh: the three legal
+  // documents are different lengths and will keep changing, and a section bind
+  // resolves against whatever height the page actually has.
+  {
+    key: "legal-body-left",
+    ndc: [-0.92, -0.6],
+    dist: 26,
+    seed: 7,
+    bounds: [5, 1.3, 1],
+    volume: 4,
+    section: { trigger: "[data-legal-prose]", travel: 2.2, at: 0.28 },
+    perspectiveScroll: false,
+  },
+  {
+    key: "legal-body-right",
+    ndc: [0.92, 0.45],
+    dist: 26,
+    seed: 11,
+    bounds: [4, 1.2, 1],
+    volume: 4,
+    section: { trigger: "[data-legal-prose]", travel: 2.2, at: 0.5 },
+    perspectiveScroll: false,
+  },
+  {
+    key: "legal-body-left-2",
+    ndc: [-0.9, 0.55],
+    dist: 28,
+    seed: 3,
+    bounds: [4.5, 1.2, 1],
+    volume: 4,
+    section: { trigger: "[data-legal-prose]", travel: 2.2, at: 0.74 },
+    perspectiveScroll: false,
+  },
+
+  // ——— The close ———
+  {
+    key: "legal-footer-right",
+    ndc: [0.9, -0.72],
+    dist: 24,
+    seed: 11,
+    bounds: [5, 1.2, 1],
+    volume: 4,
+    section: { trigger: "[data-footer]" },
+    perspectiveScroll: false,
+  },
+];
+
+// No rock-base band: these routes have no hero cliffs (same as /pricing).
+export const LEGAL_ROCK_CLOUDS: CloudSpec[] = [];
+
 // ── Per-route scene registry ────────────────────────────────────────────────
 // The clouds mount ONCE at the root (cloud-layer.tsx) so the shared WebGL context
 // survives client-side navigation; only the registered specs swap per route. Each
@@ -298,6 +411,11 @@ export type CloudScene = { sky: CloudSpec[]; rock: CloudSpec[] };
 export const CLOUD_SCENES: Record<string, CloudScene> = {
   "/": { sky: SKY_CLOUDS, rock: ROCK_CLOUDS },
   "/pricing": { sky: PRICING_SKY_CLOUDS, rock: PRICING_ROCK_CLOUDS },
+  // The three legal routes share one scene — they share a shell (LegalPage), so
+  // the same three binds ([data-legal-prose], [data-footer]) resolve on all of them.
+  "/terms": { sky: LEGAL_SKY_CLOUDS, rock: LEGAL_ROCK_CLOUDS },
+  "/privacy": { sky: LEGAL_SKY_CLOUDS, rock: LEGAL_ROCK_CLOUDS },
+  "/refunds": { sky: LEGAL_SKY_CLOUDS, rock: LEGAL_ROCK_CLOUDS },
 };
 
 /** The cloud scene for a route, falling back to the home scene when unmapped. */
