@@ -6,6 +6,13 @@ import { usePathname } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
+import {
+  consumePendingPop,
+  installScrollRestore,
+  noteRouteChange,
+  restoreScroll,
+  setScroller,
+} from "@/lib/scroll-restore";
 
 // Silence the upstream `THREE.Clock` deprecation notice emitted by
 // @react-three/fiber's internal store. We use no deprecated three APIs
@@ -257,6 +264,13 @@ export default function LenisProvider({
   // heading to 0 keeps running — harmless, because 0 is where the new route
   // wants to be anyway.
   //
+  // BACK/FORWARD is the exception, and it is handled by lib/scroll-restore.ts:
+  // the browser's own restoration is off (layout.tsx sets scrollRestoration
+  // "manual" so the homepage welcome always opens at the hero) and the App Router
+  // has none of its own, so a pop used to be dumped at the top by the reset
+  // below. It now consumes the offset the restorer parked for that history entry
+  // instead — reload and link clicks still land at the top, unchanged.
+  //
   // The first run is a deliberate no-op. Cold load is owned by the inline script
   // in layout.tsx (scrollRestoration "manual" + hash strip + scrollTo(0,0)) and
   // re-zeroed by intro.tsx right before it measures the hero; firing here would
@@ -265,20 +279,50 @@ export default function LenisProvider({
   // (off in next.config.ts today, but this shouldn't depend on that).
   const lastPath = useRef<string | null>(null);
   useEffect(() => {
+    // Hand the restorer a scroller that goes THROUGH Lenis. Restoring with a
+    // bare window.scrollTo leaves Lenis' own animation untouched, and it drags
+    // the page back off the restored offset on the next frame — the same
+    // survives-the-navigation problem the reset below exists for.
+    setScroller((y) => {
+      const lenis = lenisRef.current?.lenis;
+      if (lenis) lenis.scrollTo(y, { immediate: true, force: true });
+      else window.scrollTo(0, y);
+    });
+    installScrollRestore();
+    return () => setScroller(null);
+  }, []);
+
+  useEffect(() => {
     if (lastPath.current === null || lastPath.current === pathname) {
       lastPath.current = pathname;
       return;
     }
     lastPath.current = pathname;
 
-    const lenis = lenisRef.current?.lenis;
-    // No instance on touch — the native scroller is already the real one there.
-    if (lenis) lenis.scrollTo(0, { immediate: true, force: true });
-    else window.scrollTo(0, 0);
+    // Back/forward: the reader had a position on this entry, and putting them
+    // back on it is the whole point of the gesture. Anything else is a forward
+    // navigation, which lands at the top.
+    const restoreY = consumePendingPop(pathname);
+    const popped = restoreY !== null;
 
     // This provider sits in the ROOT LAYOUT, so its effects run after the newly
     // mounted page's own — the triggers being re-measured already exist.
+    //
+    // The refresh comes BEFORE the restore, and the order is load-bearing: a
+    // refresh puts the scroller back where it was when the refresh STARTED, so
+    // refreshing after a restore hands a pinned section the chance to undo it.
     ScrollTrigger.refresh();
+
+    if (popped) {
+      restoreScroll(restoreY);
+    } else {
+      const lenis = lenisRef.current?.lenis;
+      // No instance on touch — the native scroller is already the real one there.
+      if (lenis) lenis.scrollTo(0, { immediate: true, force: true });
+      else window.scrollTo(0, 0);
+    }
+    noteRouteChange(pathname);
+
     ScrollTrigger.update();
   }, [pathname]);
 
