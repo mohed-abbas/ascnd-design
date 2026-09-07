@@ -158,9 +158,7 @@ export default function Refunds() {
         </LegalP>
         {/* No postal address here — the source document closes with just the
             email and the domain. */}
-        <LegalContact
-          lines={[LEGAL_DETAILS.contactEmail, "ascnd.design"]}
-        />
+        <LegalContact lines={[LEGAL_DETAILS.contactEmail, "ascnd.design"]} />
       </LegalSection>
     </LegalPage>
   );

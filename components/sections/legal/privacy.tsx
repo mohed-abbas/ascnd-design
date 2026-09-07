@@ -15,8 +15,10 @@ import {
  *
  * Transcribed from files/ascnd-privacy-policy.md. As with the ToS, the prose is
  * the source document's and the `[BRACKETED]` values are hoisted into
- * lib/legal.ts (all still placeholders — see the warning there). Headings are
- * lowercase to match the site's voice; body copy keeps its own sentence case.
+ * lib/legal.ts. As on the ToS, the operator clause is prose rather than a
+ * substitution — ascnd is an unregistered sole proprietorship, so there is no
+ * entity name or registered address to print. Headings are lowercase to match
+ * the site's voice; body copy keeps its own sentence case.
  *
  * Two structural notes:
  *   • §2's legal-basis table is a real <table> (LegalTable), which reflows to
@@ -39,10 +41,9 @@ export default function Privacy() {
         </LegalP>
         <LegalP>
           ascnd (&ldquo;we&rdquo;, &ldquo;us&rdquo;, &ldquo;our&rdquo;) is a
-          design subscription service operated by {LEGAL_DETAILS.entityName} of{" "}
-          {LEGAL_DETAILS.registeredAddress}, {LEGAL_DETAILS.country}. If you have
-          any questions about this policy or your data, email us at{" "}
-          {LEGAL_DETAILS.privacyEmail}.
+          design subscription service operated as a sole proprietorship based in{" "}
+          {LEGAL_DETAILS.country}. If you have any questions about this policy or
+          your data, email us at {LEGAL_DETAILS.privacyEmail}.
         </LegalP>
       </div>
 
@@ -237,13 +238,8 @@ export default function Privacy() {
 
       <LegalSection heading="10. contact">
         <LegalP>Questions about this policy or your information:</LegalP>
-        <LegalContact
-          lines={[
-            LEGAL_DETAILS.privacyEmail,
-            LEGAL_DETAILS.registeredAddress,
-            "ascnd.design",
-          ]}
-        />
+        {/* No postal address — see the note in lib/legal.ts. */}
+        <LegalContact lines={[LEGAL_DETAILS.privacyEmail, "ascnd.design"]} />
       </LegalSection>
     </LegalPage>
   );

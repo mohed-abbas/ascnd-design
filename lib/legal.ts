@@ -4,7 +4,10 @@
  * ⚠️ EVERY `[bracketed]` VALUE BELOW IS A PLACEHOLDER AND MUST BE REPLACED
  * BEFORE THESE PAGES GO LIVE. They render verbatim into published legal text,
  * so shipping them as-is publishes bracketed stubs to real visitors.
- * `lastUpdated` and `country` are set; everything still in brackets is not.
+ *
+ * LEGAL_DETAILS is now fully set. The only brackets left in this file are in
+ * LEGAL_PROCESSORS at the bottom — six of its seven rows are still stubs, and
+ * they render as a visible list in the privacy policy's §3.
  *
  * The prose in components/sections/legal/ is transcribed from the source
  * documents in files/*.md, which carried these same values as `[BRACKETS]`
@@ -28,21 +31,28 @@ export const LEGAL_DETAILS = {
    *  SET — this is the one value below that is no longer a placeholder. */
   lastUpdated: "31 july 2026",
 
-  /** The registered company that operates ascnd, and its registered address.
-   *  Both appear in the ToS preamble, the privacy preamble, and the contact
-   *  blocks at the foot of the ToS and privacy pages. */
-  entityName: "[legal entity name]",
-  registeredAddress: "[registered address]",
-  /** Named in the ToS preamble and, load-bearingly, in the privacy policy's
-   *  international-transfers section (no UK/EU adequacy decision). */
+  /** The country ascnd operates from. Named in both preambles and,
+   *  load-bearingly, in the privacy policy's international-transfers section
+   *  (no UK/EU adequacy decision). SET.
+   *
+   *  There is deliberately no `entityName` or `registeredAddress` beside it.
+   *  ascnd is not a registered company: it is a sole proprietorship, so there
+   *  is no separate legal entity to name and no registered address to print.
+   *  Both preambles therefore read "operated as a sole proprietorship based in
+   *  {country}" as fixed prose, and the contact blocks are email + domain.
+   *  ⚠️ ON INCORPORATION: add `entityName` and `registeredAddress` back here,
+   *  and restore the operator/address clauses in terms.tsx and privacy.tsx —
+   *  the sentence is prose in those two files now, not a substitution, so
+   *  editing this file alone will not update the pages. */
   country: "Pakistan",
 
-  /** General contact — cancellations, pauses, refund requests. */
-  contactEmail: "[email]",
+  /** General contact — cancellations, pauses, refund requests. SET. */
+  contactEmail: "contact@ascnd.design",
   /** Data-protection contact — subject-access requests and privacy questions.
-   *  May be the same address as `contactEmail`; it's kept separate because the
-   *  privacy policy promises a 30-day response against it specifically. */
-  privacyEmail: "[privacy email]",
+   *  Currently the same address as `contactEmail`; it stays a separate field
+   *  because the privacy policy promises a 30-day response against it
+   *  specifically, so it can be split off without touching the copy. SET. */
+  privacyEmail: "contact@ascnd.design",
 
   /** Payment terms (ToS §4). `invoiceDueDays` is the window from issue to due;
    *  `latePaymentGraceDays` is how long past the due date before work pauses. */
@@ -57,9 +67,9 @@ export const LEGAL_DETAILS = {
    *  page). */
   refundBusinessDays: "10",
 
-  /** Governing law and the courts with exclusive jurisdiction (ToS §14). */
-  governingLaw: "[jurisdiction]",
-  jurisdictionCity: "[city]",
+  /** Governing law and the courts with exclusive jurisdiction (ToS §14). SET. */
+  governingLaw: "Pakistan",
+  jurisdictionCity: "Islamabad",
 } as const;
 
 /**

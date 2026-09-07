@@ -288,8 +288,8 @@ export function LegalTable({
 /**
  * The contact block that closes each document — the brand name over its
  * address lines. Entries are pre-formatted strings; falsy ones are dropped so a
- * page that omits the postal address (the refunds page does) doesn't render a
- * blank line.
+ * page that omits a line doesn't render a blank one. All three pages currently
+ * print email + domain only (no postal address — see lib/legal.ts).
  */
 export function LegalContact({ lines }: { lines: readonly (string | false)[] }) {
   return (

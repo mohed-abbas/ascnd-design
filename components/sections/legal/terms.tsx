@@ -15,8 +15,12 @@ import {
  *
  * Transcribed from files/ascnd-terms-of-service.md. The prose is the source
  * document's, unchanged; only two things differ, both deliberate:
- *   • The `[BRACKETED]` values are hoisted into lib/legal.ts (see the warning
- *     at the top of that file — they are all still placeholders).
+ *   • The `[BRACKETED]` values are hoisted into lib/legal.ts, and are all set.
+ *     The operator clause is the exception: ascnd is an unregistered sole
+ *     proprietorship, so there is no entity name or registered address to
+ *     substitute and the preamble states the structure as prose. §15 is email
+ *     + domain for the same reason. See the note on `country` in lib/legal.ts
+ *     for what to restore here on incorporation.
  *   • Headings are lowercase, matching the site's voice everywhere else
  *     ("questions, answered straight", "your first month, plotted"). The body
  *     copy keeps the document's own sentence case.
@@ -39,11 +43,10 @@ export default function Terms() {
           agree to them.
         </LegalP>
         <LegalP>
-          ascnd is operated by {LEGAL_DETAILS.entityName} of{" "}
-          {LEGAL_DETAILS.registeredAddress}, {LEGAL_DETAILS.country}{" "}
-          (&ldquo;ascnd&rdquo;, &ldquo;we&rdquo;, &ldquo;us&rdquo;).
-          &ldquo;You&rdquo; and &ldquo;client&rdquo; mean the person or company
-          using our services.
+          ascnd is a design studio operated as a sole proprietorship based in{" "}
+          {LEGAL_DETAILS.country} (&ldquo;ascnd&rdquo;, &ldquo;we&rdquo;,
+          &ldquo;us&rdquo;). &ldquo;You&rdquo; and &ldquo;client&rdquo; mean the
+          person or company using our services.
         </LegalP>
       </div>
 
@@ -369,13 +372,8 @@ export default function Terms() {
       </LegalSection>
 
       <LegalSection heading="15. contact">
-        <LegalContact
-          lines={[
-            LEGAL_DETAILS.contactEmail,
-            LEGAL_DETAILS.registeredAddress,
-            "ascnd.design",
-          ]}
-        />
+        {/* No postal address — see the note in lib/legal.ts. */}
+        <LegalContact lines={[LEGAL_DETAILS.contactEmail, "ascnd.design"]} />
       </LegalSection>
     </LegalPage>
   );
