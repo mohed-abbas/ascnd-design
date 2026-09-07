@@ -2,7 +2,7 @@ import Image from "next/image";
 import AnchorLink from "@/components/ui/anchor-link";
 import BookCallLink from "@/components/ui/book-call-link";
 import { InstagramSocial, XSocial } from "@/components/ui/icons";
-import { NAV_LINKS } from "@/lib/nav-links";
+import { NAV_LINKS, SOCIAL_URLS } from "@/lib/nav-links";
 import FooterReveal from "./footer-reveal";
 
 /**
@@ -93,9 +93,12 @@ const LEGAL = [
   { label: "privacy policy", href: "/privacy" },
 ];
 
+// Destinations come from lib/nav-links.ts (shared with the glass menu's row);
+// the order and the icon binding are this row's own — the footer leads with
+// Instagram.
 const SOCIALS = [
-  { label: "Instagram", href: "https://instagram.com", Icon: InstagramSocial },
-  { label: "X (Twitter)", href: "https://x.com", Icon: XSocial },
+  { label: "Instagram", href: SOCIAL_URLS.instagram, Icon: InstagramSocial },
+  { label: "X (Twitter)", href: SOCIAL_URLS.x, Icon: XSocial },
 ];
 
 const ROCK_SRC = "/footer/footer-rock.png";

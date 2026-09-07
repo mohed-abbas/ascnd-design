@@ -51,3 +51,20 @@ export const NAV_LINKS: NavLink[] = [
   { label: "pricing", href: "/pricing" },
   { label: "book a call", href: "/pricing#book", booking: true },
 ];
+
+/**
+ * The social profiles, for the same reason NAV_LINKS is here: the navbar and the
+ * footer each render a social row and each held its own copy of these URLs.
+ *
+ * Only the destinations are shared. The two rows deliberately differ in ORDER
+ * (the menu leads with X, the footer with Instagram) and each binds its own
+ * icon component, so the arrays themselves stay local — icons are components,
+ * not data, and don't belong in lib/.
+ *
+ * ⚠️ `instagram` is still the bare domain, not a profile. Replace it with the
+ * real handle URL before launch, the way `x` now is.
+ */
+export const SOCIAL_URLS = {
+  x: "https://x.com/ascnddd",
+  instagram: "https://instagram.com",
+} as const;

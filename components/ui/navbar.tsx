@@ -2,7 +2,7 @@
 
 import { useEffect, useId, useRef, useState } from "react";
 import gsap from "gsap";
-import { NAV_LINKS } from "@/lib/nav-links";
+import { NAV_LINKS, SOCIAL_URLS } from "@/lib/nav-links";
 import { setMode } from "@/lib/theme/mode-store";
 import { useMode } from "@/lib/theme/use-mode";
 import AnchorLink from "./anchor-link";
@@ -23,9 +23,11 @@ import { useSlidingHighlight } from "./sliding-highlight";
 // not smooth, and — because the cloud parallax only advances while Lenis drives
 // ScrollTrigger — it froze the hero clouds in place at the target section.
 
+// Destinations come from lib/nav-links.ts (shared with the footer's row); the
+// order and the icon binding are this row's own — the menu leads with X.
 const SOCIALS = [
-  { label: "X (Twitter)", href: "https://x.com", Icon: XSocial },
-  { label: "Instagram", href: "https://instagram.com", Icon: InstagramSocial },
+  { label: "X (Twitter)", href: SOCIAL_URLS.x, Icon: XSocial },
+  { label: "Instagram", href: SOCIAL_URLS.instagram, Icon: InstagramSocial },
 ];
 
 // Expand/collapse motion. There is ONE glass surface: the compact pill *is* the
