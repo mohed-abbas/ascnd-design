@@ -1,3 +1,4 @@
+import { Analytics } from "@vercel/analytics/next";
 import type { Metadata, Viewport } from "next";
 import { Geist_Mono, Instrument_Serif } from "next/font/google";
 import localFont from "next/font/local";
@@ -290,6 +291,22 @@ export default function RootLayout({
               breaks their position:fixed. */}
           <ModeSwitcher />
         </LenisProvider>
+        {/* Vercel Web Analytics. Chosen over GA4 deliberately: it is COOKIELESS
+            (no persistent identifier — visitors are hashed per-day), so the
+            site needs no consent banner, and Vercel already processes this
+            traffic as our host, so it adds no new third party to the privacy
+            policy's processor list (lib/legal.ts). It reports aggregate
+            country / referrer / page / device only; it cannot tell you WHICH
+            client visited, by design.
+
+            Renders null and injects one small script, so it sits outside
+            LenisProvider — it is not part of the scroll/canvas architecture and
+            has no ticker, loop, or GL cost to account for.
+
+            ⚠️ The code alone collects nothing: Web Analytics must also be
+            enabled for the project in the Vercel dashboard, and it only reports
+            from production deployments. */}
+        <Analytics />
       </body>
     </html>
   );

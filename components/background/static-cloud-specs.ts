@@ -191,9 +191,34 @@ export const STATIC_CLOUDS: StaticCloudSpec[] = [
 // the homepage arrangement; bake its own sprites at /lab/cloud-sprites (branch `dev`) and list
 // them here when the page's clouds are designed. Unmapped routes fall back to the
 // home set, matching the WebGL selector.
+/**
+ * The legal routes (/terms, /privacy, /refunds) — the sprite mirror of
+ * LEGAL_SKY_CLOUDS in cloud-specs.ts, and sparse for the same reason: the page is
+ * a prose column and the sky stays out of its way. Without this entry these routes
+ * fell through to STATIC_CLOUDS, whose section clouds have no trigger here — and a
+ * trigger-less section cloud renders at its rest spot and never moves, so the
+ * homepage's whole sky sat frozen on top of the document.
+ */
+export const LEGAL_STATIC_CLOUDS: StaticCloudSpec[] = [
+  // Field clouds: in the corners at load, travelling off with the page.
+  { key: "legal-hero-tr", sprite: "puff-soft.webp", layer: "sky", x: 92, y: 12, width: 52, speed: 0.85 },
+  { key: "legal-hero-bl", sprite: "wide-bank.webp", layer: "sky", x: 4, y: 92, width: 70, speed: 0.95 },
+  // Three staggered through the body + one over the footer, bound to the shell's
+  // own sections so the drift holds for documents of any length. `at` spreads them
+  // a quarter / half / three-quarters of the way down; the wide travel is what
+  // keeps an off-centre cloud parked off screen at both ends of the crossing.
+  { key: "legal-body-l", sprite: "wide-bank.webp", layer: "sky", trigger: "[data-legal-prose]", x: 6, y: 70, width: 66, at: 0.28, travel: 220 },
+  { key: "legal-body-r", sprite: "puff-small.webp", layer: "sky", trigger: "[data-legal-prose]", x: 94, y: 30, width: 48, at: 0.5, travel: 220 },
+  { key: "legal-body-l2", sprite: "puff-soft.webp", layer: "sky", trigger: "[data-legal-prose]", x: 4, y: 26, width: 54, at: 0.74, travel: 220 },
+  { key: "legal-footer-r", sprite: "cta-bank.webp", layer: "sky", trigger: "[data-footer]", x: 88, y: 88, width: 54 },
+];
+
 export const STATIC_CLOUD_SCENES: Record<string, StaticCloudSpec[]> = {
   "/": STATIC_CLOUDS,
   "/pricing": [],
+  "/terms": LEGAL_STATIC_CLOUDS,
+  "/privacy": LEGAL_STATIC_CLOUDS,
+  "/refunds": LEGAL_STATIC_CLOUDS,
 };
 
 /** The static-cloud set for a route, falling back to the home set when unmapped. */

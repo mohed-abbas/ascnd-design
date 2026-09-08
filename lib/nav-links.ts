@@ -21,11 +21,13 @@
  * shared): a same-page click glides via Lenis, a cross-page click navigates and
  * the App Router lands on the anchor.
  *
- * A hash here MUST match a real element id or the link is a silent no-op — that
- * is the deliberate no-target behaviour AnchorLink relies on for the footer's
- * unbuilt legal links, so it will not warn you. The footer's LEGAL list stays
- * local to the footer: those are placeholder anchors for pages that don't exist
- * yet, not navigation.
+ * A hash here MUST match a real element id or the link is a silent no-op, and
+ * nothing will warn you — the missing-target case is a deliberate no-op in
+ * AnchorLink, not an error. Check the id exists when you add an entry.
+ *
+ * The footer's LEGAL list stays local to the footer. Those are document links
+ * (/terms, /privacy) rather than site navigation, and the glass menu shouldn't
+ * render them.
  */
 
 export type NavLink = {
@@ -49,3 +51,20 @@ export const NAV_LINKS: NavLink[] = [
   { label: "pricing", href: "/pricing" },
   { label: "book a call", href: "/pricing#book", booking: true },
 ];
+
+/**
+ * The social profiles, for the same reason NAV_LINKS is here: the navbar and the
+ * footer each render a social row and each held its own copy of these URLs.
+ *
+ * Only the destinations are shared. The two rows deliberately differ in ORDER
+ * (the menu leads with X, the footer with Instagram) and each binds its own
+ * icon component, so the arrays themselves stay local — icons are components,
+ * not data, and don't belong in lib/.
+ *
+ * ⚠️ `instagram` is still the bare domain, not a profile. Replace it with the
+ * real handle URL before launch, the way `x` now is.
+ */
+export const SOCIAL_URLS = {
+  x: "https://x.com/ascnddd",
+  instagram: "https://instagram.com",
+} as const;
