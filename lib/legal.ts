@@ -29,7 +29,7 @@ export const LEGAL_DETAILS = {
    *  updated by hand whenever the wording of any of the three documents
    *  changes. Lowercased to match the site's voice.
    *  SET — this is the one value below that is no longer a placeholder. */
-  lastUpdated: "31 july 2026",
+  lastUpdated: "8 september 2026",
 
   /** The country ascnd operates from. Named in both preambles and,
    *  load-bearingly, in the privacy policy's international-transfers section
@@ -67,6 +67,13 @@ export const LEGAL_DETAILS = {
    *  page). */
   refundBusinessDays: "10",
 
+  /** The window to claim a full refund on a subscription payment where no work
+   *  has started yet (refunds page). Hoisted here because it was the one
+   *  policy number still hardcoded in the prose — and it is easy to confuse
+   *  with `invoiceDueDays`, which is also 7 but counts something else
+   *  entirely. Two independent 7s: change one and the other must not move. */
+  refundNotStartedDays: "7",
+
   /** Governing law and the courts with exclusive jurisdiction (ToS §14). SET. */
   governingLaw: "Pakistan",
   jurisdictionCity: "Islamabad",
@@ -81,13 +88,11 @@ export const LEGAL_DETAILS = {
  * much of a compliance problem as omitting one you do. Delete the rows that
  * don't apply and replace each `[bracketed]` name with the real vendor.
  *
- * ⚠️ ONE STUB LEFT: site analytics. It is deliberately parked — NOTHING is
- * installed on the site today (no gtag, no Umami, no @vercel/analytics), so
- * the row currently names a processor that does not exist. It is held open
- * pending the cookies decision, because the two move together: §7 already
- * claims "analytics cookies" the site does not set, and §1 already describes
- * collection that is not happening. Whatever lands here must be settled with
- * §1 and §7 in the same pass, not on its own.
+ * No stubs remain. Vercel appears TWICE — as host and as analytics — because
+ * the list is grouped by purpose and it genuinely does both jobs. That is the
+ * point of having picked Vercel Web Analytics (app/layout.tsx): it is
+ * cookieless, so the site needs no consent banner, and it introduced no new
+ * third party to disclose here.
  *
  * SCOPE: these are ascnd's OWN vendors — the ones that touch the data of the
  * person reading the policy (a visitor, an enquirer, a client). Infrastructure
@@ -114,10 +119,7 @@ export const LEGAL_PROCESSORS: readonly LegalProcessor[] = [
   { purpose: "Website hosting", vendors: ["Hostinger", "Vercel"] },
   { purpose: "Call bookings", vendors: ["Cal.com"] },
   { purpose: "Email", vendors: ["Zoho Mail", "Gmail"] },
-  {
-    purpose: "Site analytics",
-    vendors: ["[analytics provider, e.g. Google Analytics / Plausible]"],
-  },
+  { purpose: "Site analytics", vendors: ["Vercel"] },
   {
     purpose: "Storing and sharing project files",
     vendors: ["Google Drive", "Figma"],

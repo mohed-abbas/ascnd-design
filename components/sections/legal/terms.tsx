@@ -18,9 +18,15 @@ import {
  *   • The `[BRACKETED]` values are hoisted into lib/legal.ts, and are all set.
  *     The operator clause is the exception: ascnd is an unregistered sole
  *     proprietorship, so there is no entity name or registered address to
- *     substitute and the preamble states the structure as prose. §15 is email
+ *     substitute and the preamble states the structure as prose. §16 is email
  *     + domain for the same reason. See the note on `country` in lib/legal.ts
  *     for what to restore here on incorporation.
+ *   • §10 ("working in your systems") is NOT from the source document — it was
+ *     added to cover the processor role we take on when working inside a
+ *     client's own site or accounts, which neither document addressed. Adding
+ *     it renumbered the old §10–§15 up by one; the two numeric cross-references
+ *     in the prose (refunds.tsx → "section 5", §13 → "section 6") both point
+ *     below the insertion and were unaffected.
  *   • Headings are lowercase, matching the site's voice everywhere else
  *     ("questions, answered straight", "your first month, plotted"). The body
  *     copy keeps the document's own sentence case.
@@ -90,7 +96,10 @@ export default function Terms() {
           <LegalLead>Revisions.</LegalLead> Revisions are included. We&rsquo;ll
           keep refining a request until you&rsquo;re happy with it, within the
           scope of the original request. A revision that fundamentally changes
-          the brief becomes a new request.
+          the brief becomes a new request. If we think something you&rsquo;ve
+          asked for crosses that line, we&rsquo;ll say so and agree it with you
+          before starting — we won&rsquo;t treat work as a new request after the
+          fact.
         </LegalP>
         <LegalP>
           <LegalLead>Fair use.</LegalLead> The subscription is intended for one
@@ -238,9 +247,12 @@ export default function Terms() {
           property.
         </LegalP>
         <LegalP>
-          <LegalLead>Final work.</LegalLead> Once a request is complete and fully
-          paid for, the intellectual property in the final delivered work
-          transfers to you. You own it and can use it however you want.
+          <LegalLead>Final work.</LegalLead> The intellectual property in the
+          final delivered work transfers to you once it is complete and paid
+          for. On a subscription, that means the billing period the work was
+          delivered in has been paid in full; on a build sprint, it means the
+          project has been paid in full. You then own it and can use it however
+          you want.
         </LegalP>
         <LegalP>
           <LegalLead>Before payment,</LegalLead> all rights in the work remain
@@ -293,7 +305,48 @@ export default function Terms() {
         </LegalP>
       </LegalSection>
 
-      <LegalSection heading="10. warranties and liability">
+      <LegalSection heading="10. working in your systems">
+        <LegalP>
+          Some work means going into things you already run — your website, your
+          CMS, your hosting, your analytics, your design files. Where you give us
+          that access:
+        </LegalP>
+        <LegalList>
+          <LegalItem>
+            we use it only to do the work you&rsquo;ve asked for, and for nothing
+            else
+          </LegalItem>
+          <LegalItem>
+            we take only the access we actually need, and we&rsquo;ll tell you
+            what that is rather than asking for the keys to everything
+          </LegalItem>
+          <LegalItem>
+            any personal data belonging to your own users or customers stays
+            yours. You decide what happens to it and we act on your
+            instructions — in data protection terms, you are the controller and
+            we are your processor
+          </LegalItem>
+          <LegalItem>
+            we don&rsquo;t copy that data out of your systems, and we don&rsquo;t
+            use it to train anything or for any purpose of our own
+          </LegalItem>
+          <LegalItem>
+            when the engagement ends, or whenever you ask, we hand the access
+            back and remove ourselves from the accounts
+          </LegalItem>
+        </LegalList>
+        <LegalP>
+          If your own obligations require a formal data processing agreement,
+          send it to us and we&rsquo;ll sign it.
+        </LegalP>
+        <LegalP>
+          <LegalLead>Backups are yours.</LegalLead> We work carefully in live
+          systems, but you should be able to restore them without depending on
+          us. Keeping your own backups stays your responsibility.
+        </LegalP>
+      </LegalSection>
+
+      <LegalSection heading="11. warranties and liability">
         <LegalP>
           We provide our services with reasonable skill and care. Beyond that,
           our services are provided &ldquo;as is&rdquo; and we make no other
@@ -319,7 +372,7 @@ export default function Terms() {
         </LegalP>
       </LegalSection>
 
-      <LegalSection heading="11. indemnity">
+      <LegalSection heading="12. indemnity">
         <LegalP>
           You agree to indemnify us against any claim arising from materials you
           provide to us, including claims that those materials infringe someone
@@ -327,16 +380,22 @@ export default function Terms() {
         </LegalP>
       </LegalSection>
 
-      <LegalSection heading="12. suspension and termination">
+      <LegalSection heading="13. suspension and termination">
         <LegalP>
           We may suspend or end services immediately if you don&rsquo;t pay, if
           you use our services unlawfully, or if you&rsquo;re abusive towards our
           team. We&rsquo;ll always try to talk to you first where it&rsquo;s
           reasonable to do so.
         </LegalP>
+        <LegalP>
+          Where we end services under this section, the refund of the unused
+          period described in section 6 does not apply — that one covers us
+          ending a working relationship that simply isn&rsquo;t working, not a
+          breach of these terms.
+        </LegalP>
       </LegalSection>
 
-      <LegalSection heading="13. things outside our control">
+      <LegalSection heading="14. things outside our control">
         <LegalP>
           We&rsquo;re not liable for delays or failures caused by events outside
           our reasonable control, including internet or power outages, illness,
@@ -345,7 +404,7 @@ export default function Terms() {
         </LegalP>
       </LegalSection>
 
-      <LegalSection heading="14. general">
+      <LegalSection heading="15. general">
         <LegalP>
           <LegalLead>Changes.</LegalLead> We may update these terms. Material
           changes will be notified to active clients at least 30 days in advance,
@@ -371,7 +430,7 @@ export default function Terms() {
         </LegalP>
       </LegalSection>
 
-      <LegalSection heading="15. contact">
+      <LegalSection heading="16. contact">
         {/* No postal address — see the note in lib/legal.ts. */}
         <LegalContact lines={[LEGAL_DETAILS.contactEmail, "ascnd.design"]} />
       </LegalSection>

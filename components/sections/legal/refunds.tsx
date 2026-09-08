@@ -75,6 +75,12 @@ export default function Refunds() {
             You can stay paused for up to {LEGAL_DETAILS.maxPauseDuration}.
           </LegalItem>
           <LegalItem>
+            After {LEGAL_DETAILS.maxPauseDuration} the subscription is cancelled,
+            and any credit still held is forfeited unless we agree otherwise. If
+            you&rsquo;re coming up on that, email us — we&rsquo;d rather sort
+            something out than have your credit disappear.
+          </LegalItem>
+          <LegalItem>
             Any locked or founding rate you have is preserved while paused.
           </LegalItem>
         </LegalList>
@@ -97,8 +103,9 @@ export default function Refunds() {
         <LegalList>
           <LegalItem>
             <LegalLead>If we haven&rsquo;t started.</LegalLead> If you pay and we
-            haven&rsquo;t begun any work, tell us within 7 days and we&rsquo;ll
-            refund the payment in full.
+            haven&rsquo;t begun any work, tell us within{" "}
+            {LEGAL_DETAILS.refundNotStartedDays} days and we&rsquo;ll refund the
+            payment in full.
           </LegalItem>
           <LegalItem>
             <LegalLead>If we end the engagement.</LegalLead> If we choose to stop
@@ -120,6 +127,21 @@ export default function Refunds() {
         </LegalP>
       </LegalSection>
 
+      <LegalSection heading="if you&rsquo;re buying as a consumer">
+        <LegalP>
+          Everything above is written for businesses, which is nearly everyone
+          we work with. If you are a consumer in the UK or EU, you also have a
+          statutory right to cancel within 14 days of signing up, and nothing on
+          this page takes that away.
+        </LegalP>
+        <LegalP>
+          If you ask us to start inside those 14 days and then cancel, we&rsquo;ll
+          refund what you paid less a fair amount for the work already done. Once
+          a piece of work is finished with your agreement, the 14-day right no
+          longer applies to it.
+        </LegalP>
+      </LegalSection>
+
       <LegalSection heading="build sprints">
         <LegalP>
           Fixed-scope projects work differently, since we block out time
@@ -131,8 +153,9 @@ export default function Refunds() {
             started work.
           </LegalItem>
           <LegalItem>
-            If you cancel before we start, the deposit is refundable minus any
-            work already carried out.
+            If you cancel before we start, the deposit is refunded in full — less
+            any preparatory work, such as a discovery session, that you asked us
+            to do first.
           </LegalItem>
           <LegalItem>
             If you cancel mid-project, you&rsquo;re billed for the work completed
