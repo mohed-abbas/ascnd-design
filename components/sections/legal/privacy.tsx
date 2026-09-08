@@ -116,9 +116,9 @@ export default function Privacy() {
           process some of your information:
         </LegalP>
         <LegalList>
-          {LEGAL_PROCESSORS.map(({ name, purpose }) => (
-            <LegalItem key={name}>
-              <LegalLead>{name}:</LegalLead> {purpose}
+          {LEGAL_PROCESSORS.map(({ purpose, vendors }) => (
+            <LegalItem key={purpose}>
+              <LegalLead>{purpose}:</LegalLead> {vendors.join(", ")}
             </LegalItem>
           ))}
         </LegalList>

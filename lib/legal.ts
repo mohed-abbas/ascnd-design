@@ -81,30 +81,53 @@ export const LEGAL_DETAILS = {
  * much of a compliance problem as omitting one you do. Delete the rows that
  * don't apply and replace each `[bracketed]` name with the real vendor.
  *
- * `name` is the vendor; `purpose` is what they do with the data. Cal.com is the
- * one entry already confirmed — the booking embed is live on /pricing
- * (components/sections/book-a-call).
+ * ⚠️ ONE STUB LEFT: site analytics. It is deliberately parked — NOTHING is
+ * installed on the site today (no gtag, no Umami, no @vercel/analytics), so
+ * the row currently names a processor that does not exist. It is held open
+ * pending the cookies decision, because the two move together: §7 already
+ * claims "analytics cookies" the site does not set, and §1 already describes
+ * collection that is not happening. Whatever lands here must be settled with
+ * §1 and §7 in the same pass, not on its own.
+ *
+ * SCOPE: these are ascnd's OWN vendors — the ones that touch the data of the
+ * person reading the policy (a visitor, an enquirer, a client). Infrastructure
+ * belonging to a CLIENT does not belong here, in either direction: a client
+ * site we deploy is their deployment, and a client's existing host is their
+ * vendor that we are merely given access to. Neither processes the reader's
+ * data on our behalf. Client-system access is a separate question the
+ * documents don't yet cover.
+ *
+ * ONE ROW PER PURPOSE, not per vendor: `purpose` leads the line and `vendors`
+ * are listed after it, comma-joined onto that same line ("Website hosting:
+ * Hostinger, Vercel"). Two vendors doing the same job share a row rather than
+ * repeating the purpose down the list. Order the vendors as you'd say them.
+ *
+ * Cal.com was the first confirmed entry — the booking embed is live on
+ * /pricing (components/sections/book-a-call).
  */
-export type LegalProcessor = { name: string; purpose: string };
+export type LegalProcessor = {
+  purpose: string;
+  vendors: readonly string[];
+};
 
 export const LEGAL_PROCESSORS: readonly LegalProcessor[] = [
-  { name: "[hosting provider, e.g. Vercel]", purpose: "website hosting" },
-  { name: "Cal.com", purpose: "call bookings" },
-  { name: "[email provider, e.g. Google Workspace]", purpose: "email" },
+  { purpose: "Website hosting", vendors: ["Hostinger", "Vercel"] },
+  { purpose: "Call bookings", vendors: ["Cal.com"] },
+  { purpose: "Email", vendors: ["Zoho Mail", "Gmail"] },
   {
-    name: "[analytics provider, e.g. Google Analytics / Plausible]",
-    purpose: "site analytics",
+    purpose: "Site analytics",
+    vendors: ["[analytics provider, e.g. Google Analytics / Plausible]"],
   },
   {
-    name: "[file storage, e.g. Google Drive, Figma]",
-    purpose: "storing and sharing project files",
+    purpose: "Storing and sharing project files",
+    vendors: ["Google Drive", "Figma"],
   },
   {
-    name: "[payment / invoicing, e.g. Wise, Payoneer]",
-    purpose: "invoicing and receiving payment",
+    purpose: "Invoicing and receiving payment",
+    vendors: ["Wise", "Payoneer"],
   },
   {
-    name: "[project comms, e.g. Slack, Notion]",
-    purpose: "client communication and request tracking",
+    purpose: "Client communication and request tracking",
+    vendors: ["Slack", "Notion"],
   },
 ];
