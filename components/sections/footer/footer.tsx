@@ -29,8 +29,8 @@ import FooterReveal from "./footer-reveal";
  * is why FinalCta above runs a tight bottom padding — it leans on this
  * section's top sky for its closing headroom (see final-cta.tsx).
  *
- * ROCKS (747:438 left / 746:4748 right) — ONE shared 825×1024 RGBA cutout
- * (footer-rock.png, the exact V4 asset) placed twice at its NATURAL aspect
+ * ROCKS (747:438 left / 746:4748 right) — ONE shared 2838×3523 RGBA cutout
+ * (footer-rock.avif, the exact V4 asset) placed twice at its NATURAL aspect
  * (the Figma boxes match the source ratio — no stretch, unlike the old
  * FooterFinal crops). Each box is pixel-mapped to the frame and pinned to its
  * screen edge, overflowing the band (clipped by overflow-hidden) so only the
@@ -101,7 +101,31 @@ const SOCIALS = [
   { label: "X (Twitter)", href: SOCIAL_URLS.x, Icon: XSocial },
 ];
 
-const ROCK_SRC = "/footer/footer-rock.png";
+// The V4 cutout, re-exported from the Figma master (node 746:4748's fill) at
+// its native 2838x3523 and pre-encoded to AVIF q80 — PSNR 44.3dB RGB / 58.0dB
+// alpha vs that master, i.e. visually lossless, and the same treatment
+// /rocks/*.avif get (see components/sections/hero/rock.tsx).
+//
+// It replaces an 825x1024 PNG that had been exported at 0.29x of the master.
+// That file was SMALLER than the boxes below (1248x1549 and 1318x1635), so the
+// browser was upscaling it 1.5-1.6x at 1x DPR and ~3x on retina — the reason
+// the footer rocks read blurry while the hero cliffs (1428x3928 shown at 357px,
+// a 4x DOWNscale) read crisp. At 2838 wide it now covers the larger box 2.15x,
+// so retina finally samples down instead of up.
+//
+// `unoptimized` on both placements below is load-bearing, for the same reason
+// it is on the hero cliffs: Next's optimizer re-encodes at q75 and softens a
+// color-keyed cut-out's edges. It also never upscales past the source, so while
+// the 825px file was in place it served that same 825px image for every
+// requested width — the optimizer could not have rescued this even in principle.
+//
+// ⚠️ NOT SIZED FOR A CROP. Both placements are pixel-mapped to the 1512x797
+// Figma frame and clipped by the band's overflow-hidden, which leaves only ~20%
+// (left) and ~18% (right) of this image's area on screen — the union of the two
+// visible regions is the TOP ~46%, full width. Trimming the unused bottom would
+// roughly halve the bytes, but it changes the aspect the container heights are
+// derived from, so the offsets above must be re-derived with it.
+const ROCK_SRC = "/footer/footer-rock.avif";
 
 export default function Footer() {
   return (
@@ -222,6 +246,7 @@ export default function Footer() {
           alt=""
           fill
           sizes="1248px"
+          unoptimized
           className="object-cover"
         />
       </div>
@@ -231,6 +256,7 @@ export default function Footer() {
           alt=""
           fill
           sizes="1318px"
+          unoptimized
           className="object-cover"
         />
       </div>
