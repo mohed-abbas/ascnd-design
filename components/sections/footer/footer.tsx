@@ -5,6 +5,7 @@ import { InstagramSocial, XSocial } from "@/components/ui/icons";
 import { NAV_LINKS, SOCIAL_URLS } from "@/lib/nav-links";
 import FooterReveal from "./footer-reveal";
 import WordmarkTexture from "./wordmark-texture";
+import { WORDMARK_FX_ID, WORDMARK_LETTERS } from "./wordmark-fx";
 
 /**
  * Footer — Figma frame "FooterV4" (746:4738, 1512×797).
@@ -126,15 +127,6 @@ const SOCIALS = [
 // visible regions is the TOP ~46%, full width. Trimming the unused bottom would
 // roughly halve the bytes, but it changes the aspect the container heights are
 // derived from, so the offsets above must be re-derived with it.
-/* The wordmark, split so each letter can be distorted on its own. Splitting
-   text into spans normally costs the kerning across those boundaries, so this
-   was measured rather than assumed: split vs unsplit, in the identical computed
-   style, differ by 0.03px over a 1214px word — Product Sans has no kern pairs
-   for a-s-c-n-d, so the metric-derived fit above is untouched. Keep in sync:
-   WORDMARK_FX_ID names one filter per letter, built below. */
-const WORDMARK_LETTERS = ["a", "s", "c", "n", "d"] as const;
-const WORDMARK_FX_ID = "footer-wordmark-fx";
-
 const ROCK_SRC = "/footer/footer-rock.avif";
 
 export default function Footer() {
@@ -240,6 +232,12 @@ export default function Footer() {
           aria-hidden
           className="pointer-events-none w-full whitespace-nowrap text-center font-product font-bold leading-none tracking-[-0.0151em] text-white select-none text-[38.574cqw] mt-[-0.1375em] mb-[-0.1305em]"
         >
+          {/* One span per letter so each can be filtered on its own. Splitting
+              text this way normally costs the kerning across the boundaries, so
+              it was measured rather than assumed: split vs unsplit, in the
+              identical computed style, differ by 0.03px over a 1214px word —
+              Product Sans has no kern pairs for a-s-c-n-d, so the
+              metric-derived fit above is untouched. */}
           {WORDMARK_LETTERS.map((letter, i) => (
             <span key={i} data-fx-letter={i}>
               {letter}

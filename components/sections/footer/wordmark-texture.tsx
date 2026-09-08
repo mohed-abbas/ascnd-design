@@ -2,9 +2,9 @@
 
 import { useEffect } from "react";
 import gsap from "gsap";
+import { WORDMARK_FX_ID } from "./wordmark-fx";
 
 const REDUCE_MOTION = "(prefers-reduced-motion: reduce)";
-const FX_ID = "footer-wordmark-fx"; // must match WORDMARK_FX_ID in footer.tsx
 
 /* The Figma comp's own numbers (node 918:438), and the width they were authored
    against — the V4 column cap, which is also the wordmark's ink width there.
@@ -74,12 +74,13 @@ export default function WordmarkTexture() {
       word.querySelectorAll<HTMLElement>("[data-fx-letter]"),
     );
     const turbulences = letters.map((_, i) =>
-      document.querySelector<SVGElement>(`#${FX_ID}-${i} feTurbulence`),
+      document.querySelector<SVGElement>(`#${WORDMARK_FX_ID}-${i} feTurbulence`),
     );
     const displacements = letters.map((_, i) =>
-      document.querySelector<SVGElement>(`#${FX_ID}-${i} feDisplacementMap`),
+      document.querySelector<SVGElement>(`#${WORDMARK_FX_ID}-${i} feDisplacementMap`),
     );
     if (!letters.length || turbulences.some((n) => !n)) return;
+    if (displacements.some((n) => !n)) return;
 
     // How distorted each letter currently is, 0 → 1. Tweened, then read every
     // frame by the flicker.
@@ -95,12 +96,22 @@ export default function WordmarkTexture() {
        at every width. */
     let scale = DESIGN_SCALE;
     let frequency = DESIGN_BASE_FREQUENCY;
+    // The ink-trimming margins, cached. Both are negative, so subtracting the
+    // top and adding the bottom walks the border box's edges INWARD onto the ink
+    // (see the header note). Read here rather than per pointermove:
+    // getComputedStyle forces a style recalc, and these only move when the
+    // wordmark resizes — which is exactly when this runs.
+    let trimTop = 0;
+    let trimBottom = 0;
     const syncScale = () => {
       const width = word.getBoundingClientRect().width;
       if (!width) return;
       const k = width / DESIGN_WIDTH;
       scale = DESIGN_SCALE * k;
       frequency = DESIGN_BASE_FREQUENCY / k;
+      const style = getComputedStyle(word);
+      trimTop = parseFloat(style.marginTop) || 0;
+      trimBottom = parseFloat(style.marginBottom) || 0;
     };
 
     const tick = (time: number) => {
@@ -126,7 +137,7 @@ export default function WordmarkTexture() {
         }
         alive = true;
         if (!filtered[i]) {
-          letters[i].style.filter = `url(#${FX_ID}-${i})`;
+          letters[i].style.filter = `url(#${WORDMARK_FX_ID}-${i})`;
           filtered[i] = true;
         }
         displacements[i]?.setAttribute("scale", `${scale * amount * flicker}`);
@@ -168,12 +179,7 @@ export default function WordmarkTexture() {
       if (e.pointerType !== "mouse") return;
 
       const box = word.getBoundingClientRect();
-      // Negative margins, so subtracting them walks the edges INWARD off the
-      // line box and onto the ink. See the header note.
-      const style = getComputedStyle(word);
-      const top = box.top - parseFloat(style.marginTop);
-      const bottom = box.bottom + parseFloat(style.marginBottom);
-      if (e.clientY < top || e.clientY > bottom) {
+      if (e.clientY < box.top - trimTop || e.clientY > box.bottom + trimBottom) {
         setHovered(-1);
         return;
       }
