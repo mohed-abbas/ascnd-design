@@ -4,6 +4,7 @@ import BookCallLink from "@/components/ui/book-call-link";
 import { InstagramSocial, XSocial } from "@/components/ui/icons";
 import { NAV_LINKS, SOCIAL_URLS } from "@/lib/nav-links";
 import FooterReveal from "./footer-reveal";
+import WordmarkTexture from "./wordmark-texture";
 
 /**
  * Footer — Figma frame "FooterV4" (746:4738, 1512×797).
@@ -125,6 +126,15 @@ const SOCIALS = [
 // visible regions is the TOP ~46%, full width. Trimming the unused bottom would
 // roughly halve the bytes, but it changes the aspect the container heights are
 // derived from, so the offsets above must be re-derived with it.
+/* The wordmark, split so each letter can be distorted on its own. Splitting
+   text into spans normally costs the kerning across those boundaries, so this
+   was measured rather than assumed: split vs unsplit, in the identical computed
+   style, differ by 0.03px over a 1214px word — Product Sans has no kern pairs
+   for a-s-c-n-d, so the metric-derived fit above is untouched. Keep in sync:
+   WORDMARK_FX_ID names one filter per letter, built below. */
+const WORDMARK_LETTERS = ["a", "s", "c", "n", "d"] as const;
+const WORDMARK_FX_ID = "footer-wordmark-fx";
+
 const ROCK_SRC = "/footer/footer-rock.avif";
 
 export default function Footer() {
@@ -139,6 +149,7 @@ export default function Footer() {
       {/* Scrubs the wordmark's blur-rise as it scrolls into view; renders
           nothing. */}
       <FooterReveal />
+      <WordmarkTexture />
 
       {/* Content column (746:4749) — centre-anchored in the band. Tracks the
           viewport with the Figma 157px gutters below 1512, CAPS at the Figma
@@ -229,8 +240,58 @@ export default function Footer() {
           aria-hidden
           className="pointer-events-none w-full whitespace-nowrap text-center font-product font-bold leading-none tracking-[-0.0151em] text-white select-none text-[38.574cqw] mt-[-0.1375em] mb-[-0.1305em]"
         >
-          ascnd
+          {WORDMARK_LETTERS.map((letter, i) => (
+            <span key={i} data-fx-letter={i}>
+              {letter}
+            </span>
+          ))}
         </p>
+
+        {/* One texture filter PER LETTER, transcribed from Figma node 918:438:
+            fractal noise displacing the glyph edges, which is what gives them
+            their ragged, cloud-eaten outline. Figma applies it to the whole
+            word; we scope it to the letter under the pointer.
+
+            They start at scale=0 — a no-op — so the filter is inert until
+            wordmark-texture.tsx drives it, and the letters render crisp before
+            JS and with JS off. Seeds are spaced per letter because each CSS
+            filter samples the noise from its OWN element box: at one shared
+            seed all five would get the identical patch of noise and the
+            raggedness would visibly repeat letter to letter.
+
+            The region is widened to -20%/140% (the default -10%/120% leaves
+            only ~24px of horizontal bleed on a letter this size) so ±25.5px of
+            displacement can't clip against the filter box. */}
+        <svg aria-hidden focusable="false" className="absolute h-0 w-0">
+          <defs>
+            {WORDMARK_LETTERS.map((_, i) => (
+              <filter
+                key={i}
+                id={`${WORDMARK_FX_ID}-${i}`}
+                x="-20%"
+                y="-20%"
+                width="140%"
+                height="140%"
+                colorInterpolationFilters="sRGB"
+              >
+                <feTurbulence
+                  type="fractalNoise"
+                  baseFrequency="0.028901735320687294 0.028901735320687294"
+                  numOctaves={3}
+                  seed={8268 + i * 1009}
+                  result="noise"
+                />
+                <feDisplacementMap
+                  in="SourceGraphic"
+                  in2="noise"
+                  scale={0}
+                  xChannelSelector="R"
+                  yChannelSelector="G"
+                />
+              </filter>
+            ))}
+          </defs>
+        </svg>
       </div>
 
       {/* Rocks (747:438 left / 746:4748 right) — the shared V4 cutout placed
