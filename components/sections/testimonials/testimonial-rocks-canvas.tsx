@@ -15,6 +15,7 @@ import { useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
 import { OrthographicCamera, useCursor, useGLTF } from "@react-three/drei";
 import * as THREE from "three";
 import gsap from "gsap";
+import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { GROUP_H, GROUP_W, REVEAL, UNITS } from "./testimonials-data";
 import {
   isTestimonialsRevealPlayed,
@@ -40,7 +41,18 @@ const ROCKS_EXPOSURE = 1.15;
 // 30fps cloud paint landed on a 60fps rock tick — the coinciding GPU work was
 // the section's dropped-frame source; measured 80→119.7 rAF with this + the
 // cloud retune). Hover uncaps to "heavy" so the dodge spring stays glassy.
+// STATIONARY only — while the page scrolls the view rides "scroll" (see
+// SCROLL_IDLE_S): 30 against a display-rate scroll is what made the rocks jump.
 const ROCKS_STEADY_FPS = 30;
+
+// How long after the last scroll update to keep the rocks at fpsCap "scroll"
+// (display rate). The rocks paint on a FIXED plane, so their pixels only follow
+// the scrolling track when the plane repaints: at the 30 cap they held still for
+// 1–3 display frames, then snapped to catch the DOM rings — the rocks visibly
+// "bounced" through the section. Same weld fix + release window as the clouds
+// (cloud-canvas.tsx SCROLL_IDLE_S); Lenis emits every frame of its glide, so this
+// holds through the whole scroll and drops back to 30 just after it settles.
+const SCROLL_IDLE_S = 0.15;
 
 // Rock-level hover → view-level fpsCap bridge. The hover lives per <Rock> deep
 // in the scene; the cap lives on the view registration. Module-scope counter +
@@ -533,10 +545,11 @@ function Scene() {
  * own (testimonial-rocks.tsx); the host's fixed plane Canvas scissors this view to
  * the track's live rect.
  *
- * PAINT POLICY (mirrors the intro's descriptor-flip): continuous "heavy" while
- * the section is on screen (`inView`) OR the fly-in is running (`revealing`) —
- * the host pump paces it to ≤60/s and idles it to zero via the track
- * IntersectionObserver when off-screen. Demand otherwise.
+ * PAINT POLICY (mirrors the intro's descriptor-flip): continuous while the
+ * section is on screen (`inView`) OR the fly-in is running (`revealing`) — the
+ * host pump idles it to zero via the track IntersectionObserver when off-screen.
+ * Demand otherwise. The cap is "scroll" while the track moves (`scrolling`),
+ * else 30 at rest / "heavy" on hover + reveal — see the fpsCap block below.
  *
  * ⚠️ The reveal fires SYNCHRONOUSLY inside a scroll ScrollTrigger callback (mid-
  * scroll). Flipping `revealing` is a React state change → a DEFERRED effect →
@@ -594,15 +607,46 @@ export default function TestimonialRocksView({
     };
   }, [markDirty, requestBurst]);
 
+  // Scroll-activity gate (see SCROLL_IDLE_S): true while the track is moving on
+  // screen. Scoped to the track's viewport range, so scrolling elsewhere on the
+  // page never re-renders this view; the flip is setPaintPolicy (in place, no
+  // registry emit), so a gesture costs one cheap re-render each way.
+  const [scrolling, setScrolling] = useState(false);
+  useEffect(() => {
+    const el = track.current;
+    if (!el) return;
+    gsap.registerPlugin(ScrollTrigger);
+    let clear: gsap.core.Tween | undefined;
+    const st = ScrollTrigger.create({
+      trigger: el,
+      start: "top bottom",
+      end: "bottom top",
+      onUpdate: () => {
+        setScrolling(true); // idempotent — React bails when already true
+        clear?.kill();
+        clear = gsap.delayedCall(SCROLL_IDLE_S, () => setScrolling(false));
+      },
+    });
+    return () => {
+      st.kill();
+      clear?.kill();
+    };
+  }, [track]);
+
   const active = inView || revealing;
   const mode = active ? "continuous" : "demand";
-  // Steady 30 (ROCKS_STEADY_FPS — the slow orbit reads the same and stops
-  // colliding with the section-cloud morph ticks); "heavy" (≤60) while any rock
-  // is hovered so the dodge spring rides the fast cadence. The reveal fly-in
-  // also runs at "heavy" (revealing) so the entrance stays crisp.
+  // Scrolling → "scroll" (display rate on high tier) so the rocks stay welded to
+  // the rings; it outranks everything below ("scroll" ≥ "heavy" on every tier).
+  // Still → steady 30 (ROCKS_STEADY_FPS — the slow orbit reads the same and
+  // stops colliding with the section-cloud morph ticks); "heavy" (≤60) while any
+  // rock is hovered so the dodge spring rides the fast cadence. The reveal
+  // fly-in also runs at "heavy" (revealing) so the entrance stays crisp.
   const anyHovered = useSyncExternalStore(rockHover.subscribe, rockHover.any, () => false);
-  const fpsCap: FpsCap =
-    anyHovered || revealing ? "heavy" : ROCKS_STEADY_FPS;
+  const fpsCap: FpsCap = scrolling
+    ? "scroll"
+    : anyHovered || revealing
+      ? "heavy"
+      : ROCKS_STEADY_FPS;
 
   const children: ReactNode = useMemo(() => <Scene />, []);
 
