@@ -99,14 +99,26 @@ html[data-mode="night"] {
    `min-h-*` section behind `max-md:` (portfolio's globe band got there first —
    see the note in portfolio.tsx). Desktop keeps dvh, where all three units are
    equal anyway. The trade: with the chrome retracted, full-height sections stop
-   growing to fill, so a little more sky shows at their bottom edge. */
+   growing to fill, so a little more sky shows at their bottom edge.
+
+   LOCKED, NOT RAW svh. `svh` only stays put in browsers that report their own
+   chrome to the engine (Safari, Chrome). An app that wraps the system web view
+   and resizes it for its own bar (Arc's bottom bar, reported 2026-11-21) moves
+   svh AND lvh with that bar, so the step came straight back there: a 60px bar
+   reflowed the document by ~430px. Mobile therefore sizes off --svh-lock /
+   --lvh-lock (1% of the viewport, in px), which an inline script in layout.tsx
+   measures before first paint and re-measures only when the WIDTH changes
+   (rotation) — never on a height-only resize, which is what the bar is. The
+   1svh / 1lvh fallbacks below cover the pre-JS / no-JS render. */
 :root {
   --gap-section: 18dvh;
+  --svh-lock: 1svh;
+  --lvh-lock: 1lvh;
 }
 
 @media (width < 768px) {
   :root {
-    --gap-section: 12svh;
+    --gap-section: calc(var(--svh-lock) * 12);
   }
 }
 

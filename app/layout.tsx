@@ -214,6 +214,28 @@ export default function RootLayout({
               "}",
           }}
         />
+        {/* Lock the viewport height before first paint (see the "LOCKED, NOT
+            RAW svh" note in globals.css). --svh-lock is 1% of the viewport as
+            loaded (the small viewport: the bar is showing at load), --lvh-lock
+            1% of the large one, probed from `100lvh` with innerHeight as the
+            floor. Both are re-measured only when the WIDTH changes (rotation,
+            a real window resize) — a phone's bar only ever moves the height,
+            and following it is exactly the reflow this exists to stop. A
+            non-touch window re-measures on every resize, so a narrow desktop
+            window still refits when it's made taller. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              "(function(){var d=document.documentElement,w=0;" +
+              "function lock(){w=innerWidth;var p=document.createElement('div');" +
+              "p.style.cssText='position:fixed;top:0;height:100lvh;width:0;visibility:hidden';" +
+              "d.appendChild(p);var l=Math.max(p.getBoundingClientRect().height,innerHeight);p.remove();" +
+              "d.style.setProperty('--svh-lock',innerHeight/100+'px');" +
+              "d.style.setProperty('--lvh-lock',l/100+'px');}" +
+              "lock();var fine=matchMedia('(pointer: fine)').matches;" +
+              "addEventListener('resize',function(){if(fine||innerWidth!==w)lock();});})();",
+          }}
+        />
         {/* Stamp the persisted sky mode onto <html> before first paint, so the
             correct --sky-* gradient (globals.css [data-mode]) and cloud palette
             render immediately — no flash of day-blue before hydration. Same

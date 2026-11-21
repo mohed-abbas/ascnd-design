@@ -98,13 +98,22 @@ const canUseScrollTimeline = () =>
  * `y + travel` has to clear ~100vh. lvh is just as constant as svh and is the
  * value the tuning already assumes.
  *
- * Measured from a probe because there is no `window.largeViewportHeight` to ask.
- * One forced layout per call, and it's called on mount and on refresh only —
- * never per scroll update. Falls back to innerHeight if `lvh` is unsupported
- * (nothing in the browserslist target is, but the probe returning 0 shouldn't
- * park every cloud at the origin).
+ * Read from the LOCKED large viewport, `--lvh-lock` (globals.css), not raw
+ * `100lvh`: a browser that resizes the web view for its own bar (Arc) moves lvh
+ * with that bar, which brought the step straight back. layout.tsx's inline
+ * script measures it before first paint and only on width changes. The probe
+ * stays as the fallback for a render where the lock hasn't been written; it is
+ * one forced layout per call, on mount and on refresh only, and falls back to
+ * innerHeight in turn so a 0 can never park every cloud at the origin.
  */
 function stableViewportHeight(): number {
+  // Only a px value is a lock; the CSS fallback is the raw `1lvh` token.
+  const locked = getComputedStyle(document.documentElement)
+    .getPropertyValue("--lvh-lock")
+    .trim();
+  if (locked.endsWith("px") && parseFloat(locked) > 0) {
+    return parseFloat(locked) * 100;
+  }
   const probe = document.createElement("div");
   probe.style.cssText =
     "position:fixed;top:0;left:0;width:0;height:100lvh;visibility:hidden;pointer-events:none";
@@ -227,12 +236,14 @@ function buildMeasuredTimelineCss(clouds: StaticCloudSpec[]): string {
     const at = c.at ?? 0.5;
     const travel = c.travel ?? DEFAULT_TRAVEL;
     const swell = c.swell ?? 1;
-    const y = (d: number) => (-d * travel).toFixed(2);
+    // In units of the LOCKED large viewport, not raw lvh (see
+    // stableViewportHeight): raw lvh follows the bar in Arc.
+    const y = (d: number) => `calc(var(--lvh-lock) * ${(-d * travel).toFixed(2)})`;
     const s = (d: number) => Math.pow(swell, d).toFixed(4);
     const d0 = 2 * (pFrom - at);
     const d1 = 2 * (1 - at);
     rules.push(
-      `@keyframes sc-${c.key} { from { transform: translateY(${y(d0)}lvh) scale(${s(d0)}); } to { transform: translateY(${y(d1)}lvh) scale(${s(d1)}); } }`,
+      `@keyframes sc-${c.key} { from { transform: translateY(${y(d0)}) scale(${s(d0)}); } to { transform: translateY(${y(d1)}) scale(${s(d1)}); } }`,
       `.sc-${c.key} { animation: sc-${c.key} 1ms linear both; animation-timeline: scroll(root); ${range} }`,
     );
   }
@@ -310,8 +321,9 @@ export default function StaticCloudLayer({
     // every section.
     //
     // Height-only resizes are exactly the ones we must ignore now: nothing this
-    // function measures depends on them any more (the sections are `svh` and
-    // stableViewportHeight() is `lvh`, both constant), so a rebuild can only
+    // function measures depends on them any more (the sections size off
+    // --svh-lock and stableViewportHeight() off --lvh-lock, both locked to the
+    // width — see globals.css), so a rebuild can only
     // cost a jump and never buy a correction. Orientation changes and real
     // window resizes move the width, and those still rebuild. Same
     // discriminator lenis-provider uses on its body-height watchdog.

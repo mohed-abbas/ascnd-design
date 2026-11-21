@@ -215,7 +215,7 @@ export default function CalEmbed() {
       className={`relative size-full [&_cal-inline]:relative [&_cal-inline]:z-10 [&_iframe]:rounded-[18px] ${
         ready
           ? "@min-[769px]:[&_cal-inline]:-mb-[80px]"
-          : "min-h-[563px] max-md:min-h-[70svh]"
+          : "min-h-[563px] max-md:min-h-[calc(var(--svh-lock)*70)]"
       }`}
     >
       {!ready && (

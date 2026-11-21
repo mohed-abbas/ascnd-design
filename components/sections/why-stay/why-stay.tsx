@@ -87,7 +87,7 @@ function HeadingWords() {
 
 export default function WhyStay() {
   return (
-    <section data-whystay className="relative min-h-dvh max-md:min-h-svh w-full overflow-hidden">
+    <section data-whystay className="relative min-h-dvh max-md:min-h-[calc(var(--svh-lock)*100)] w-full overflow-hidden">
       {/* Scrubs the whole section (heading roll-up + pill fade + reel) as it
           crosses the viewport; renders nothing. */}
       <WhyStayReveal />

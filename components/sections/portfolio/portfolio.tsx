@@ -216,7 +216,7 @@ export default function Portfolio() {
     <section
       id="work"
       data-portfolio
-      className="relative w-full overflow-hidden pt-[8dvh] max-md:pt-[8svh] pb-section"
+      className="relative w-full overflow-hidden pt-[8dvh] max-md:pt-[calc(var(--svh-lock)*8)] pb-section"
     >
       {/* The GLOBE BAND — an in-flow 100dvh block, and the containing block for
           the absolutely-positioned canvas.
@@ -229,7 +229,7 @@ export default function Portfolio() {
           also pins the canvas to exactly 100dvh, which the tuned preset depends
           on — see cloud-canvas-scene.tsx for why a taller canvas would rescale
           the sphere instead of clearing it. */}
-      {/* max-md:h-svh — the band must NOT be dynamically sized on a phone.
+      {/* max-md:h-[calc(var(--svh-lock)*100)] — the band must NOT be dynamically sized on a phone.
           `dvh` tracks the URL bar, so scrolling (especially UPWARD, which is
           what re-reveals the bar) changed this band's height mid-scroll, the
           ResizeObserver on the canvas fired, and engine.resize() reassigned
@@ -269,8 +269,8 @@ export default function Portfolio() {
           activeMode === "grid"
             ? // svh on mobile for the same URL-bar reason as the globe: a dvh
               // band would resize mid-scroll and rebuild the whole marquee.
-              "h-[130dvh] max-md:h-[124svh]"
-            : "h-dvh max-md:h-svh"
+              "h-[130dvh] max-md:h-[calc(var(--svh-lock)*124)]"
+            : "h-dvh max-md:h-[calc(var(--svh-lock)*100)]"
         }`}
       >
         {/* Top row — the controls. In GLOBE mode the heading lives at the
@@ -278,7 +278,7 @@ export default function Portfolio() {
             alone, exactly as before. In GRID mode there is no canvas to paint
             into, so the heading has to be a real DOM element and it goes here
             (see the <h2> below). */}
-        <div className="pointer-events-none relative z-10 flex w-full flex-col items-center gap-[26px] pt-[10dvh] max-md:pt-[10svh] max-md:px-6">
+        <div className="pointer-events-none relative z-10 flex w-full flex-col items-center gap-[26px] pt-[10dvh] max-md:pt-[calc(var(--svh-lock)*10)] max-md:px-6">
           {/* THE HEADING, in both modes — but only VISIBLE in grid mode.
               The globe paints these same words at the sphere's core
               (config.coreLabel) precisely so tiles can pass in front of them and
