@@ -427,6 +427,59 @@ html[data-custom-cursor="on"] * {
   }
 }
 
+/* Rock mode-adaptation treatments (components/ui/rock-art.tsx, picked by
+   <html data-rock-treatment> — lib/theme/rock-treatment.ts). ThemeDriver tweens
+   --rock-filter / --rock-tint-* with the sky, so A and B crossfade on their own;
+   C's bakes crossfade by opacity on <html data-mode> over the same 0.9s
+   (cubic-bezier ≈ CROSSFADE's power2.inOut). No `position` here: the callers
+   set it with a utility, and an unlayered rule would beat their layered one. */
+[data-rock-art] {
+  isolation: isolate; /* B's multiply blends with the rock only, never the sky */
+}
+/* A — filter the whole group. "split" filters only the bare rocks; their grass
+   gets B's tint instead (rock-art.tsx `kind`, stamped as data-rock-kind). */
+html[data-rock-treatment="filter"] [data-rock-art],
+html[data-rock-treatment="split"] [data-rock-art][data-rock-kind="rock"] {
+  filter: var(--rock-filter);
+}
+/* B — tint, masked to the rock's own alpha (inline mask-image = the base src). */
+.rock-tint {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    to bottom,
+    var(--rock-tint-top, #fff),
+    var(--rock-tint-bottom, #fff)
+  );
+  mix-blend-mode: multiply;
+  -webkit-mask-size: 100% 100%;
+  mask-size: 100% 100%;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  transition: opacity 0.9s cubic-bezier(0.45, 0, 0.55, 1);
+}
+[data-rock-fit="cover"] .rock-tint {
+  -webkit-mask-size: cover;
+  mask-size: cover;
+  -webkit-mask-position: center;
+  mask-position: center;
+}
+/* B + night bake: the tint hands over to the baked night grade. */
+html[data-rock-treatment="tint-night"][data-mode="night"] .rock-tint {
+  opacity: 0;
+}
+/* C — a pre-graded copy per mode, shown only in its own mode. */
+.rock-bake {
+  opacity: 0;
+  transition: opacity 0.9s cubic-bezier(0.45, 0, 0.55, 1);
+}
+html[data-mode="sunrise"] .rock-bake[data-bake-mode="sunrise"],
+html[data-mode="sunset"] .rock-bake[data-bake-mode="sunset"],
+html[data-mode="night"] .rock-bake[data-bake-mode="night"] {
+  opacity: 1;
+}
+
 /* Designs Shots collage — the seven tiles park scaled-down + invisible for the
    on-load "bloom from center" (design-shots-reveal.tsx). Keyed on .reveal-armed
    so they hold before JS and stay visible for no-JS. The reveal wrapper carries

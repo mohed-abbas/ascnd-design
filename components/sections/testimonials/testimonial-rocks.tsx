@@ -2,6 +2,7 @@
 
 import dynamic from "next/dynamic";
 import Image from "next/image";
+import RockArt from "@/components/ui/rock-art";
 import {
   useEffect,
   useRef,
@@ -245,13 +246,21 @@ export default function TestimonialRocks() {
                     transform: `translate(-50%, -50%) rotate(${u.rock.rotate}deg)`,
                   }}
                 >
-                  <Image
+                  {/* Same mode treatments as the cliffs (rock-art.tsx). */}
+                  <RockArt
                     src="/rocks/testimonial-rock.png"
-                    alt=""
-                    fill
                     sizes={`${Math.ceil(u.rock.w * ROCK_SCALE)}px`}
-                    className="select-none object-cover"
-                  />
+                    fit="cover"
+                    className="absolute inset-0"
+                  >
+                    <Image
+                      src="/rocks/testimonial-rock.png"
+                      alt=""
+                      fill
+                      sizes={`${Math.ceil(u.rock.w * ROCK_SCALE)}px`}
+                      className="select-none object-cover"
+                    />
+                  </RockArt>
                 </div>
               </div>
             </div>

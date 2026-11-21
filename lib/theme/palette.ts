@@ -47,6 +47,34 @@ export type ModePalette = {
    * the original baseline. ThemeDriver crossfades this with the sky on a switch.
    */
   grain: number;
+  /**
+   * Rock mode-adaptation (docs/rocks-by-mode.html). Which of these is live is
+   * picked by the rock treatment (lib/theme/rock-treatment.ts):
+   * - `tint`  — B: a top→bottom multiply gradient over the rock (white = none).
+   *   ThemeDriver tweens it as --rock-tint-top / --rock-tint-bottom.
+   * - `filter` — A: a CSS filter on the rock. EVERY mode lists the SAME
+   *   functions in the SAME order, so ThemeDriver can interpolate one string to
+   *   the next (as --rock-filter) instead of snapping.
+   * - `lights` — the 3D testimonial rocks: per-mode light rig + the colour stops
+   *   of their sky-gradient environment map. day = the original hand-tuned rig.
+   * C (baked art) needs no palette entry — the per-mode files sit next to each
+   * source as `<name>.<mode>.avif`.
+   */
+  rock: {
+    tint: { top: string; bottom: string };
+    filter: string;
+    lights: RockLights;
+  };
+};
+
+export type RockLights = {
+  ambient: Light;
+  hemi: { sky: string; ground: string; intensity: number };
+  key: Light;
+  rim: Light;
+  /** Environment gradient: zenith, sky, horizon. */
+  env: [string, string, string];
+  envIntensity: number;
 };
 
 export const PALETTES: Record<ThemeMode, ModePalette> = {
@@ -63,6 +91,18 @@ export const PALETTES: Record<ThemeMode, ModePalette> = {
       cssFilter: "brightness(1.03) sepia(0.12) saturate(1.05)",
     },
     grain: 0.06,
+    rock: {
+      tint: { top: "#fff1e6", bottom: "#ffd6b8" },
+      filter: "brightness(1.02) contrast(1) sepia(0.2) hue-rotate(-10deg) saturate(1.1)",
+      lights: {
+        ambient: { color: "#fff1e6", intensity: 0.3 },
+        hemi: { sky: "#ffe6d0", ground: "#c9b6c8", intensity: 1.0 },
+        key: { color: "#ffd9b0", intensity: 1.4 },
+        rim: { color: "#bcd2f2", intensity: 0.5 },
+        env: ["#f4d8c4", "#e8b9a8", "#ffe0b8"],
+        envIntensity: 0.6,
+      },
+    },
   },
   // The brand daytime sky — essentially today's #62abff, now a subtle gradient.
   day: {
@@ -74,6 +114,18 @@ export const PALETTES: Record<ThemeMode, ModePalette> = {
       cssFilter: "none",
     },
     grain: 0.1,
+    rock: {
+      tint: { top: "#ffffff", bottom: "#ffffff" },
+      filter: "brightness(1) contrast(1) sepia(0) hue-rotate(0deg) saturate(1)",
+      lights: {
+        ambient: { color: "#ffffff", intensity: 0.3 },
+        hemi: { sky: "#dcecff", ground: "#9fc4e8", intensity: 1.0 },
+        key: { color: "#fff4e0", intensity: 1.35 },
+        rim: { color: "#bfe0ff", intensity: 0.6 },
+        env: ["#cfe4ff", "#7fb2f0", "#e8f2ff"],
+        envIntensity: 0.6,
+      },
+    },
   },
   // Lavender-blue drifting through mauve into an amber horizon — warmer, richer.
   // Same fix as sunrise: bright, near-white clouds (key above day's 2.6) with only
@@ -86,6 +138,18 @@ export const PALETTES: Record<ThemeMode, ModePalette> = {
       cssFilter: "brightness(1.02) sepia(0.16) saturate(1.08) hue-rotate(-10deg)",
     },
     grain: 0.05,
+    rock: {
+      tint: { top: "#dccbf2", bottom: "#ffc0a0" },
+      filter: "brightness(0.9) contrast(1) sepia(0.3) hue-rotate(-25deg) saturate(1.15)",
+      lights: {
+        ambient: { color: "#ffe9e0", intensity: 0.28 },
+        hemi: { sky: "#f0c8d8", ground: "#a08cc0", intensity: 0.9 },
+        key: { color: "#ffb890", intensity: 1.3 },
+        rim: { color: "#a8b4f0", intensity: 0.55 },
+        env: ["#c8b8ee", "#d9a9d4", "#ffbf9c"],
+        envIntensity: 0.6,
+      },
+    },
   },
   // Deep, desaturated brand navy with a slightly lifted horizon; dim cool
   // moonlight on the clouds so they don't glare white against the dark sky.
@@ -98,6 +162,18 @@ export const PALETTES: Record<ThemeMode, ModePalette> = {
       cssFilter: "brightness(0.74) sepia(0.3) saturate(1.3) hue-rotate(180deg)",
     },
     grain: 0.05,
+    rock: {
+      tint: { top: "#6683b8", bottom: "#2a426c" },
+      filter: "brightness(0.5) contrast(1.05) sepia(0.45) hue-rotate(180deg) saturate(1.3)",
+      lights: {
+        ambient: { color: "#6f88b0", intensity: 0.1 },
+        hemi: { sky: "#4f6fa8", ground: "#101c34", intensity: 0.3 },
+        key: { color: "#9fb4dc", intensity: 0.4 },
+        rim: { color: "#3f5c96", intensity: 0.3 },
+        env: ["#2d5688", "#1c3f6e", "#0e2a52"],
+        envIntensity: 0.2,
+      },
+    },
   },
 };
 

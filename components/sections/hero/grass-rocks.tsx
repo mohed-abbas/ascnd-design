@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { useSyncExternalStore } from "react";
+import RockArt from "@/components/ui/rock-art";
 
 /**
  * Grass-rock overlay — grass, moss and flowers that grow over the two cliffs
@@ -150,22 +151,31 @@ export default function GrassRocks() {
             data-grass-side={side}
             className={`absolute bottom-0 h-full ${edge}`}
           >
-            <Image
+            {/* Same treatment layers as the bare rock beneath (rock-art.tsx),
+                so the grass recolours with it in every mode. */}
+            <RockArt
               src={src}
-              alt=""
-              width={width}
-              height={982}
-              // Pre-baked AVIF cut-outs (q80, at the source render's native
-              // sharpness — see GRASS above). Skip Next's optimizer — it was
-              // re-encoding them at q=75 and capping the width, which softened
-              // the reveal on HiDPI/tall viewports.
-              unoptimized
-              // Never the LCP (the bare <Rock> is) and only seen inside the
-              // hover disc, so keep it off the critical path.
-              loading="lazy"
               sizes={`${width}px`}
-              className="rock-base-fade h-full w-auto object-bottom"
-            />
+              kind="grass"
+              className="rock-base-fade relative h-full"
+            >
+              <Image
+                src={src}
+                alt=""
+                width={width}
+                height={982}
+                // Pre-baked AVIF cut-outs (q80, at the source render's native
+                // sharpness — see GRASS above). Skip Next's optimizer — it was
+                // re-encoding them at q=75 and capping the width, which softened
+                // the reveal on HiDPI/tall viewports.
+                unoptimized
+                // Never the LCP (the bare <Rock> is) and only seen inside the
+                // hover disc, so keep it off the critical path.
+                loading="lazy"
+                sizes={`${width}px`}
+                className="h-full w-auto object-bottom"
+              />
+            </RockArt>
           </div>
         )}
       </div>
