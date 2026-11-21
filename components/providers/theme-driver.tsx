@@ -62,7 +62,8 @@ export default function ThemeDriver() {
       // the OS repaints its own chrome on this attribute, and it is not worth 60
       // of those a second to crossfade a bar most desktops never render.
       const meta = document.querySelector('meta[name="theme-color"]');
-      meta?.setAttribute("content", PALETTES[mode].sky.mid);
+      // The bottom stop, matching layout.tsx (see its `viewport` export).
+      meta?.setAttribute("content", PALETTES[mode].sky.bottom);
 
       const to = stopsOf(mode);
 
