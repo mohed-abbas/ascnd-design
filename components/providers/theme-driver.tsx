@@ -30,11 +30,31 @@ import { CROSSFADE, PALETTES, type ThemeMode } from "@/lib/theme/palette";
  */
 
 const REDUCE_MOTION = "(prefers-reduced-motion: reduce)";
-const VARS = ["--sky-top", "--sky-mid", "--sky-bottom"] as const;
+// Sky stops, then the rock treatments' inputs (lib/theme/rock-treatment.ts):
+// B's tint gradient and A's filter string. All crossfade on the one proxy —
+// gsap.utils.interpolate blends the hex colours AND the filter strings (every
+// mode lists the same filter functions in the same order, so the numbers line
+// up). Set regardless of the active treatment; globals.css only reads them
+// under the matching [data-rock-treatment].
+const VARS = [
+  "--sky-top",
+  "--sky-mid",
+  "--sky-bottom",
+  "--rock-tint-top",
+  "--rock-tint-bottom",
+  "--rock-filter",
+] as const;
 
 const stopsOf = (mode: ThemeMode) => {
-  const s = PALETTES[mode].sky;
-  return [s.top, s.mid, s.bottom] as const;
+  const { sky, rock } = PALETTES[mode];
+  return [
+    sky.top,
+    sky.mid,
+    sky.bottom,
+    rock.tint.top,
+    rock.tint.bottom,
+    rock.filter,
+  ] as const;
 };
 
 export default function ThemeDriver() {

@@ -1,4 +1,5 @@
 import Image from "next/image";
+import RockArt from "@/components/ui/rock-art";
 import AnchorLink from "@/components/ui/anchor-link";
 import BookCallLink from "@/components/ui/book-call-link";
 import { InstagramSocial, XSocial } from "@/components/ui/icons";
@@ -299,7 +300,14 @@ export default function Footer() {
           giant "ascnd"'s ends tuck behind the cliffs, and as the logo rises
           (FooterReveal) it emerges from behind them (the immersion effect).
           pointer-events-none so they never intercept the nav; dropped below md. */}
-      <div className="pointer-events-none absolute left-[-457px] top-[308px] h-[1549px] w-[1248px] select-none max-md:hidden">
+      <RockArt
+        src={ROCK_SRC}
+        sizes="1248px"
+        fit="cover"
+        // Grass-topped cut-out: "split" tints it like the hero grass.
+        kind="grass"
+        className="pointer-events-none absolute left-[-457px] top-[308px] h-[1549px] w-[1248px] select-none max-md:hidden"
+      >
         <Image
           src={ROCK_SRC}
           alt=""
@@ -308,8 +316,15 @@ export default function Footer() {
           unoptimized
           className="object-cover"
         />
-      </div>
-      <div className="pointer-events-none absolute right-[-795px] top-[45px] h-[1635px] w-[1318px] select-none max-md:hidden">
+      </RockArt>
+      <RockArt
+        src={ROCK_SRC}
+        sizes="1318px"
+        fit="cover"
+        // Grass-topped cut-out: "split" tints it like the hero grass.
+        kind="grass"
+        className="pointer-events-none absolute right-[-795px] top-[45px] h-[1635px] w-[1318px] select-none max-md:hidden"
+      >
         <Image
           src={ROCK_SRC}
           alt=""
@@ -318,7 +333,7 @@ export default function Footer() {
           unoptimized
           className="object-cover"
         />
-      </div>
+      </RockArt>
     </footer>
   );
 }

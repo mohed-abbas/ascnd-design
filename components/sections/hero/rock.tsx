@@ -1,4 +1,5 @@
 import Image from "next/image";
+import RockArt from "@/components/ui/rock-art";
 
 /**
  * "Rock" — the cliffs that frame the hero (Figma nodes 103:19 left / 103:18
@@ -41,16 +42,20 @@ export default function Rock({ side }: { side: Side }) {
         side === "left" ? "left-0 z-[99]" : "right-0 z-0"
       }`}
     >
-      <Image
-        src={src}
-        alt=""
-        width={width}
-        height={982}
-        priority
-        unoptimized={unoptimized}
-        sizes={`${width}px`}
-        className="rock-base-fade h-full w-auto object-bottom"
-      />
+      {/* RockArt carries the base-fade mask (so the treatment layers fade at
+          the base with the rock) and the per-mode treatment layers. */}
+      <RockArt src={src} sizes={`${width}px`} className="rock-base-fade relative h-full">
+        <Image
+          src={src}
+          alt=""
+          width={width}
+          height={982}
+          priority
+          unoptimized={unoptimized}
+          sizes={`${width}px`}
+          className="h-full w-auto object-bottom"
+        />
+      </RockArt>
     </div>
   );
 }

@@ -28,6 +28,7 @@ import { getQualityConfig } from "@/lib/perf/quality-store";
 import { useMode } from "@/lib/theme/use-mode";
 import { CROSSFADE, PALETTES } from "@/lib/theme/palette";
 import { makeSkyBackdrop } from "@/lib/theme/sky-backdrop";
+import { useRockTreatment } from "@/lib/theme/use-rock-treatment";
 import {
   useSharedView,
   type SharedViewControls,
@@ -310,6 +311,81 @@ function Rocks({
   const maps = useTexture(rocks.map((r) => r.src));
   const mats = useRef<(THREE.MeshBasicMaterial | null)[]>([]);
   const meshes = useRef<(THREE.Mesh | null)[]>([]);
+
+  // Rock mode-adaptation (lib/theme/rock-treatment.ts), so these planes match
+  // the DOM cliffs they hand off to:
+  // - a baked grade for this mode (C, or B+N at night) → swap the map to the
+  //   `<src>.<mode>.avif` file, loaded imperatively (useTexture would suspend
+  //   the whole intro on a switch);
+  // - B tint → material.color, the midpoint of the tint gradient. Colour ×
+  //   texture is a multiply, as the DOM's mix-blend-mode is (in linear light
+  //   it's the same product as in sRGB, up to gamma rounding);
+  // - A filter (and "split", whose bare rocks are A) → no shader port; it
+  //   borrows the B tint as its approximation.
+  const mode = useMode();
+  const treatment = useRockTreatment();
+  useEffect(() => {
+    const bakeMode =
+      mode !== "day" &&
+      (treatment === "baked" || (treatment === "tint-night" && mode === "night"))
+        ? mode
+        : null;
+    const tintOn =
+      !bakeMode &&
+      (treatment === "tint" ||
+        treatment === "tint-night" ||
+        treatment === "filter" ||
+        treatment === "split");
+    const { top, bottom } = PALETTES[mode].rock.tint;
+    const tint = tintOn
+      ? new THREE.Color(top).lerp(new THREE.Color(bottom), 0.5)
+      : new THREE.Color(0xffffff);
+
+    const loaded: THREE.Texture[] = [];
+    const matList = [...mats.current];
+    let alive = true;
+    rocks.forEach((r, i) => {
+      const mat = matList[i];
+      const base = maps[i] as THREE.Texture;
+      if (!mat) return;
+      mat.color.copy(tint);
+      if (!bakeMode) {
+        if (mat.map !== base) {
+          mat.map = base;
+          mat.needsUpdate = true;
+        }
+        return;
+      }
+      new THREE.TextureLoader().load(
+        r.src.replace(/\.avif$/, `.${bakeMode}.avif`),
+        (tex) => {
+          if (!alive) return tex.dispose();
+          // Match the base texture's sampling so the swap is a pure regrade.
+          tex.colorSpace = base.colorSpace;
+          tex.anisotropy = base.anisotropy;
+          tex.minFilter = base.minFilter;
+          tex.magFilter = base.magFilter;
+          tex.generateMipmaps = base.generateMipmaps;
+          tex.flipY = base.flipY;
+          loaded.push(tex);
+          mat.map = tex;
+          mat.needsUpdate = true;
+        },
+      );
+    });
+    return () => {
+      alive = false;
+      rocks.forEach((_, i) => {
+        const mat = matList[i];
+        const base = maps[i] as THREE.Texture;
+        if (mat && mat.map !== base) {
+          mat.map = base;
+          mat.needsUpdate = true;
+        }
+      });
+      loaded.forEach((t) => t.dispose());
+    };
+  }, [mode, treatment, rocks, maps]);
 
   // Drive the entrance imperatively from the shared ref (same pattern as Glass).
   // Start hidden (opacity 0 below) and let <Intro>'s drift tween fade + settle.

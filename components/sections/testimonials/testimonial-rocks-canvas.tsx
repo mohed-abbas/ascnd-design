@@ -29,6 +29,9 @@ import {
 } from "@/components/canvas/use-shared-view";
 import type { FpsCap } from "@/components/canvas/view-registry";
 import { TESTIMONIAL_ROCKS_INDEX } from "@/components/canvas/indices";
+import { CROSSFADE, PALETTES } from "@/lib/theme/palette";
+import { useMode } from "@/lib/theme/use-mode";
+import { useRockTreatment } from "@/lib/theme/use-rock-treatment";
 
 // AgX slightly darkens; this exposure lifts it back (the old canvas set it at
 // context creation). Shared by the per-view setter AND the warm precompile —
@@ -183,15 +186,18 @@ const PUSH_DAMP = 2 * Math.sqrt(PUSH_SPRING); // critical damping — no oversho
  * value and the one-time bake doesn't depend on the (never) render loop. Baked
  * from the SHARED plane renderer (useThree gl inside the view children).
  */
-function buildSkyEnvMap(gl: THREE.WebGLRenderer): THREE.Texture {
+function buildSkyEnvMap(
+  gl: THREE.WebGLRenderer,
+  stops: readonly [string, string, string] = PALETTES.day.rock.lights.env,
+): THREE.Texture {
   const c = document.createElement("canvas");
   c.width = 16;
   c.height = 256;
   const ctx = c.getContext("2d")!;
   const g = ctx.createLinearGradient(0, 0, 0, 256);
-  g.addColorStop(0.0, "#cfe4ff"); // zenith (bright)
-  g.addColorStop(0.55, "#7fb2f0"); // sky
-  g.addColorStop(1.0, "#e8f2ff"); // horizon / cloud pale
+  g.addColorStop(0.0, stops[0]); // zenith (bright) — day: #cfe4ff
+  g.addColorStop(0.55, stops[1]); // sky — day: #7fb2f0
+  g.addColorStop(1.0, stops[2]); // horizon / cloud pale — day: #e8f2ff
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, 16, 256);
 
@@ -521,10 +527,7 @@ function Scene() {
           again so the form reads (flat ambient was the "clay" tell); the key does
           the shaping and the hemisphere + rim keep the undersides from the old
           near-black. Kept light overall to match the Figma. */}
-      <ambientLight intensity={0.3} />
-      <hemisphereLight args={[0xdcecff, 0x9fc4e8, 1.0]} />
-      <directionalLight color={0xfff4e0} intensity={1.35} position={[4, 6, 6]} />
-      <directionalLight color={0xbfe0ff} intensity={0.6} position={[-5, -2, -4]} />
+      <ModeLights material={asset.material} baseEnv={asset.env} />
       {UNITS.map((u, i) => (
         <Rock
           key={i}
@@ -535,6 +538,103 @@ function Scene() {
           material={asset.material}
         />
       ))}
+    </>
+  );
+}
+
+/** Point the shared rock material at an environment map (a three object, not
+ *  React state — kept out of the effect body for the compiler's mutation rule). */
+function setEnv(
+  material: THREE.MeshStandardMaterial,
+  env: THREE.Texture,
+  intensity: number,
+) {
+  material.envMap = env;
+  material.envMapIntensity = intensity;
+}
+
+/**
+ * The rig. Its day values (PALETTES.day.rock.lights) are the original hand-tuned
+ * lights: low ambient + hemisphere + a warm key at [4,6,6] + a cool rim from
+ * below-behind. Under any rock treatment other than "none"
+ * (lib/theme/rock-treatment.ts) it follows the sky mode: light colours and
+ * intensities crossfade over CROSSFADE (painted by the host pump while the
+ * section is on screen; off-screen nobody sees the tween), and the sky IBL is
+ * rebuilt from that mode's stops (a 16×256 PMREM — a snap, not a fade).
+ */
+function ModeLights({
+  material,
+  baseEnv,
+}: {
+  material: THREE.MeshStandardMaterial;
+  baseEnv: THREE.Texture;
+}) {
+  const mode = useMode();
+  const treatment = useRockTreatment();
+  const gl = useThree((s) => s.gl);
+  const ambient = useRef<THREE.AmbientLight>(null);
+  const hemi = useRef<THREE.HemisphereLight>(null);
+  const key = useRef<THREE.DirectionalLight>(null);
+  const rim = useRef<THREE.DirectionalLight>(null);
+  const first = useRef(true);
+  const day = PALETTES.day.rock.lights;
+
+  useEffect(() => {
+    const target = treatment === "none" ? "day" : mode;
+    const L = PALETTES[target].rock.lights;
+    const duration = first.current ? 0 : CROSSFADE.duration;
+    first.current = false;
+
+    const tweens: gsap.core.Tween[] = [];
+    const to = (c: THREE.Color | undefined, hex: string) => {
+      if (!c) return;
+      const t = new THREE.Color(hex);
+      tweens.push(gsap.to(c, { r: t.r, g: t.g, b: t.b, duration, ease: CROSSFADE.ease }));
+    };
+    const power = (l: THREE.Light | null, intensity: number) => {
+      if (l) tweens.push(gsap.to(l, { intensity, duration, ease: CROSSFADE.ease }));
+    };
+    to(ambient.current?.color, L.ambient.color);
+    power(ambient.current, L.ambient.intensity);
+    to(hemi.current?.color, L.hemi.sky);
+    to(hemi.current?.groundColor, L.hemi.ground);
+    power(hemi.current, L.hemi.intensity);
+    to(key.current?.color, L.key.color);
+    power(key.current, L.key.intensity);
+    to(rim.current?.color, L.rim.color);
+    power(rim.current, L.rim.intensity);
+
+    const env = target === "day" ? baseEnv : buildSkyEnvMap(gl, L.env);
+    setEnv(material, env, L.envIntensity);
+
+    return () => {
+      tweens.forEach((t) => t.kill());
+      if (env !== baseEnv) {
+        if (material.envMap === env) setEnv(material, baseEnv, day.envIntensity);
+        env.dispose();
+      }
+    };
+  }, [mode, treatment, gl, material, baseEnv, day]);
+
+  return (
+    <>
+      <ambientLight ref={ambient} color={day.ambient.color} intensity={day.ambient.intensity} />
+      <hemisphereLight
+        ref={hemi}
+        args={[day.hemi.sky, day.hemi.ground, day.hemi.intensity]}
+      />
+      <directionalLight
+        ref={key}
+        color={day.key.color}
+        intensity={day.key.intensity}
+        position={[4, 6, 6]}
+      />
+      <directionalLight
+        ref={rim}
+        color={day.rim.color}
+        intensity={day.rim.intensity}
+        position={[-5, -2, -4]}
+      />
     </>
   );
 }
