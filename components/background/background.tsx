@@ -65,7 +65,12 @@ export default function Background() {
       // gradient stops above are remapped to keep the visible slice identical,
       // and the grain child spans the bleed with it. Desktop: the bleed is
       // off-screen and nothing changes.
-      className="pointer-events-none fixed inset-x-0 top-[-10lvh] bottom-[-10lvh] -z-20 bg-[#62abff]"
+      //
+      // Sized off the LOCKED large viewport (--lvh-lock, globals.css), as a
+      // fixed height rather than a bottom inset: Arc resizes the web view for
+      // its bottom bar, so raw lvh — and a bottom-anchored box — follow the
+      // bar, and the whole gradient re-stretched every time it came back.
+      className="pointer-events-none fixed inset-x-0 top-[calc(var(--lvh-lock)*-10)] h-[calc(var(--lvh-lock)*120)] -z-20 bg-[#62abff]"
       style={{ backgroundImage: SKY_GRADIENT }}
     >
       {/* Grain — 256px seamless noise tile above the fill. Opacity is per-MODE
