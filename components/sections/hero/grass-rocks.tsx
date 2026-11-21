@@ -43,9 +43,16 @@ import { useSyncExternalStore } from "react";
  * warning with loading="eager" — that would pull 1.3MB onto the critical path
  * for an invisible image.
  */
+// RIGHT is v2: cut from a full, cleanly-matted render of the whole rock rather
+// than the cropped Figma export. That render was scaled 0.98×, offset
+// (-75, -415) px and cropped onto an 860×2455 frame (2.5× the 344×982 slot, its
+// native sharpness — no upscale), which lays its outline over the bare right
+// rock at ~98% overlap. The render's light-blue flowers had been keyed out as
+// holes; they were filled from the surrounding moss before encoding (AVIF q80).
+// The `.v2` suffix busts the /rocks cache (next.config.ts) on the swap.
 const GRASS = {
   left: { src: "/rocks/left-rock-grass.avif", width: 357, edge: "left-0" },
-  right: { src: "/rocks/right-rock-grass.avif", width: 344, edge: "right-0" },
+  right: { src: "/rocks/right-rock-grass.v2.avif", width: 344, edge: "right-0" },
 } as const;
 
 const REDUCE_MOTION = "(prefers-reduced-motion: reduce)";
@@ -101,8 +108,9 @@ export default function GrassRocks() {
                 alt=""
                 width={width}
                 height={982}
-                // Pre-baked AVIF cut-outs (q80, full 1428×3928 res — visually
-                // lossless vs the WebP master). Skip Next's optimizer — it was
+                // Pre-baked AVIF cut-outs (q80; left at full 1428×3928 res —
+                // visually lossless vs the WebP master — right v2 at 860×2455,
+                // see GRASS above). Skip Next's optimizer — it was
                 // re-encoding them at q=75 and capping the width, which softened
                 // the reveal on HiDPI/tall viewports.
                 unoptimized
