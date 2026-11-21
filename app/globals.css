@@ -385,8 +385,12 @@ html[data-custom-cursor="on"] * {
 
 /* The right cliff sits lower/heavier at its base, so it needs a taller fade to
    dissolve cleanly — push the band higher than the shared default (rock.tsx
-   tags the wrapper with data-rock-side). */
-[data-rock-side="right"] .rock-base-fade {
+   tags the wrapper with data-rock-side). The right GRASS overlay (grass-rocks
+   .tsx, data-grass-side) must fade over the SAME band: with the default 20%
+   its moss stayed opaque while the rock beneath was already dissolving into
+   the clouds, leaving crisp dark grass floating on a white base. */
+[data-rock-side="right"] .rock-base-fade,
+[data-grass-side="right"] .rock-base-fade {
   --rock-fade-bottom: 5%;
   --rock-fade-top: 26%;
 }

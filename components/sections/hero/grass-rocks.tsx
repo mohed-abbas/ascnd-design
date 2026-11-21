@@ -4,9 +4,10 @@ import Image from "next/image";
 import { useSyncExternalStore } from "react";
 
 /**
- * Grass-rock overlay — the lush, grass-topped variant of the two cliffs (Figma
- * nodes 56:58 left / 69:175 right), exported at the same scale and edge anchor
- * as the bare <Rock>s so it registers pixel-for-pixel on top of them.
+ * Grass-rock overlay — grass, moss and flowers that grow over the two cliffs
+ * (originally Figma nodes 56:58 left / 69:175 right; now cut from a full rock
+ * render, see GRASS below), framed at the same edge anchor and aspect as the
+ * bare <Rock>s so their outlines register on top of them.
  *
  * It carries no reveal logic of its own: a radial-gradient mask (in globals.css)
  * hides the whole overlay at rest, and rock-hover.tsx uncovers it inside a soft
@@ -14,12 +15,18 @@ import { useSyncExternalStore } from "react";
  * disc only ever shows grass where it overlaps a cliff — move over open sky and
  * nothing reveals, so no hit-testing is needed.
  *
- * One full-hero overlay holds BOTH rocks so a single hero-relative mask drives
- * the reveal. It sits at z-[100] — ABOVE both bare cliffs, including the left
- * rock which is lifted to z-[99] (rock.tsx) — so the hover reveal always paints
- * on top of the bare rock it overlays. The overlay is transparent except at the
- * cliff cut-outs and only ever shows grass inside the hover disc, so a high z
- * doesn't cover the centred collage/text.
+ * ONE full-hero overlay PER SIDE, each carrying the same hero-relative mask
+ * (rock-hover.tsx feeds identical vars to both), so each side can sit at its
+ * own depth: directly above ITS bare cliff, and on the same side of the
+ * front-plane rock clouds (plane-canvas, z 61) as that cliff.
+ * - left  z-[100]: above the left rock, which is lifted to z-[99] (rock.tsx) —
+ *   both sit above the clouds.
+ * - right z-[1]: above the right rock (z-0) but BELOW the z-61 clouds, so its
+ *   grass sinks into the cloud bank with the rock's base. A single z-[100]
+ *   overlay painted the right grass ON TOP of that cloud, leaving dark grass
+ *   floating on white where the rock itself was buried.
+ * Each overlay is transparent except at its cliff cut-out and only ever shows
+ * grass inside the hover disc, so neither covers the centred collage/text.
  *
  * PERF (docs/performance-audit.md A1/A3): the grass cut-outs are ~1.3MB of AVIF
  * that only ever appear inside a mouse-driven hover disc. So we gate the heavy
@@ -28,8 +35,8 @@ import { useSyncExternalStore } from "react";
  * (server snapshot `false`, so SSR ships no <img>, re-evaluated after hydration,
  * no mismatch). On touch / coarse-pointer devices the bytes never download.
  *
- * The wrapper `[data-grass-overlay]` <div> is ALWAYS rendered (even when the
- * images aren't), so rock-hover.tsx always finds its mask target — no
+ * The `[data-grass-overlay]` wrappers are ALWAYS rendered (even when the
+ * images aren't), so rock-hover.tsx always finds its mask targets — no
  * mount-timing race when it wires on the intro-skipped path. When the images do
  * render they're `loading="lazy"` (not `priority`) to stay off the critical
  * request path.
@@ -43,16 +50,51 @@ import { useSyncExternalStore } from "react";
  * warning with loading="eager" — that would pull 1.3MB onto the critical path
  * for an invisible image.
  */
-// RIGHT is v2: cut from a full, cleanly-matted render of the whole rock rather
-// than the cropped Figma export. That render was scaled 0.98×, offset
-// (-75, -415) px and cropped onto an 860×2455 frame (2.5× the 344×982 slot, its
-// native sharpness — no upscale), which lays its outline over the bare right
-// rock at ~98% overlap. The render's light-blue flowers had been keyed out as
-// holes; they were filled from the surrounding moss before encoding (AVIF q80).
-// The `.v2` suffix busts the /rocks cache (next.config.ts) on the swap.
+// Both are v2: cut from ONE full, cleanly-matted render of the whole rock
+// rather than the cropped Figma exports, whose rough cut-outs left the
+// original backdrop showing as white patches between the grass blades. The
+// cliffs are two sides of that same rock:
+// - RIGHT = the render's LEFT side: scaled 0.98×, offset (-75, -415) px onto an
+//   860×2455 frame (2.5× the 344×982 slot) — ~98% outline overlap with the
+//   bare right rock.
+// - LEFT = the render's RIGHT side: a 1:1 crop at (1986, 902) px onto an
+//   830×2284 frame (~2.33× the 357×982 slot) — ~96% overlap with the bare left
+//   rock; the remainder is grass overhanging the rock edge, as before.
+// Each frame is the render's native sharpness (no upscale). The render's
+// light-blue flowers had been keyed out as holes; they were filled from the
+// surrounding moss.
+//
+// v3 — GRASS ONLY. The render's rock is a different drawing from the bare
+// rocks (only the outlines match), so revealing it whole showed a second rock
+// whose cracks doubled up in the disc's soft ring — a "fish-eye" lens rather
+// than grass growing on the stone. Every rock pixel is therefore masked out
+// (a green-hue + saturated-flower mask, closed and feathered), so the disc
+// keeps showing the BARE rock with only grass, moss and flowers fading in on
+// top. The pixels were also colour-matched to the bare rocks' cool grade
+// (LAB mean/std transfer of the rock pixels; a gentler 60% lightness + cast
+// shift on the vegetation so it stays green). AVIF q80. The version suffix
+// busts the /rocks cache (next.config.ts) on each swap.
+//
+// Right v4: its darker moss needed a looser mask, which also let in the
+// render's dull grey lichen; over the dark bare rock that showed as pale,
+// blocky blotches at the base. v4 keeps only clearly green growth (hue +
+// saturation + green excess), closes it with round blur-threshold steps
+// instead of square min/max kernels, and drops any dull pixel that would paint
+// much lighter than the bare rock beneath it.
+// `z` is each side's overlay depth — see the header for why they differ.
 const GRASS = {
-  left: { src: "/rocks/left-rock-grass.avif", width: 357, edge: "left-0" },
-  right: { src: "/rocks/right-rock-grass.v2.avif", width: 344, edge: "right-0" },
+  left: {
+    src: "/rocks/left-rock-grass.v3.avif",
+    width: 357,
+    edge: "left-0",
+    z: "z-[100]",
+  },
+  right: {
+    src: "/rocks/right-rock-grass.v4.avif",
+    width: 344,
+    edge: "right-0",
+    z: "z-[1]",
+  },
 } as const;
 
 const REDUCE_MOTION = "(prefers-reduced-motion: reduce)";
@@ -83,46 +125,50 @@ function useHoverEligible() {
 export default function GrassRocks() {
   const eligible = useHoverEligible();
 
-  return (
-    <div
-      data-grass-overlay
-      aria-hidden
-      // Hidden below md alongside the bare cliffs — the mobile hero shows no
-      // rocks, so the grass hover overlay goes with them. (On touch phones the
-      // heavy images already never mount via useHoverEligible; this also covers
-      // a ≤768px viewport that happens to report a fine pointer.) Desktop
-      // unaffected — max-md:hidden only.
-      // opacity-0: keeps this mask-hidden overlay out of Chrome's LCP candidate
-      // set (see the LCP note in the header). rock-hover.tsx sets opacity 1 on
-      // the first pointer move over the hero; the reveal disc is mask-driven,
-      // so the flip itself is invisible.
-      className="pointer-events-none absolute inset-0 z-[100] select-none opacity-0 max-md:hidden"
-    >
-      {eligible &&
-        (["left", "right"] as const).map((side) => {
-          const { src, width, edge } = GRASS[side];
-          return (
-            <div key={side} className={`absolute bottom-0 h-full ${edge}`}>
-              <Image
-                src={src}
-                alt=""
-                width={width}
-                height={982}
-                // Pre-baked AVIF cut-outs (q80; left at full 1428×3928 res —
-                // visually lossless vs the WebP master — right v2 at 860×2455,
-                // see GRASS above). Skip Next's optimizer — it was
-                // re-encoding them at q=75 and capping the width, which softened
-                // the reveal on HiDPI/tall viewports.
-                unoptimized
-                // Never the LCP (the bare <Rock> is) and only seen inside the
-                // hover disc, so keep it off the critical path.
-                loading="lazy"
-                sizes={`${width}px`}
-                className="rock-base-fade h-full w-auto object-bottom"
-              />
-            </div>
-          );
-        })}
-    </div>
-  );
+  return (["left", "right"] as const).map((side) => {
+    const { src, width, edge, z } = GRASS[side];
+    return (
+      <div
+        key={side}
+        data-grass-overlay
+        aria-hidden
+        // Hidden below md alongside the bare cliffs — the mobile hero shows no
+        // rocks, so the grass hover overlay goes with them. (On touch phones
+        // the heavy images already never mount via useHoverEligible; this also
+        // covers a ≤768px viewport that happens to report a fine pointer.)
+        // Desktop unaffected — max-md:hidden only.
+        // opacity-0: keeps this mask-hidden overlay out of Chrome's LCP
+        // candidate set (see the LCP note in the header). rock-hover.tsx sets
+        // opacity 1 on the first pointer move over the hero; the reveal disc
+        // is mask-driven, so the flip itself is invisible.
+        className={`pointer-events-none absolute inset-0 ${z} select-none opacity-0 max-md:hidden`}
+      >
+        {eligible && (
+          <div
+            // Lets globals.css give each side's grass the same base-fade band
+            // as the bare rock beneath it.
+            data-grass-side={side}
+            className={`absolute bottom-0 h-full ${edge}`}
+          >
+            <Image
+              src={src}
+              alt=""
+              width={width}
+              height={982}
+              // Pre-baked AVIF cut-outs (q80, at the source render's native
+              // sharpness — see GRASS above). Skip Next's optimizer — it was
+              // re-encoding them at q=75 and capping the width, which softened
+              // the reveal on HiDPI/tall viewports.
+              unoptimized
+              // Never the LCP (the bare <Rock> is) and only seen inside the
+              // hover disc, so keep it off the critical path.
+              loading="lazy"
+              sizes={`${width}px`}
+              className="rock-base-fade h-full w-auto object-bottom"
+            />
+          </div>
+        )}
+      </div>
+    );
+  });
 }
