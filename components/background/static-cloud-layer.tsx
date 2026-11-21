@@ -476,7 +476,11 @@ export default function StaticCloudLayer({
         className="absolute -translate-x-1/2 -translate-y-1/2"
         style={{
           left: `${c.x}vw`,
-          top: `${c.y}vh`,
+          // The LOCKED large viewport, not `vh`: Arc resizes the web view
+          // for its bottom bar, so `vh` follows the bar and every cloud
+          // stepped by y% of the bar's height each time it came back. The
+          // drift keyframes above use the same unit.
+          top: `calc(var(--lvh-lock) * ${c.y})`,
           width: `${c.width}vw`,
           opacity: c.opacity,
         }}
