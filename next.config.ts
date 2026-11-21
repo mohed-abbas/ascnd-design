@@ -15,6 +15,12 @@ const nextConfig: NextConfig = {
   // verified-clean production behavior. Re-add Strict Mode per-subtree with
   // <React.StrictMode> around non-WebGL trees if you want the dev checks back.
   reactStrictMode: false,
+  // Let a phone on the LAN (http://192.168.x.y:3000) use the dev server. Next 16
+  // 403s cross-origin requests to /_next/* and /__nextjs* (HMR websocket, dev
+  // overlay) unless the origin is listed here, which leaves the phone with a
+  // half-working page. A wildcard rather than this machine's current IP, which
+  // DHCP can change. Dev-only: `next build`/`next start` ignore it.
+  allowedDevOrigins: ["192.168.*.*"],
   // Serve AVIF (then WebP) for images that DO go through Next's optimizer — the
   // default is WebP-only. The hand-tuned rock cut-outs stay `unoptimized`
   // (pre-encoded AVIF), so this only affects other next/image usage (e.g. the
