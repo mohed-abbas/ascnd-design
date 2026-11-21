@@ -1,0 +1,111 @@
+/* Rock grade lab (/lab/rocksplay, branch lab/rocks-night).
+
+   The panel (rocks-playground.tsx) tags the footer's two rock boxes with
+   [data-rp-rock] and writes the active mode's grade as --rp-* vars on the
+   .rocksplay wrapper. Three layers per rock:
+     1. the <img> itself        — filter (brightness / saturate / contrast)
+     2. ::after (z 1)           — TINT: a flat colour blended into the rock
+                                  (multiply by default — the scene's light colour)
+     3. ::before (z 2)          — RIM: a directional light wash (screen) from the
+                                  light's side, to give the form back
+   Both overlays are masked by the rock's own alpha (the same, already-cached
+   AVIF), so they only ever touch rock pixels. The boxes are pixel-mapped at the
+   source aspect with object-cover, so a 100% 100% mask lines up exactly.
+
+   Deliberately NOT isolated: a stacking context would blend the tint against the
+   rock alone, and at its soft edges (low alpha) the raw tint colour would show
+   as a fringe. Non-isolated, the edge blends against rock + sky — pure multiply,
+   no fringe. The z-indexes exist only because ::before paints before the <img>.
+
+   Everything is scoped under .rocksplay, so the sheet stays inert if client
+   navigation carries it to another route. */
+
+.rocksplay [data-rp-rock] img {
+  filter: var(--rp-filter, none);
+}
+
+.rocksplay [data-rp-rock]::before,
+.rocksplay [data-rp-rock]::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  -webkit-mask: url(/footer/footer-rock.avif) center / 100% 100% no-repeat;
+  mask: url(/footer/footer-rock.avif) center / 100% 100% no-repeat;
+}
+
+.rocksplay [data-rp-rock]::after {
+  z-index: 1;
+  background-color: var(--rp-tint, #fff);
+  mix-blend-mode: var(--rp-tint-blend, multiply);
+  opacity: var(--rp-tint-strength, 0);
+}
+
+.rocksplay [data-rp-rock]::before {
+  z-index: 2;
+  background-image: var(--rp-rim, none);
+  mix-blend-mode: screen;
+  opacity: var(--rp-rim-strength, 0);
+}
+
+/* Crossfade only while a mode switch plays ([data-fading], set for CROSSFADE's
+   duration) — so the sliders stay instant. The rim gradient's colour can't
+   interpolate (background-image); its strength fades instead. */
+.rocksplay[data-fading] [data-rp-rock] img {
+  transition: filter var(--rp-fade, 0.9s) ease-in-out;
+}
+.rocksplay[data-fading] [data-rp-rock]::after {
+  transition:
+    opacity var(--rp-fade, 0.9s) ease-in-out,
+    background-color var(--rp-fade, 0.9s) ease-in-out;
+}
+.rocksplay[data-fading] [data-rp-rock]::before {
+  transition: opacity var(--rp-fade, 0.9s) ease-in-out;
+}
+
+/* ── Baked night sources (the offline grade, bake-night-rock.mjs) ────────────
+   The production-shaped technique: the pre-graded night image as an overlay
+   on the day <img>, crossfaded by opacity on the mode switch. It carries its
+   own (identical) alpha, so no mask. In night the day <img> hides only AFTER
+   the fade has fully covered it (transition-delay): a symmetric crossfade
+   would dip the rock's coverage mid-fade, and a day image left underneath
+   would glow through the night image's soft edges. Leaving night, it snaps
+   back first, then the overlay fades out over it. */
+.rocksplay[data-source^="baked"] [data-rp-rock]::after {
+  -webkit-mask: none;
+  mask: none;
+  background: var(--rp-baked) center / cover no-repeat;
+  mix-blend-mode: normal;
+  opacity: 0;
+  transition: opacity var(--rp-fade, 0.9s) ease-in-out;
+}
+html[data-mode="night"] .rocksplay[data-source^="baked"] [data-rp-rock]::after {
+  opacity: 1;
+}
+.rocksplay[data-source^="baked"] [data-rp-rock] img {
+  filter: none;
+  opacity: 1;
+  transition: opacity 0s;
+}
+html[data-mode="night"] .rocksplay[data-source^="baked"] [data-rp-rock] img {
+  opacity: 0;
+  transition: opacity 0s linear var(--rp-fade, 0.9s);
+}
+.rocksplay[data-source^="baked"] [data-rp-rock]::before {
+  display: none;
+}
+
+/* View toggles: the untouched original, or split (left = original). They must
+   beat every source above, so the img overrides are deliberately blunt
+   (!important — lab only). */
+.rocksplay[data-view="original"] [data-rp-rock] img,
+.rocksplay[data-view="split"] [data-rp-rock="left"] img {
+  filter: none !important;
+  opacity: 1 !important;
+}
+.rocksplay[data-view="original"] [data-rp-rock]::before,
+.rocksplay[data-view="original"] [data-rp-rock]::after,
+.rocksplay[data-view="split"] [data-rp-rock="left"]::before,
+.rocksplay[data-view="split"] [data-rp-rock="left"]::after {
+  display: none;
+}
