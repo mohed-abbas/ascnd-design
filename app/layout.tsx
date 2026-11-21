@@ -92,11 +92,17 @@ export const metadata: Metadata = {
  * by the inline script below (before first paint) and kept in sync by
  * ThemeDriver; this is just the pre-JS default, and it matches DEFAULT_MODE.
  *
+ * It's the sky's BOTTOM stop, not the mid: the chrome a visitor most often sees
+ * is a bottom bar (Safari's default layout, and in-app/preview panes), and the
+ * mid stop under a sky that ends at --sky-bottom read as a flat darker band.
+ * Top-bar layouts (Chrome Android, Safari's top-bar option) trade that for a
+ * lighter strip above --sky-top — the one value can't match both edges.
+ *
  * themeColor lives on the `viewport` export, NOT `metadata` — Next moved it and
  * warns at build time if it's in the wrong one (generateViewport docs).
  */
 export const viewport: Viewport = {
-  themeColor: PALETTES[DEFAULT_MODE].sky.mid,
+  themeColor: PALETTES[DEFAULT_MODE].sky.bottom,
 };
 
 export default function RootLayout({
@@ -218,11 +224,12 @@ export default function RootLayout({
             theme-color can't come from the `viewport` export, which is rendered
             on the server and can't know the persisted mode; left to a static
             value the URL bar reads as a dark band above a bright sky (or vice
-            versa) until the user changes mode. The mid stop is the compromise
-            the one value has to make: the chrome sits at the TOP edge on
-            Safari's top-bar layout and the BOTTOM edge on its default bottom-bar
-            layout, so it can't match --sky-top and --sky-bottom at once.
-            Colours must match PALETTES[*].sky.mid in lib/theme/palette.ts. */}
+            versa) until the user changes mode. The chrome sits at the TOP edge
+            on Safari's top-bar layout and the BOTTOM edge on its default
+            bottom-bar layout, so one value can't match --sky-top and
+            --sky-bottom at once; it follows the bottom stop, for the
+            bottom-bar layout (see the `viewport` export above).
+            Colours must match PALETTES[*].sky.bottom in lib/theme/palette.ts. */}
         <script
           dangerouslySetInnerHTML={{
             __html:
@@ -236,7 +243,7 @@ export default function RootLayout({
               // appends later.
               "var t=document.querySelector('meta[name=\"theme-color\"]');" +
               "if(!t){t=document.createElement('meta');t.setAttribute('name','theme-color');document.head.appendChild(t);}" +
-              "t.setAttribute('content',{sunrise:'#f4c9b0',day:'#62abff',sunset:'#d9a9d4',night:'#1c3f6e'}[m]);",
+              "t.setAttribute('content',{sunrise:'#ffe0b8',day:'#9cc9ff',sunset:'#ffbf9c',night:'#2d5688'}[m]);",
           }}
         />
         {/* Arm the on-load reveal before first paint. This runs synchronously
