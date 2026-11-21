@@ -30,8 +30,13 @@ export default function RockHover() {
     if (window.matchMedia(REDUCE_MOTION).matches) return;
 
     const hero = document.querySelector<HTMLElement>("[data-hero]");
-    const overlay = document.querySelector<HTMLElement>("[data-grass-overlay]");
-    if (!hero || !overlay) return;
+    // One overlay per cliff (grass-rocks.tsx — each at its own z so it sits on
+    // the right side of the rock clouds). Both span the hero, so the same
+    // hero-relative disc vars drive both.
+    const overlays = Array.from(
+      document.querySelectorAll<HTMLElement>("[data-grass-overlay]"),
+    );
+    if (!hero || overlays.length === 0) return;
 
     // Disc state we animate, and the cursor target the disc eases toward.
     const state = { x: -9999, y: -9999, size: 0 };
@@ -41,10 +46,12 @@ export default function RockHover() {
     let running = false; // ticker attached
 
     const apply = () => {
-      overlay.style.setProperty("--reveal-x", `${state.x}px`);
-      overlay.style.setProperty("--reveal-y", `${state.y}px`);
-      overlay.style.setProperty("--reveal-size", `${state.size}px`);
-      overlay.style.setProperty("--reveal-half", `${state.size / 2}px`);
+      for (const overlay of overlays) {
+        overlay.style.setProperty("--reveal-x", `${state.x}px`);
+        overlay.style.setProperty("--reveal-y", `${state.y}px`);
+        overlay.style.setProperty("--reveal-size", `${state.size}px`);
+        overlay.style.setProperty("--reveal-half", `${state.size / 2}px`);
+      }
     };
 
     // Frame-rate-independent follow (audit H3): a raw `* FOLLOW` per tick
@@ -87,7 +94,7 @@ export default function RockHover() {
         // paint) never counts the invisible lazy grass as the page's LCP — see
         // the LCP note in grass-rocks.tsx. Mask still hides everything outside
         // the disc, so this flip has no visible effect. Idempotent on re-enter.
-        overlay.style.opacity = "1";
+        for (const overlay of overlays) overlay.style.opacity = "1";
       }
       start();
       if (!active) {
