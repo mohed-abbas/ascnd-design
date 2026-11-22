@@ -20,17 +20,32 @@ import RockArt from "@/components/ui/rock-art";
 
 type Side = "left" | "right";
 
-const ROCKS: Record<Side, { src: string; width: number; unoptimized?: boolean }> = {
+const ROCKS: Record<
+  Side,
+  { src: string; width: number; unoptimized?: boolean; relight: string }
+> = {
   // Hand-tuned 4× cut-outs, pre-encoded to AVIF (q80, full 1428×3928 res — PSNR
   // ~43dB RGB / ~62dB alpha vs the WebP master, i.e. visually lossless). Served
   // via `unoptimized` so Next's on-demand optimizer (which softened the
   // color-keyed edges at q75) never touches them. See docs/performance-audit.md.
-  left: { src: "/rocks/left-rock.avif", width: 357, unoptimized: true },
-  right: { src: "/rocks/right-rock.avif", width: 344, unoptimized: true },
+  // `relight`: the 2.5D relight map (normals + baked shading) for the "relight"
+  // rock treatment — see components/ui/relit-rock.tsx.
+  left: {
+    src: "/rocks/left-rock.avif",
+    width: 357,
+    unoptimized: true,
+    relight: "/rocks/left-rock.relight.webp",
+  },
+  right: {
+    src: "/rocks/right-rock.avif",
+    width: 344,
+    unoptimized: true,
+    relight: "/rocks/right-rock.relight.webp",
+  },
 };
 
 export default function Rock({ side }: { side: Side }) {
-  const { src, width, unoptimized } = ROCKS[side];
+  const { src, width, unoptimized, relight } = ROCKS[side];
   return (
     <div
       data-rock
@@ -44,7 +59,12 @@ export default function Rock({ side }: { side: Side }) {
     >
       {/* RockArt carries the base-fade mask (so the treatment layers fade at
           the base with the rock) and the per-mode treatment layers. */}
-      <RockArt src={src} sizes={`${width}px`} className="rock-base-fade relative h-full">
+      <RockArt
+        src={src}
+        sizes={`${width}px`}
+        relight={{ map: relight, side }}
+        className="rock-base-fade relative h-full"
+      >
         <Image
           src={src}
           alt=""

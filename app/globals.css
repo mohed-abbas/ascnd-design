@@ -439,7 +439,8 @@ html[data-custom-cursor="on"] * {
 /* A — filter the whole group. "split" filters only the bare rocks; their grass
    gets B's tint instead (rock-art.tsx `kind`, stamped as data-rock-kind). */
 html[data-rock-treatment="filter"] [data-rock-art],
-html[data-rock-treatment="split"] [data-rock-art][data-rock-kind="rock"] {
+html[data-rock-treatment="split"] [data-rock-art][data-rock-kind="rock"],
+html[data-rock-treatment="relight"] [data-rock-art][data-rock-kind="rock"]:not([data-relit]) {
   filter: var(--rock-filter);
 }
 /* B — tint, masked to the rock's own alpha (inline mask-image = the base src). */
@@ -464,6 +465,12 @@ html[data-rock-treatment="split"] [data-rock-art][data-rock-kind="rock"] {
   mask-size: cover;
   -webkit-mask-position: center;
   mask-position: center;
+}
+/* 2.5D relight — once <RelitRock>'s canvas has drawn its first frame it marks
+   the group ready; hide the plain <img> beneath so its day-lit soft edges don't
+   fringe through the canvas. (Kept in the DOM: it's the LCP + the fallback.) */
+[data-relit-ready] > img {
+  opacity: 0;
 }
 /* B + night bake: the tint hands over to the baked night grade. */
 html[data-rock-treatment="tint-night"][data-mode="night"] .rock-tint {
