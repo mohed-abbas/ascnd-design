@@ -335,7 +335,8 @@ function Rocks({
       (treatment === "tint" ||
         treatment === "tint-night" ||
         treatment === "filter" ||
-        treatment === "split");
+        treatment === "split" ||
+        treatment === "relight");
     const { top, bottom } = PALETTES[mode].rock.tint;
     const tint = tintOn
       ? new THREE.Color(top).lerp(new THREE.Color(bottom), 0.5)

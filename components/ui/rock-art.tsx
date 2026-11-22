@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import dynamic from "next/dynamic";
 import type { ReactNode } from "react";
 import { bakedModesFor } from "@/lib/theme/rock-treatment";
 import { useRockTreatment } from "@/lib/theme/use-rock-treatment";
@@ -19,8 +20,9 @@ import { useRockTreatment } from "@/lib/theme/use-rock-treatment";
  *                    crossfaded by CSS on <html data-mode>
  *
  * `kind` says what the art is — a bare rock, or grass (the hover overlays and the
- * grass-topped footer rock). Only the "split" treatment reads it: A's filter
- * on rocks, B's tint on grass.
+ * grass-topped footer rock). The "split" treatment reads it (A's filter on
+ * rocks, B's tint on grass), and so does "relight" (B's tint on grass; bare
+ * rocks that pass `relight` maps are drawn by <RelitRock>, the rest filtered).
  *
  * The tint and bake layers only MOUNT under a treatment that uses them, so the
  * default ("none") renders the same single <img> as before and downloads no
@@ -31,11 +33,15 @@ import { useRockTreatment } from "@/lib/theme/use-rock-treatment";
 
 type BakeMode = "sunrise" | "sunset" | "night";
 
+// WebGL relight canvas — only fetched when the "relight" treatment is picked.
+const RelitRock = dynamic(() => import("./relit-rock"), { ssr: false });
+
 export default function RockArt({
   src,
   sizes,
   fit = "height",
   kind = "rock",
+  relight,
   className = "",
   children,
 }: {
@@ -44,6 +50,9 @@ export default function RockArt({
   sizes: string;
   fit?: "height" | "cover";
   kind?: "rock" | "grass";
+  /** 2.5D relight inputs (hero cliffs only): the `<name>.relight.webp` map and
+   *  which side the cliff is on. Used by the "relight" treatment. */
+  relight?: { map: string; side: "left" | "right" };
   className?: string;
   children: ReactNode;
 }) {
@@ -51,7 +60,8 @@ export default function RockArt({
   const tinted =
     treatment === "tint" ||
     treatment === "tint-night" ||
-    (treatment === "split" && kind === "grass");
+    ((treatment === "split" || treatment === "relight") && kind === "grass");
+  const relit = treatment === "relight" && kind === "rock" && !!relight;
   const bakes = bakedModesFor(treatment);
   const mask = `url(${src})`;
 
@@ -60,9 +70,11 @@ export default function RockArt({
       data-rock-art
       data-rock-fit={fit}
       data-rock-kind={kind}
+      data-relit={relit ? "" : undefined}
       className={className}
     >
       {children}
+      {relit && relight && <RelitRock src={src} map={relight.map} side={relight.side} />}
       {tinted && (
         <span
           aria-hidden

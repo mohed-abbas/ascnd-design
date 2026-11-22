@@ -57,6 +57,10 @@ export type ModePalette = {
    *   the next (as --rock-filter) instead of snapping.
    * - `lights` — the 3D testimonial rocks: per-mode light rig + the colour stops
    *   of their sky-gradient environment map. day = the original hand-tuned rig.
+   * - `relight` — 2.5D relight (treatment "relight"): the hero cliffs drawn in
+   *   WebGL with a normal map derived from the painting (relit-rock.tsx). All
+   *   colours are LINEAR multipliers on the painting; day = ambient 1, key 0,
+   *   rim 0, flatten 0 — which reproduces the painting exactly.
    * C (baked art) needs no palette entry — the per-mode files sit next to each
    * source as `<name>.<mode>.avif`.
    */
@@ -64,7 +68,25 @@ export type ModePalette = {
     tint: { top: string; bottom: string };
     filter: string;
     lights: RockLights;
+    relight: RockRelight;
   };
+};
+
+/** Linear-light RGB triple (values may exceed 1). */
+export type RGB = [number, number, number];
+
+export type RockRelight = {
+  /** Flat light the whole rock receives (multiplies the painting). */
+  ambient: RGB;
+  /** Directional key light colour… */
+  key: RGB;
+  /** …and direction, in the image plane (+x = toward the page centre, the
+   *  shader mirrors it per side; +y = up; +z = toward the viewer). */
+  keyDir: RGB;
+  /** Silhouette rim light on edges facing the key. */
+  rim: RGB;
+  /** 0–1: how much of the painting's baked daylight to divide out first. */
+  flatten: number;
 };
 
 export type RockLights = {
@@ -102,6 +124,7 @@ export const PALETTES: Record<ThemeMode, ModePalette> = {
         env: ["#f4d8c4", "#e8b9a8", "#ffe0b8"],
         envIntensity: 0.6,
       },
+      relight: { ambient: [0.86, 0.8, 0.8], key: [0.42, 0.28, 0.14], keyDir: [0.6, 0.25, 0.75], rim: [0.55, 0.38, 0.22], flatten: 0.2 },
     },
   },
   // The brand daytime sky — essentially today's #62abff, now a subtle gradient.
@@ -125,6 +148,7 @@ export const PALETTES: Record<ThemeMode, ModePalette> = {
         env: ["#cfe4ff", "#7fb2f0", "#e8f2ff"],
         envIntensity: 0.6,
       },
+      relight: { ambient: [1, 1, 1], key: [0, 0, 0], keyDir: [0.6, 0.4, 0.7], rim: [0, 0, 0], flatten: 0 },
     },
   },
   // Lavender-blue drifting through mauve into an amber horizon — warmer, richer.
@@ -149,6 +173,7 @@ export const PALETTES: Record<ThemeMode, ModePalette> = {
         env: ["#c8b8ee", "#d9a9d4", "#ffbf9c"],
         envIntensity: 0.6,
       },
+      relight: { ambient: [0.55, 0.42, 0.52], key: [0.85, 0.45, 0.22], keyDir: [0.7, 0.15, 0.7], rim: [1.0, 0.55, 0.3], flatten: 0.35 },
     },
   },
   // Deep, desaturated brand navy with a slightly lifted horizon; dim cool
@@ -173,6 +198,7 @@ export const PALETTES: Record<ThemeMode, ModePalette> = {
         env: ["#2d5688", "#1c3f6e", "#0e2a52"],
         envIntensity: 0.2,
       },
+      relight: { ambient: [0.09, 0.1, 0.15], key: [0.26, 0.32, 0.5], keyDir: [0.55, 0.5, 0.67], rim: [0.3, 0.42, 0.75], flatten: 0.6 },
     },
   },
 };
