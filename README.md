@@ -1,5 +1,3 @@
-<div align="center">
-
 ```text
                  .                                      *
             .-~~~-.                     .                          .
@@ -24,6 +22,8 @@
     ▄▟████████▙▄▄▖                                        ▗▄▄▟████████▙▄
    ▟███████████████▙▄                                  ▄▟███████████████▙
 ```
+
+<div align="center">
 
 **The marketing site for ascnd — a design and front-end subscription.**
 <br>
@@ -248,11 +248,7 @@ decision records: check them before reversing something that looks arbitrary.
 
 <br>
 
-<div align="center">
-
 ```text
           .                       ^                       .
                  let's get you off the ground
 ```
-
-</div>
