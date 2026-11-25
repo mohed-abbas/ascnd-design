@@ -30,6 +30,13 @@ import { CROSSFADE, PALETTES } from "@/lib/theme/palette";
 import { makeSkyBackdrop } from "@/lib/theme/sky-backdrop";
 import { useRockTreatment } from "@/lib/theme/use-rock-treatment";
 import {
+  RELIGHT_GLSL,
+  lerpRelight,
+  relightMapFor,
+  relightParams,
+  type RelightParams,
+} from "@/lib/theme/relight-shader";
+import {
   useSharedView,
   type SharedViewControls,
 } from "@/components/canvas/use-shared-view";
@@ -301,6 +308,70 @@ export function GlassEnvironment({
   );
 }
 
+/**
+ * Per-plane uniforms for the 2.5D relight (lib/theme/relight-shader.ts).
+ * `uRelightOn` = 0 leaves the material a plain textured MeshBasicMaterial (the
+ * other treatments' tint path); 1 runs the hero cliffs' lighting model on the
+ * sampled painting, so the intro planes hand off to <RelitRock> seamlessly.
+ */
+type RelightUniforms = {
+  uRelief: { value: THREE.Texture | null };
+  uRelightOn: { value: number };
+  uAmbient: { value: THREE.Vector3 };
+  uKey: { value: THREE.Vector3 };
+  uKeyDir: { value: THREE.Vector3 };
+  uRim: { value: THREE.Vector3 };
+  uFlatten: { value: number };
+};
+
+function makeRelightUniforms(): RelightUniforms {
+  return {
+    uRelief: { value: null },
+    uRelightOn: { value: 0 },
+    uAmbient: { value: new THREE.Vector3(1, 1, 1) },
+    uKey: { value: new THREE.Vector3() },
+    uKeyDir: { value: new THREE.Vector3(0, 0, 1) },
+    uRim: { value: new THREE.Vector3() },
+    uFlatten: { value: 0 },
+  };
+}
+
+function writeRelight(u: RelightUniforms, p: RelightParams) {
+  u.uAmbient.value.fromArray(p.ambient);
+  u.uKey.value.fromArray(p.key);
+  u.uKeyDir.value.fromArray(p.keyDir);
+  u.uRim.value.fromArray(p.rim);
+  u.uFlatten.value = p.flatten;
+}
+
+/**
+ * onBeforeCompile for a rock plane's MeshBasicMaterial: binds this plane's
+ * uniforms and relights `diffuseColor` right after the map is sampled (the
+ * sample is already linear — the painting is an sRGB texture). Every plane's
+ * hook has identical source, so three compiles ONE program and only the
+ * uniform objects differ per material.
+ */
+function relightOnBeforeCompile(u: RelightUniforms) {
+  return (shader: THREE.WebGLProgramParametersWithUniforms) => {
+    Object.assign(shader.uniforms, u);
+    shader.fragmentShader = shader.fragmentShader
+      .replace(
+        "#include <common>",
+        `#include <common>
+uniform sampler2D uRelief;
+uniform float uRelightOn;
+${RELIGHT_GLSL}`,
+      )
+      .replace(
+        "#include <map_fragment>",
+        `#include <map_fragment>
+if (uRelightOn > 0.5) {
+  diffuseColor.rgb = relightRock(diffuseColor.rgb, texture2D(uRelief, vMapUv).rgb);
+}`,
+      );
+  };
+}
+
 function Rocks({
   rocks,
   rockEntry,
@@ -314,9 +385,13 @@ function Rocks({
 
   // Rock mode-adaptation (lib/theme/rock-treatment.ts), so these planes match
   // the DOM cliffs they hand off to:
+  // - 2.5D relight → the
+  //   hero's own lighting model, run in this material (relightOnBeforeCompile)
+  //   with the same `<name>.relight.webp` maps, so loader and hero agree. The
+  //   maps load imperatively (useTexture would suspend the whole intro); until
+  //   one lands its plane keeps the B tint below as a stand-in;
   // - a baked grade for this mode (C, or B+N at night) → swap the map to the
-  //   `<src>.<mode>.avif` file, loaded imperatively (useTexture would suspend
-  //   the whole intro on a switch);
+  //   `<src>.<mode>.avif` file, loaded imperatively;
   // - B tint → material.color, the midpoint of the tint gradient. Colour ×
   //   texture is a multiply, as the DOM's mix-blend-mode is (in linear light
   //   it's the same product as in sRGB, up to gamma rounding);
@@ -324,6 +399,73 @@ function Rocks({
   //   borrows the B tint as its approximation.
   const mode = useMode();
   const treatment = useRockTreatment();
+  const relit = treatment === "relight";
+
+  const relight = useMemo(() => rocks.map(() => makeRelightUniforms()), [rocks]);
+  const compileHooks = useMemo(() => relight.map(relightOnBeforeCompile), [relight]);
+  // Key light mirrored per side, as <RelitRock side> does.
+  const mirrors = useMemo(
+    () => rocks.map((r) => (r.src.includes("left-rock") ? 1 : -1)),
+    [rocks],
+  );
+  const relightLive = useRef<RelightParams[] | null>(null);
+
+  // Relight maps: loaded only while the treatment needs them.
+  useEffect(() => {
+    if (!relit) return;
+    const matList = [...mats.current];
+    const loaded: THREE.Texture[] = [];
+    let alive = true;
+    rocks.forEach((r, i) => {
+      new THREE.TextureLoader().load(relightMapFor(r.src), (tex) => {
+        if (!alive) return tex.dispose();
+        // DATA, not colour: no sRGB decode. flipY etc. match the painting's
+        // texture so both are read with the same UVs.
+        tex.colorSpace = THREE.NoColorSpace;
+        loaded.push(tex);
+        relight[i].uRelief.value = tex;
+        relight[i].uRelightOn.value = 1;
+        matList[i]?.color.set(0xffffff);
+      });
+    });
+    return () => {
+      alive = false;
+      relight.forEach((u) => {
+        u.uRelightOn.value = 0;
+        u.uRelief.value = null;
+      });
+      loaded.forEach((t) => t.dispose());
+    };
+  }, [relit, rocks, relight]);
+
+  // Relight lighting: follows the mode with the hero's crossfade (the intro
+  // view paints continuously while these planes are mounted).
+  useEffect(() => {
+    const target = rocks.map((_, i) =>
+      relightParams(PALETTES[mode].rock.relight, mirrors[i]),
+    );
+    const from = relightLive.current;
+    if (!from) {
+      relightLive.current = target;
+      target.forEach((p, i) => writeRelight(relight[i], p));
+      return;
+    }
+    const proxy = { t: 0 };
+    const tween = gsap.to(proxy, {
+      t: 1,
+      duration: CROSSFADE.duration,
+      ease: CROSSFADE.ease,
+      onUpdate: () => {
+        const now = from.map((p, i) => lerpRelight(p, target[i], proxy.t));
+        relightLive.current = now;
+        now.forEach((p, i) => writeRelight(relight[i], p));
+      },
+    });
+    return () => {
+      tween.kill();
+    };
+  }, [mode, rocks, mirrors, relight]);
+
   useEffect(() => {
     const bakeMode =
       mode !== "day" &&
@@ -336,7 +478,7 @@ function Rocks({
         treatment === "tint-night" ||
         treatment === "filter" ||
         treatment === "split" ||
-        treatment === "relight");
+        relit);
     const { top, bottom } = PALETTES[mode].rock.tint;
     const tint = tintOn
       ? new THREE.Color(top).lerp(new THREE.Color(bottom), 0.5)
@@ -349,7 +491,10 @@ function Rocks({
       const mat = matList[i];
       const base = maps[i] as THREE.Texture;
       if (!mat) return;
-      mat.color.copy(tint);
+      // A relit plane does its own colouring — the tint is only its stand-in
+      // until the relight map lands.
+      if (relight[i].uRelightOn.value > 0.5) mat.color.set(0xffffff);
+      else mat.color.copy(tint);
       if (!bakeMode) {
         if (mat.map !== base) {
           mat.map = base;
@@ -386,7 +531,7 @@ function Rocks({
       });
       loaded.forEach((t) => t.dispose());
     };
-  }, [mode, treatment, rocks, maps]);
+  }, [mode, treatment, relit, rocks, maps, relight]);
 
   // Drive the entrance imperatively from the shared ref (same pattern as Glass).
   // Start hidden (opacity 0 below) and let <Intro>'s drift tween fade + settle.
@@ -422,6 +567,7 @@ function Rocks({
               mats.current[i] = m;
             }}
             map={maps[i] as THREE.Texture}
+            onBeforeCompile={compileHooks[i]}
             transparent
             toneMapped={false}
             opacity={0}

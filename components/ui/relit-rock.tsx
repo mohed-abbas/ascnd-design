@@ -2,7 +2,13 @@
 
 import { useEffect, useRef } from "react";
 import gsap from "gsap";
-import { CROSSFADE, PALETTES, type RockRelight } from "@/lib/theme/palette";
+import { CROSSFADE, PALETTES } from "@/lib/theme/palette";
+import {
+  RELIGHT_GLSL,
+  lerpRelight,
+  relightParams,
+  type RelightParams,
+} from "@/lib/theme/relight-shader";
 import { useMode } from "@/lib/theme/use-mode";
 
 /**
@@ -51,18 +57,15 @@ void main() {
   gl_Position = vec4(aPos, 0.0, 1.0);
 }`;
 
+// The lighting model itself lives in lib/theme/relight-shader.ts, shared with
+// the intro's WebGL rock planes so the loader → hero hand-off matches.
 const FRAG = `#version 300 es
 precision highp float;
 in vec2 vUv;
 out vec4 fragColor;
 uniform sampler2D uAlbedo;
 uniform sampler2D uRelief;
-uniform vec3 uAmbient;
-uniform vec3 uKey;
-uniform vec3 uKeyDir;
-uniform vec3 uRim;
-uniform float uFlatten;
-const float NORMAL_SCALE = 0.45;
+${RELIGHT_GLSL}
 
 vec3 toLin(vec3 c) {
   return mix(c / 12.92, pow((c + 0.055) / 1.055, vec3(2.4)), step(0.04045, c));
@@ -75,53 +78,11 @@ vec3 toSrgb(vec3 c) {
 void main() {
   vec4 a = texture(uAlbedo, vUv);
   if (a.a <= 0.0) { fragColor = vec4(0.0); return; }
-  vec3 r = texture(uRelief, vUv).rgb;
-  // Soften the derived relief: at full strength the painting's strokes read
-  // as an embossed, plastic surface. Scale x,y and renormalise.
-  vec3 n = normalize(vec3((r.xy * 2.0 - 1.0) * NORMAL_SCALE, 1.0));
-  float baked = r.z * 2.0;
-
-  vec3 alb = toLin(a.rgb);
-  vec3 flat_ = alb / clamp(mix(1.0, baked, uFlatten), 0.4, 2.5);
-
-  vec3 L = normalize(uKeyDir);
-  float ndl = max(dot(n, L), 0.0);
-  vec2 lxy = normalize(L.xy + 1e-5);
-  float edge = pow(clamp(1.0 - n.z, 0.0, 1.0), 1.5);
-  float rim = edge * clamp(dot(normalize(n.xy + 1e-5), lxy), 0.0, 1.0) * 1.5;
-
-  vec3 col = flat_ * (uAmbient + uKey * ndl) + flat_ * uRim * rim;
+  vec3 col = relightRock(toLin(a.rgb), texture(uRelief, vUv).rgb);
   fragColor = vec4(toSrgb(col) * a.a, a.a);
 }`;
 
-type Params = {
-  ambient: number[];
-  key: number[];
-  keyDir: number[];
-  rim: number[];
-  flatten: number;
-};
-
-function paramsFor(r: RockRelight, mirror: number): Params {
-  return {
-    ambient: [...r.ambient],
-    key: [...r.key],
-    keyDir: [r.keyDir[0] * mirror, r.keyDir[1], r.keyDir[2]],
-    rim: [...r.rim],
-    flatten: r.flatten,
-  };
-}
-
-function lerpParams(a: Params, b: Params, t: number): Params {
-  const l = (x: number[], y: number[]) => x.map((v, i) => v + (y[i] - v) * t);
-  return {
-    ambient: l(a.ambient, b.ambient),
-    key: l(a.key, b.key),
-    keyDir: l(a.keyDir, b.keyDir),
-    rim: l(a.rim, b.rim),
-    flatten: a.flatten + (b.flatten - a.flatten) * t,
-  };
-}
+type Params = RelightParams;
 
 function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
@@ -226,7 +187,7 @@ export default function RelitRock({
 
   // Live lighting state + the draw fn, shared between the GL and mode effects.
   const live = useRef<{ params: Params; draw: (() => void) | null }>({
-    params: paramsFor(PALETTES[mode].rock.relight, mirror),
+    params: relightParams(PALETTES[mode].rock.relight, mirror),
     draw: null,
   });
 
@@ -318,7 +279,7 @@ export default function RelitRock({
   // the GSAP ticker, repainting each step.
   useEffect(() => {
     const from = live.current.params;
-    const to = paramsFor(PALETTES[mode].rock.relight, mirror);
+    const to = relightParams(PALETTES[mode].rock.relight, mirror);
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const proxy = { t: 0 };
     const tween = gsap.to(proxy, {
@@ -326,7 +287,7 @@ export default function RelitRock({
       duration: reduce ? 0 : CROSSFADE.duration,
       ease: CROSSFADE.ease,
       onUpdate: () => {
-        live.current.params = lerpParams(from, to, proxy.t);
+        live.current.params = lerpRelight(from, to, proxy.t);
         live.current.draw?.();
       },
     });
