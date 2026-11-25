@@ -79,6 +79,16 @@
  * |                                            | portfolio modes are mutually exclusive   |
  * |                                            | MOUNTS, so this and the globe above are  |
  * |                                            | never both live.                         |
+ * | components/ui/relit-rock.tsx (mounted by   | rockRelight — whether the hero cliffs'   |
+ * |   ui/rock-art.tsx) + the intro's rock      | 2.5D relight runs at all. false on low → |
+ * |   planes (sections/intro/intro-scene.tsx)  | the cliffs keep A's CSS filter and the   |
+ * |                                            | intro planes B's tint (no maps fetched,  |
+ * |                                            | no WebGL context). Locked at mount: a    |
+ * |                                            | step-down never swaps a mounted canvas.  |
+ * |                                            | Paints on change only (mode tween rides  |
+ * |                                            | the shared GSAP ticker), idles to zero,  |
+ * |                                            | dpr≤1.5, and never mounts in day or      |
+ * |                                            | below md (day is the identity).          |
  *
  * ★ RULE (audit 2026-07-02 F5.1): any NEW heavy effect — a WebGL canvas, a
  * free-running loop, a per-frame SVG/CSS filter — must be added to this table
@@ -148,6 +158,17 @@ export interface QualityConfig {
    * regardless of tier.
    */
   readonly testimonialsDrift: boolean;
+
+  // ── Rock 2.5D relight (components/ui/relit-rock.tsx + the intro's rock planes) ──
+  /**
+   * Whether the night/sunrise/sunset cliffs are relit in WebGL (a per-pixel
+   * normal-map shader on a small quad per cliff, plus two ~200 KB relight
+   * maps). It paints only on change, so its cost is the maps' download/decode,
+   * one context and ~2×(display-size) of texture memory, not frame time. false
+   * on low → A's CSS filter on the cliffs, B's tint on the intro planes.
+   * Locked at mount (see rock-art.tsx useRelightActive).
+   */
+  readonly rockRelight: boolean;
 }
 
 export const TIERS: Record<TierName, QualityConfig> = {
@@ -172,6 +193,7 @@ export const TIERS: Record<TierName, QualityConfig> = {
     text3dBevelSegments: 12,
     comparisonAuraSweep: true,
     testimonialsDrift: true,
+    rockRelight: true,
   },
   medium: {
     tier: "medium",
@@ -184,6 +206,7 @@ export const TIERS: Record<TierName, QualityConfig> = {
     text3dBevelSegments: 8,
     comparisonAuraSweep: true,
     testimonialsDrift: true,
+    rockRelight: true,
   },
   low: {
     tier: "low",
@@ -196,5 +219,6 @@ export const TIERS: Record<TierName, QualityConfig> = {
     text3dBevelSegments: 6,
     comparisonAuraSweep: false,
     testimonialsDrift: false,
+    rockRelight: false,
   },
 };
