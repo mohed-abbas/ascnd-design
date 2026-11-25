@@ -443,28 +443,11 @@ html[data-rock-treatment="split"] [data-rock-art][data-rock-kind="rock"],
 html[data-rock-treatment="relight"] [data-rock-art][data-rock-kind="rock"]:not([data-relit]) {
   filter: var(--rock-filter);
 }
-/* B — tint, masked to the rock's own alpha (inline mask-image = the base src). */
-.rock-tint {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background: linear-gradient(
-    to bottom,
-    var(--rock-tint-top, #fff),
-    var(--rock-tint-bottom, #fff)
-  );
-  mix-blend-mode: multiply;
-  -webkit-mask-size: 100% 100%;
-  mask-size: 100% 100%;
-  -webkit-mask-repeat: no-repeat;
-  mask-repeat: no-repeat;
-  transition: opacity 0.9s cubic-bezier(0.45, 0, 0.55, 1);
-}
-[data-rock-fit="cover"] .rock-tint {
-  -webkit-mask-size: cover;
-  mask-size: cover;
-  -webkit-mask-position: center;
-  mask-position: center;
+/* B — tint: an SVG filter per rock (rock-art.tsx RockTintFilter) that multiplies
+   the colour by the sky-tinted gradient and keeps the alpha, so soft edges
+   (the grass blades) don't pick up a film of the tint colour. */
+[data-rock-tinted] {
+  filter: var(--rock-tint-ref);
 }
 /* 2.5D relight — once <RelitRock>'s canvas has drawn its first frame it marks
    the group ready; hide the plain <img> beneath so its day-lit soft edges don't
@@ -472,9 +455,10 @@ html[data-rock-treatment="relight"] [data-rock-art][data-rock-kind="rock"]:not([
 [data-relit-ready] > img {
   opacity: 0;
 }
-/* B + night bake: the tint hands over to the baked night grade. */
-html[data-rock-treatment="tint-night"][data-mode="night"] .rock-tint {
-  opacity: 0;
+/* B + night bake: the tint hands over to the baked night grade (the bake is
+   inside the filtered group, so the tint must be off or it would grade it twice). */
+html[data-rock-treatment="tint-night"][data-mode="night"] [data-rock-tinted] {
+  filter: none;
 }
 /* C — a pre-graded copy per mode, shown only in its own mode. */
 .rock-bake {

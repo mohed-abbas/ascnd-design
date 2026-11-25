@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import dynamic from "next/dynamic";
-import type { ReactNode } from "react";
+import { useId, type CSSProperties, type ReactNode } from "react";
 import { bakedModesFor } from "@/lib/theme/rock-treatment";
 import { useRockTreatment } from "@/lib/theme/use-rock-treatment";
 
@@ -11,13 +11,20 @@ import { useRockTreatment } from "@/lib/theme/use-rock-treatment";
  * treatments (lib/theme/rock-treatment.ts, docs/rocks-by-mode.html) apply to
  * the hero cliffs, their grass overlays and the footer rocks alike:
  *
- *   [data-rock-art]  isolated group — A's filter lands here (globals.css)
+ *   <svg>            B's tint filter (only when tinted), a 0×0 sibling
+ *   [data-rock-art]  isolated group — A's CSS filter, or B's SVG tint filter
+ *                    (globals.css), lands here
  *     children       the caller's own base <Image> (unchanged priority/sizes)
- *     .rock-tint     B: a sky-tinted gradient, masked to the rock's own alpha,
- *                    multiplied over the base INSIDE the isolated group — so it
- *                    darkens only the rock, never the sky or clouds behind it
  *     .rock-bake ×n  C: pre-graded copies (`<name>.<mode>.<ext>`), opacity-
  *                    crossfaded by CSS on <html data-mode>
+ *
+ * B multiplies the rock's colour by a sky-tinted top→bottom gradient and keeps
+ * its alpha exactly. It used to be a `mix-blend-mode: multiply` span masked to
+ * the rock's alpha, but a CSS multiply over a semi-transparent pixel can't keep
+ * alpha: where the backdrop is see-through it paints the span's own colour
+ * instead. That left a white (day) / blue (night) film on every soft edge, and
+ * the grass overlays are almost all soft edge. The SVG filter computes
+ * (rgb·tint, a) per pixel with feComposite arithmetic, which has no such term.
  *
  * `kind` says what the art is — a bare rock, or grass (the hover overlays and the
  * grass-topped footer rock). The "split" treatment reads it (A's filter on
@@ -63,37 +70,82 @@ export default function RockArt({
     ((treatment === "split" || treatment === "relight") && kind === "grass");
   const relit = treatment === "relight" && kind === "rock" && !!relight;
   const bakes = bakedModesFor(treatment);
-  const mask = `url(${src})`;
+  const tintId = `rock-tint${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
 
   return (
-    <div
-      data-rock-art
-      data-rock-fit={fit}
-      data-rock-kind={kind}
-      data-relit={relit ? "" : undefined}
-      className={className}
-    >
-      {children}
-      {relit && relight && <RelitRock src={src} map={relight.map} side={relight.side} />}
-      {tinted && (
-        <span
-          aria-hidden
-          className="rock-tint"
-          style={{ maskImage: mask, WebkitMaskImage: mask }}
-        />
-      )}
-      {bakes.map((mode: BakeMode) => (
-        <Image
-          key={mode}
-          data-bake-mode={mode}
-          src={src.replace(/\.(avif|png)$/, `.${mode}.$1`)}
-          alt=""
-          fill
-          unoptimized
-          sizes={sizes}
-          className="rock-bake object-cover"
-        />
-      ))}
-    </div>
+    <>
+      {tinted && <RockTintFilter id={tintId} />}
+      <div
+        data-rock-art
+        data-rock-fit={fit}
+        data-rock-kind={kind}
+        data-relit={relit ? "" : undefined}
+        data-rock-tinted={tinted ? "" : undefined}
+        style={tinted ? ({ "--rock-tint-ref": `url(#${tintId})` } as CSSProperties) : undefined}
+        className={className}
+      >
+        {children}
+        {relit && relight && <RelitRock src={src} map={relight.map} side={relight.side} />}
+        {bakes.map((mode: BakeMode) => (
+          <Image
+            key={mode}
+            data-bake-mode={mode}
+            src={src.replace(/\.(avif|png)$/, `.${mode}.$1`)}
+            alt=""
+            fill
+            unoptimized
+            sizes={sizes}
+            className="rock-bake object-cover"
+          />
+        ))}
+      </div>
+    </>
+  );
+}
+
+// B's gradient ramp: black at the top of the box → white at the bottom, a
+// static image the filter stretches over the rock's box and uses to mix the
+// two tint colours (which are live CSS vars, so they can't go in here).
+const TINT_RAMP = `data:image/svg+xml,${encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" width="1" height="64" viewBox="0 0 1 64" preserveAspectRatio="none"><linearGradient id="g" x2="0" y2="1"><stop offset="0" stop-color="#000"/><stop offset="1" stop-color="#fff"/></linearGradient><rect width="1" height="64" fill="url(#g)"/></svg>',
+)}`;
+
+const tintFlood = (v: "top" | "bottom"): CSSProperties => ({
+  floodColor: `var(--rock-tint-${v}, #fff)`,
+});
+
+/**
+ * B's tint as an SVG filter: out = (rgb · tint, a), with
+ *   tint = mix(--rock-tint-top, --rock-tint-bottom, ramp)
+ * computed in sRGB, as the old multiply span did. The floods read ThemeDriver's
+ * vars, so the tint crossfades with the sky on its own. feComposite arithmetic
+ * works on premultiplied values: (rgb·a) · tint = (rgb·tint)·a, and the alpha
+ * channel comes out as a · 1, so soft edges keep exactly their own alpha.
+ */
+function RockTintFilter({ id }: { id: string }) {
+  return (
+    <svg aria-hidden width="0" height="0" className="pointer-events-none absolute">
+      <filter
+        id={id}
+        x="0"
+        y="0"
+        width="1"
+        height="1"
+        colorInterpolationFilters="sRGB"
+      >
+        <feImage href={TINT_RAMP} preserveAspectRatio="none" result="ramp" />
+        <feFlood style={tintFlood("top")} result="top" />
+        <feFlood style={tintFlood("bottom")} result="bottom" />
+        <feComposite in="bottom" in2="ramp" operator="arithmetic" k1="1" result="b" />
+        <feComponentTransfer in="ramp" result="inv">
+          <feFuncR type="linear" slope="-1" intercept="1" />
+          <feFuncG type="linear" slope="-1" intercept="1" />
+          <feFuncB type="linear" slope="-1" intercept="1" />
+        </feComponentTransfer>
+        <feComposite in="top" in2="inv" operator="arithmetic" k1="1" result="t" />
+        <feComposite in="b" in2="t" operator="arithmetic" k2="1" k3="1" result="tint" />
+        <feComposite in="SourceGraphic" in2="tint" operator="arithmetic" k1="1" />
+      </filter>
+    </svg>
   );
 }
