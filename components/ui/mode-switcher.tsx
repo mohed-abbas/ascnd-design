@@ -299,6 +299,9 @@ export default function ModeSwitcher() {
       title={`Switch to ${next.label.toLowerCase()} sky`}
       // Clicking this with the menu open previews a sky instead of closing it.
       data-menu-keep-open
+      // Hidden through the loader + welcome, it fades in WITH the navbar
+      // (hero-reveal.tsx / chrome-reveal.tsx; armed state in globals.css).
+      data-reveal-with-nav
       className="group pointer-events-auto fixed right-[55px] bottom-[calc(37.6%_+_87px)] z-[1000] flex size-[52px] items-center justify-center rounded-full text-white max-md:hidden"
     >
       {/* The glass, as its own layer so the menu can dissolve it while the icon
