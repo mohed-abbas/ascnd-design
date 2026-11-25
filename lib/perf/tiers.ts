@@ -81,8 +81,8 @@
  * |                                            | never both live.                         |
  * | components/ui/relit-rock.tsx (mounted by   | rockRelight — whether the hero cliffs'   |
  * |   ui/rock-art.tsx) + the intro's rock      | 2.5D relight runs at all. false on low → |
- * |   planes (sections/intro/intro-scene.tsx)  | the cliffs keep A's CSS filter and the   |
- * |                                            | intro planes B's tint (no maps fetched,  |
+ * |   planes (sections/intro/intro-scene.tsx)  | the cliffs and the intro planes keep     |
+ * |                                            | B's tint (no maps fetched,               |
  * |                                            | no WebGL context). Locked at mount: a    |
  * |                                            | step-down never swaps a mounted canvas.  |
  * |                                            | Paints on change only (mode tween rides  |
@@ -165,7 +165,7 @@ export interface QualityConfig {
    * normal-map shader on a small quad per cliff, plus two ~200 KB relight
    * maps). It paints only on change, so its cost is the maps' download/decode,
    * one context and ~2×(display-size) of texture memory, not frame time. false
-   * on low → A's CSS filter on the cliffs, B's tint on the intro planes.
+   * on low → B's tint on the cliffs and the intro planes.
    * Locked at mount (see rock-art.tsx useRelightActive).
    */
   readonly rockRelight: boolean;

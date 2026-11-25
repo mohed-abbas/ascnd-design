@@ -453,9 +453,7 @@ html[data-custom-cursor="on"] * {
 /* A — filter the whole group. "split" filters only the bare rocks; their grass
    gets B's tint instead (rock-art.tsx `kind`, stamped as data-rock-kind). */
 html[data-rock-treatment="filter"]:not([data-mode-settled="day"]) [data-rock-art],
-html[data-rock-treatment="split"]:not([data-mode-settled="day"]) [data-rock-art][data-rock-kind="rock"],
-html[data-rock-treatment="relight"]:not([data-mode-settled="day"])
-  [data-rock-art][data-rock-kind="rock"]:not([data-relit]) {
+html[data-rock-treatment="split"]:not([data-mode-settled="day"]) [data-rock-art][data-rock-kind="rock"] {
   filter: var(--rock-filter);
 }
 /* B — tint: an SVG filter per rock (rock-art.tsx RockTintFilter) that multiplies
@@ -464,16 +462,19 @@ html[data-rock-treatment="relight"]:not([data-mode-settled="day"])
 html:not([data-mode-settled="day"]) [data-rock-tinted] {
   filter: var(--rock-tint-ref);
 }
-/* 2.5D relight — while <RelitRock> is mounted, A's filter moves from the group
-   to the <img> (on the group it would filter the canvas too), so the <img> is
-   the stand-in while the relight maps load. Once the canvas has drawn its first
-   frame it marks the group ready: the canvas fades in over the <img>, and the
-   <img> hides when the fade is done, so its soft edges can't fringe through the
-   canvas. (Kept in the DOM: it's the LCP + the fallback.) */
-html[data-rock-treatment="relight"]:not([data-mode-settled="day"])
-  [data-rock-art][data-relit]
-  > img {
-  filter: var(--rock-filter);
+/* 2.5D relight — every rock is B-tinted (rock-art.tsx: a colour multiply, so
+   no hue sweep mid-crossfade). While <RelitRock> is mounted the tint moves
+   from the group to the <img> (on the group it would filter the canvas too),
+   so the <img> is the stand-in while the relight maps load (on a first
+   switch out of day, about the first half of the crossfade). Once the canvas has drawn its
+   first frame it marks the group ready: the canvas fades in over the <img>,
+   and the <img> hides when the fade is done, so its soft edges can't fringe
+   through the canvas. (Kept in the DOM: it's the LCP + the fallback.) */
+html:not([data-mode-settled="day"]) [data-rock-tinted][data-relit] {
+  filter: none;
+}
+html:not([data-mode-settled="day"]) [data-rock-tinted][data-relit] > img {
+  filter: var(--rock-tint-ref);
 }
 .relit-rock {
   opacity: 0;

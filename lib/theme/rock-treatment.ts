@@ -10,9 +10,9 @@
  *   tint-night  — B for sunrise/sunset, the baked night grade at night
  *   split       — A on the bare rocks, B on the grass (RockArt `kind`): the
  *                 current pick, and the dev default
- *   relight     — prototype: the hero cliffs drawn in WebGL and relit per mode
- *                 from a normal map (components/ui/relit-rock.tsx); grass and
- *                 the footer keep B's tint, other bare rocks A's filter
+ *   relight     — the hero cliffs drawn in WebGL and relit per mode from a
+ *                 normal map (components/ui/relit-rock.tsx); every other rock
+ *                 (grass, footer, phones) gets B's tint. Shipped on main.
  *
  * The current value is stamped on <html data-rock-treatment>, which globals.css
  * keys every treatment off, so switching is a pure CSS change (plus the bake
