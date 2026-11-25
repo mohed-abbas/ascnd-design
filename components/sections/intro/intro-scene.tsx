@@ -399,7 +399,10 @@ function Rocks({
   //   borrows the B tint as its approximation.
   const mode = useMode();
   const treatment = useRockTreatment();
-  const relit = treatment === "relight";
+  // Same tier knob as the hero cliffs (rockRelight, lib/perf/tiers.ts), read
+  // once at mount like the intro's other knobs: on low the planes keep B's tint.
+  const [tierRelight] = useState(() => getQualityConfig().rockRelight);
+  const relit = treatment === "relight" && tierRelight;
 
   const relight = useMemo(() => rocks.map(() => makeRelightUniforms()), [rocks]);
   const compileHooks = useMemo(() => relight.map(relightOnBeforeCompile), [relight]);

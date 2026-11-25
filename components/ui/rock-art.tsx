@@ -10,6 +10,7 @@ import {
   type CSSProperties,
   type ReactNode,
 } from "react";
+import { useQuality } from "@/lib/perf/use-quality";
 import { CROSSFADE } from "@/lib/theme/palette";
 import { bakedModesFor } from "@/lib/theme/rock-treatment";
 import { useMode } from "@/lib/theme/use-mode";
@@ -45,8 +46,8 @@ import { useRockTreatment } from "@/lib/theme/use-rock-treatment";
  * the plain <img> (A's filter, which is the identity in day), so they never
  * download the relight maps or create a WebGL context.
  *
- * The tint and bake layers only MOUNT under a treatment that uses them, so the
- * default ("none") renders the same single <img> as before and downloads no
+ * The tint and bake layers only MOUNT under a treatment that uses them, so
+ * "none" renders the same single <img> as before and downloads no
  * extra bytes. `fit` mirrors how the base image fills its box: "height" (hero:
  * h-full w-auto, the box IS the image) or "cover" (footer: fill + object-cover,
  * so the tint mask and bakes cover-crop the same way).
@@ -66,7 +67,10 @@ function subscribeDesktop(cb: () => void) {
 
 /**
  * Whether <RelitRock> should be mounted: it's wanted, the screen is desktop
- * width, and the mode isn't day. On a switch INTO day it stays mounted for one
+ * width, the mode isn't day, and the quality tier allows it (`rockRelight`,
+ * lib/perf/tiers.ts — false on low, which keeps A's CSS filter). The tier is
+ * LOCKED the first time the canvas mounts, so a watchdog step-down mid-session
+ * never swaps it out under the visitor. On a switch INTO day it stays mounted for one
  * crossfade, so the canvas can tween to the day lights (the identity) and then
  * unmount onto an identical <img> instead of snapping. Server snapshot false:
  * SSR renders the plain <img>, the canvas mounts after hydration.
@@ -78,7 +82,10 @@ function useRelightActive(wanted: boolean): boolean {
     () => window.matchMedia(DESKTOP).matches,
     () => false,
   );
-  const lit = wanted && desktop && mode !== "day";
+  const { rockRelight } = useQuality();
+  const [tierLock, setTierLock] = useState<boolean | null>(null);
+  const lit = wanted && desktop && mode !== "day" && (tierLock ?? rockRelight);
+  if (lit && tierLock === null) setTierLock(true);
   const [prevLit, setPrevLit] = useState(lit);
   const [linger, setLinger] = useState(false);
   if (lit !== prevLit) {
@@ -92,7 +99,6 @@ function useRelightActive(wanted: boolean): boolean {
   }, [linger]);
   return lit || linger;
 }
-
 
 export default function RockArt({
   src,

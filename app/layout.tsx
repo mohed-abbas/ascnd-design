@@ -15,7 +15,7 @@ import LenisProvider from "@/components/providers/lenis-provider";
 import QualityController from "@/components/providers/quality-controller";
 import ThemeDriver from "@/components/providers/theme-driver";
 import ModeSwitcher from "@/components/ui/mode-switcher";
-import DevTools from "@/components/ui/dev-tools";
+import { DEFAULT_ROCK_TREATMENT } from "@/lib/theme/rock-treatment";
 
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
@@ -114,6 +114,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
+      data-rock-treatment={DEFAULT_ROCK_TREATMENT}
       suppressHydrationWarning
       className={`${geistMono.variable} ${productSans.variable} ${instrumentSerif.variable} h-full antialiased`}
     >
@@ -320,9 +321,6 @@ export default function RootLayout({
               fixed sky layers (no filter/backdrop-filter ancestor), so it never
               breaks their position:fixed. */}
           <ModeSwitcher />
-          {/* Dev-only panels (the rock-treatment A/B switch); renders nothing
-              and ships no selector code in production — see dev-tools.tsx. */}
-          <DevTools />
         </LenisProvider>
         {/* Vercel Web Analytics. Chosen over GA4 deliberately: it is COOKIELESS
             (no persistent identifier — visitors are hashed per-day), so the

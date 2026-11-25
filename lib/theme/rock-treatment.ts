@@ -1,24 +1,25 @@
 /**
  * Rock mode-adaptation TREATMENT — which technique (if any) recolours the
- * rocks for the current sky mode. A dev-only A/B switch for comparing the
- * options in docs/rocks-by-mode.html; same tiny store shape as mode-store.ts.
+ * rocks for the current sky mode (docs/rocks-by-mode.html); same tiny store
+ * shape as mode-store.ts.
  *
- *   none        — rocks stay day-lit in every mode (the shipped look)
+ *   none        — rocks stay day-lit in every mode
  *   filter      — A: a per-mode CSS filter on each rock
  *   tint        — B: a sky-tinted multiply gradient over each rock
  *   baked       — C: a pre-graded image per mode, crossfaded in
  *   tint-night  — B for sunrise/sunset, the baked night grade at night
- *   split       — A on the bare rocks, B on the grass (RockArt `kind`): the
- *                 current pick, and the dev default
- *   relight     — prototype: the hero cliffs drawn in WebGL and relit per mode
+ *   split       — A on the bare rocks, B on the grass (RockArt `kind`)
+ *   relight     — SHIPPED: the hero cliffs drawn in WebGL and relit per mode
  *                 from a normal map (components/ui/relit-rock.tsx); grass and
  *                 the footer keep B's tint, other bare rocks A's filter
  *
- * The current value is stamped on <html data-rock-treatment>, which globals.css
- * keys every treatment off, so switching is a pure CSS change (plus the bake
- * layers mounting). Production builds pin it to "none" and ignore storage, so
- * a deploy of this branch looks exactly like before; only `next dev` (where
- * the selector exists) can change it.
+ * The current value is stamped on <html data-rock-treatment> (server-rendered
+ * by app/layout.tsx, so the CSS applies before hydration), which globals.css
+ * keys every treatment off. Production pins "relight" and ignores storage.
+ * The A/B selector and C's per-mode bake files live on branch `dev` only, so
+ * on main the bake-backed treatments ("baked", "tint-night") have no assets;
+ * `next dev` here still honours a stored `ascnd:rock-treatment` for the CSS-
+ * and shader-only ones.
  */
 
 export const ROCK_TREATMENTS = [
@@ -43,9 +44,9 @@ export const ROCK_TREATMENT_LABELS: Record<RockTreatment, string> = {
 };
 
 /** What production pins, and the SSR snapshot. */
-export const DEFAULT_ROCK_TREATMENT: RockTreatment = "none";
+export const DEFAULT_ROCK_TREATMENT: RockTreatment = "relight";
 /** What `next dev` starts on when nothing is stored. */
-const DEV_DEFAULT: RockTreatment = "split";
+const DEV_DEFAULT: RockTreatment = DEFAULT_ROCK_TREATMENT;
 const STORAGE_KEY = "ascnd:rock-treatment";
 const DEV = process.env.NODE_ENV !== "production";
 
