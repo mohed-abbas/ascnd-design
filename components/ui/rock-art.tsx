@@ -38,12 +38,15 @@ import { useRockTreatment } from "@/lib/theme/use-rock-treatment";
  *
  * `kind` says what the art is — a bare rock, or grass (the hover overlays and the
  * grass-topped footer rock). The "split" treatment reads it (A's filter on
- * rocks, B's tint on grass), and so does "relight" (B's tint on grass; bare
- * rocks that pass `relight` maps are drawn by <RelitRock>, the rest filtered).
+ * rocks, B's tint on grass). "relight" tints EVERYTHING with B (bare rocks
+ * that pass `relight` maps are drawn by <RelitRock> on top): B is a straight
+ * colour multiply, so it can't sweep through other hues mid-crossfade the way
+ * A's `sepia + hue-rotate(0→180deg)` does — and it's what the intro's rock
+ * planes use as their stand-in too, so loader and hero agree.
  *
  * <RelitRock> only mounts where it changes pixels (useRelightActive): day is
  * the identity, and the hero cliffs are hidden below md. Day and mobile get
- * the plain <img> (A's filter, which is the identity in day), so they never
+ * the plain <img> (B's tint, which is the identity in day), so they never
  * download the relight maps or create a WebGL context.
  *
  * The tint and bake layers only MOUNT under a treatment that uses them, so
@@ -68,7 +71,7 @@ function subscribeDesktop(cb: () => void) {
 /**
  * Whether <RelitRock> should be mounted: it's wanted, the screen is desktop
  * width, the mode isn't day, and the quality tier allows it (`rockRelight`,
- * lib/perf/tiers.ts — false on low, which keeps A's CSS filter). The tier is
+ * lib/perf/tiers.ts — false on low, which keeps B's tint). The tier is
  * LOCKED the first time the canvas mounts, so a watchdog step-down mid-session
  * never swaps it out under the visitor. On a switch INTO day it stays mounted for one
  * crossfade, so the canvas can tween to the day lights (the identity) and then
@@ -124,7 +127,8 @@ export default function RockArt({
   const tinted =
     treatment === "tint" ||
     treatment === "tint-night" ||
-    ((treatment === "split" || treatment === "relight") && kind === "grass");
+    treatment === "relight" ||
+    (treatment === "split" && kind === "grass");
   const relit = useRelightActive(treatment === "relight" && kind === "rock" && !!relight);
   const bakes = bakedModesFor(treatment);
   const tintId = `rock-tint${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;

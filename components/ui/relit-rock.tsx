@@ -43,7 +43,7 @@ import { useMode } from "@/lib/theme/use-mode";
  * The canvas sits on top of the caller's <img> inside the RockArt group (so the
  * base-fade mask applies to it). Once the first frame is drawn it stamps
  * `data-relit-ready` on that group: the canvas fades in over the <img> (which
- * carries A's CSS filter as the stand-in until then), and the <img> hides once
+ * carries B's tint as the stand-in until then), and the <img> hides once
  * the fade is done, so its soft edges can't fringe through the canvas
  * (globals.css). The <img> stays in the DOM: it's the hero's LCP element and
  * the fallback.

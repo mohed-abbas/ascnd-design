@@ -10,8 +10,8 @@
  *   tint-night  — B for sunrise/sunset, the baked night grade at night
  *   split       — A on the bare rocks, B on the grass (RockArt `kind`)
  *   relight     — SHIPPED: the hero cliffs drawn in WebGL and relit per mode
- *                 from a normal map (components/ui/relit-rock.tsx); grass and
- *                 the footer keep B's tint, other bare rocks A's filter
+ *                 from a normal map (components/ui/relit-rock.tsx); every
+ *                 other rock (grass, footer, phones) gets B's tint
  *
  * The current value is stamped on <html data-rock-treatment> (server-rendered
  * by app/layout.tsx, so the CSS applies before hydration), which globals.css
