@@ -2,8 +2,17 @@
 
 import Image from "next/image";
 import dynamic from "next/dynamic";
-import { useId, type CSSProperties, type ReactNode } from "react";
+import {
+  useEffect,
+  useId,
+  useState,
+  useSyncExternalStore,
+  type CSSProperties,
+  type ReactNode,
+} from "react";
+import { CROSSFADE } from "@/lib/theme/palette";
 import { bakedModesFor } from "@/lib/theme/rock-treatment";
+import { useMode } from "@/lib/theme/use-mode";
 import { useRockTreatment } from "@/lib/theme/use-rock-treatment";
 
 /**
@@ -31,6 +40,11 @@ import { useRockTreatment } from "@/lib/theme/use-rock-treatment";
  * rocks, B's tint on grass), and so does "relight" (B's tint on grass; bare
  * rocks that pass `relight` maps are drawn by <RelitRock>, the rest filtered).
  *
+ * <RelitRock> only mounts where it changes pixels (useRelightActive): day is
+ * the identity, and the hero cliffs are hidden below md. Day and mobile get
+ * the plain <img> (A's filter, which is the identity in day), so they never
+ * download the relight maps or create a WebGL context.
+ *
  * The tint and bake layers only MOUNT under a treatment that uses them, so the
  * default ("none") renders the same single <img> as before and downloads no
  * extra bytes. `fit` mirrors how the base image fills its box: "height" (hero:
@@ -42,6 +56,43 @@ type BakeMode = "sunrise" | "sunset" | "night";
 
 // WebGL relight canvas — only fetched when the "relight" treatment is picked.
 const RelitRock = dynamic(() => import("./relit-rock"), { ssr: false });
+// Same breakpoint as the cliffs' `max-md:hidden` (Tailwind v4 md = 48rem).
+const DESKTOP = "(min-width: 48rem)";
+function subscribeDesktop(cb: () => void) {
+  const mq = window.matchMedia(DESKTOP);
+  mq.addEventListener("change", cb);
+  return () => mq.removeEventListener("change", cb);
+}
+
+/**
+ * Whether <RelitRock> should be mounted: it's wanted, the screen is desktop
+ * width, and the mode isn't day. On a switch INTO day it stays mounted for one
+ * crossfade, so the canvas can tween to the day lights (the identity) and then
+ * unmount onto an identical <img> instead of snapping. Server snapshot false:
+ * SSR renders the plain <img>, the canvas mounts after hydration.
+ */
+function useRelightActive(wanted: boolean): boolean {
+  const mode = useMode();
+  const desktop = useSyncExternalStore(
+    subscribeDesktop,
+    () => window.matchMedia(DESKTOP).matches,
+    () => false,
+  );
+  const lit = wanted && desktop && mode !== "day";
+  const [prevLit, setPrevLit] = useState(lit);
+  const [linger, setLinger] = useState(false);
+  if (lit !== prevLit) {
+    setPrevLit(lit);
+    setLinger(!lit && wanted && desktop);
+  }
+  useEffect(() => {
+    if (!linger) return;
+    const id = window.setTimeout(() => setLinger(false), CROSSFADE.duration * 1000 + 100);
+    return () => window.clearTimeout(id);
+  }, [linger]);
+  return lit || linger;
+}
+
 
 export default function RockArt({
   src,
@@ -68,7 +119,7 @@ export default function RockArt({
     treatment === "tint" ||
     treatment === "tint-night" ||
     ((treatment === "split" || treatment === "relight") && kind === "grass");
-  const relit = treatment === "relight" && kind === "rock" && !!relight;
+  const relit = useRelightActive(treatment === "relight" && kind === "rock" && !!relight);
   const bakes = bakedModesFor(treatment);
   const tintId = `rock-tint${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
 

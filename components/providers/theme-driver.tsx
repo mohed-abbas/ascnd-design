@@ -90,11 +90,16 @@ export default function ThemeDriver() {
       // First application, or reduced motion: snap the resting sky + grain.
       if (prev === null || window.matchMedia(REDUCE_MOTION).matches) {
         setVars(to, PALETTES[mode].grain);
+        html.dataset.modeSettled = mode;
         prev = mode;
         return;
       }
 
       tweenRef.current?.kill();
+      // Mid-crossfade: no mode is settled. globals.css keeps the rock filters
+      // running until the tween lands, and drops them in day only then (they're
+      // the identity there), so they never snap off mid-tween.
+      delete html.dataset.modeSettled;
 
       // Tween from the outgoing palette to the new one, driving all stops off one
       // proxy so they share the ease/duration. gsap.utils.interpolate colour-blends
@@ -114,6 +119,9 @@ export default function ThemeDriver() {
             VARS.map((_, i) => lerp[i](proxy.p)),
             grainFrom + (grainTo - grainFrom) * proxy.p,
           ),
+        onComplete: () => {
+          html.dataset.modeSettled = mode;
+        },
       });
       prev = mode;
     };

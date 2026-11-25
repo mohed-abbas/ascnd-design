@@ -410,18 +410,36 @@ function Rocks({
   );
   const relightLive = useRef<RelightParams[] | null>(null);
 
-  // Relight maps: loaded only while the treatment needs them.
+  // Relight maps: day is the identity, so they're only fetched once a non-day
+  // mode is seen (latched — a switch back to day mid-intro keeps them, so the
+  // planes tween to the identity instead of snapping onto the tint path).
+  const [reliefWanted, setReliefWanted] = useState(false);
+  if (relit && mode !== "day" && !reliefWanted) setReliefWanted(true);
+  const needRelief = relit && reliefWanted;
+
   useEffect(() => {
-    if (!relit) return;
+    if (!needRelief) return;
     const matList = [...mats.current];
     const loaded: THREE.Texture[] = [];
     let alive = true;
+    // Decoded OFF the main thread (createImageBitmap), unlike TextureLoader's
+    // <img> path, whose upload decodes synchronously — mid-intro, the one
+    // window where a long task shows. The bitmap is flipped at decode time
+    // (WebGL ignores flipY for ImageBitmap) to match the painting's flipY
+    // texture, so both are read with the same UVs; straight alpha, and no
+    // colour conversion — the map is DATA, not colour.
+    const loader = new THREE.ImageBitmapLoader().setOptions({
+      imageOrientation: "flipY",
+      premultiplyAlpha: "none",
+      colorSpaceConversion: "none",
+    });
     rocks.forEach((r, i) => {
-      new THREE.TextureLoader().load(relightMapFor(r.src), (tex) => {
-        if (!alive) return tex.dispose();
-        // DATA, not colour: no sRGB decode. flipY etc. match the painting's
-        // texture so both are read with the same UVs.
+      loader.load(relightMapFor(r.src), (bitmap) => {
+        if (!alive) return bitmap.close();
+        const tex = new THREE.Texture(bitmap);
+        tex.flipY = false;
         tex.colorSpace = THREE.NoColorSpace;
+        tex.needsUpdate = true;
         loaded.push(tex);
         relight[i].uRelief.value = tex;
         relight[i].uRelightOn.value = 1;
@@ -434,9 +452,12 @@ function Rocks({
         u.uRelightOn.value = 0;
         u.uRelief.value = null;
       });
-      loaded.forEach((t) => t.dispose());
+      loaded.forEach((t) => {
+        t.dispose();
+        (t.image as ImageBitmap).close();
+      });
     };
-  }, [relit, rocks, relight]);
+  }, [needRelief, rocks, relight]);
 
   // Relight lighting: follows the mode with the hero's crossfade (the intro
   // view paints continuously while these planes are mounted).
