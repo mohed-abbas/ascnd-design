@@ -313,6 +313,10 @@ html[data-custom-cursor="on"] * {
                          a clip would shave focus rings / hover scale).
    - [data-reveal-soft]  opacity only, no transform — for the navbar, whose
                          `-translate-y-1/2` centering must not be overwritten.
+   - [data-reveal-with-nav] chrome OUTSIDE the page that belongs to the navbar
+                         (the sky-mode disc, mounted in the root layout): hidden
+                         — and unclickable — until the navbar fades in, then
+                         fades in with it, so it never sits over the loader.
    - [data-reveal-split] the headline; hidden until SplitText has wrapped it,
                          after which the timeline rolls each masked char up.
    - [data-reveal-words] the sub-paragraph; same, but rolled up per word.
@@ -335,6 +339,11 @@ html[data-custom-cursor="on"] * {
 
 .reveal-armed [data-reveal-soft] {
   opacity: 0;
+}
+
+.reveal-armed [data-reveal-with-nav] {
+  opacity: 0;
+  visibility: hidden;
 }
 
 .reveal-armed [data-reveal-split],
@@ -574,6 +583,10 @@ html[data-mode="night"] .rock-bake[data-bake-mode="night"] {
   /* Opacity-only: never touch transform (the navbar's own translate centers it). */
   .reveal-armed [data-reveal-soft] {
     opacity: 1;
+  }
+  .reveal-armed [data-reveal-with-nav] {
+    opacity: 1;
+    visibility: visible;
   }
 }
 

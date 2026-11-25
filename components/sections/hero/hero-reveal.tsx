@@ -43,6 +43,8 @@ const BLUR_TO = "blur(0px)";
  *   [data-reveal]        masked slide-up (lives in an overflow:hidden wrapper)
  *   [data-reveal-fade]   fade + small slide (chrome / the mask-image logos row)
  *   [data-reveal-soft]   opacity only (the navbar, whose translate must survive)
+ *   [data-reveal-with-nav] chrome outside the hero that fades in WITH the
+ *                        navbar (the root layout's sky-mode disc)
  *   [data-reveal-split]  the headline — SplitText blur-reveals it word by word
  *   [data-reveal-words]  the sub-paragraph — same per-word blur reveal
  *   [data-reveal-cta]    a button — the inner control fades in (opacity only,
@@ -222,17 +224,31 @@ export default function HeroReveal() {
       }
 
       // Soft blocks — opacity only. No transform touched, so the navbar keeps
-      // its own translate-based centering.
-      root.querySelectorAll<HTMLElement>("[data-reveal-soft]").forEach((el) => {
+      // its own translate-based centering. The navbar's companions live outside
+      // the hero (layout-level, so a document query) and join its tween slot;
+      // autoAlpha, so they stay unclickable until they're visible.
+      const companions = Array.from(
+        document.querySelectorAll<HTMLElement>("[data-reveal-with-nav]"),
+      );
+      root.querySelectorAll<HTMLElement>("[data-reveal-soft]").forEach((el, i) => {
         entries.push({
           order: Number(el.dataset.revealOrder ?? 0),
-          add: (tl, at) =>
+          add: (tl, at) => {
             tl.fromTo(
               el,
               { opacity: 0 },
               { opacity: 1, duration: DURATION, ease: EASE },
               at,
-            ),
+            );
+            if (i === 0 && companions.length) {
+              tl.fromTo(
+                companions,
+                { autoAlpha: 0 },
+                { autoAlpha: 1, duration: DURATION, ease: EASE },
+                at,
+              );
+            }
+          },
         });
       });
 

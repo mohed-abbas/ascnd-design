@@ -42,6 +42,8 @@ export default function ChromeReveal() {
     const ctx = gsap.context(() => {
       const marks = gsap.utils.toArray<HTMLElement>("[data-reveal]");
       const nav = document.querySelector<HTMLElement>("[data-reveal-soft]");
+      // The navbar's layout-level companions (the sky-mode disc) come in with it.
+      const companions = gsap.utils.toArray<HTMLElement>("[data-reveal-with-nav]");
 
       const tl = gsap.timeline({ defaults: { ease: EASE } });
 
@@ -62,6 +64,9 @@ export default function ChromeReveal() {
       // Navbar — opacity only, so its -translate-y-1/2 centering survives.
       if (nav) {
         tl.fromTo(nav, { opacity: 0 }, { opacity: 1, duration: DURATION }, 0.1);
+      }
+      if (companions.length) {
+        tl.fromTo(companions, { autoAlpha: 0 }, { autoAlpha: 1, duration: DURATION }, 0.1);
       }
     });
 
