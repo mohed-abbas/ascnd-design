@@ -432,28 +432,50 @@ html[data-custom-cursor="on"] * {
    --rock-filter / --rock-tint-* with the sky, so A and B crossfade on their own;
    C's bakes crossfade by opacity on <html data-mode> over the same 0.9s
    (cubic-bezier ≈ CROSSFADE's power2.inOut). No `position` here: the callers
-   set it with a utility, and an unlayered rule would beat their layered one. */
+   set it with a utility, and an unlayered rule would beat their layered one.
+
+   In day, A's filter and B's tint are both the identity, but a filter still
+   costs a filter pass on every repaint. ThemeDriver stamps <html
+   data-mode-settled> once a crossfade has LANDED, so the filters drop out only
+   when they've reached the identity, never mid-tween (no snap). */
 [data-rock-art] {
-  isolation: isolate; /* B's multiply blends with the rock only, never the sky */
+  isolation: isolate; /* each rock's layers stay one stacking group. */
 }
 /* A — filter the whole group. "split" filters only the bare rocks; their grass
    gets B's tint instead (rock-art.tsx `kind`, stamped as data-rock-kind). */
-html[data-rock-treatment="filter"] [data-rock-art],
-html[data-rock-treatment="split"] [data-rock-art][data-rock-kind="rock"],
-html[data-rock-treatment="relight"] [data-rock-art][data-rock-kind="rock"]:not([data-relit]) {
+html[data-rock-treatment="filter"]:not([data-mode-settled="day"]) [data-rock-art],
+html[data-rock-treatment="split"]:not([data-mode-settled="day"]) [data-rock-art][data-rock-kind="rock"],
+html[data-rock-treatment="relight"]:not([data-mode-settled="day"])
+  [data-rock-art][data-rock-kind="rock"]:not([data-relit]) {
   filter: var(--rock-filter);
 }
 /* B — tint: an SVG filter per rock (rock-art.tsx RockTintFilter) that multiplies
    the colour by the sky-tinted gradient and keeps the alpha, so soft edges
    (the grass blades) don't pick up a film of the tint colour. */
-[data-rock-tinted] {
+html:not([data-mode-settled="day"]) [data-rock-tinted] {
   filter: var(--rock-tint-ref);
 }
-/* 2.5D relight — once <RelitRock>'s canvas has drawn its first frame it marks
-   the group ready; hide the plain <img> beneath so its day-lit soft edges don't
-   fringe through the canvas. (Kept in the DOM: it's the LCP + the fallback.) */
+/* 2.5D relight — while <RelitRock> is mounted, A's filter moves from the group
+   to the <img> (on the group it would filter the canvas too), so the <img> is
+   the stand-in while the relight maps load. Once the canvas has drawn its first
+   frame it marks the group ready: the canvas fades in over the <img>, and the
+   <img> hides when the fade is done, so its soft edges can't fringe through the
+   canvas. (Kept in the DOM: it's the LCP + the fallback.) */
+html[data-rock-treatment="relight"]:not([data-mode-settled="day"])
+  [data-rock-art][data-relit]
+  > img {
+  filter: var(--rock-filter);
+}
+.relit-rock {
+  opacity: 0;
+  transition: opacity 0.5s ease-out;
+}
+[data-relit-ready] > .relit-rock {
+  opacity: 1;
+}
 [data-relit-ready] > img {
   opacity: 0;
+  transition: opacity 0s linear 0.5s;
 }
 /* B + night bake: the tint hands over to the baked night grade (the bake is
    inside the filtered group, so the tint must be off or it would grade it twice). */

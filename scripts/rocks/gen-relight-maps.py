@@ -8,7 +8,11 @@ encode the result near-lossless (lossy WebP/AVIF subsample chroma, which
 smears the normal channels):
   node -e 'require("sharp")("public/rocks/left-rock.avif").png().toFile("/tmp/left-rock.png")'
   python3 scripts/rocks/gen-relight-maps.py /tmp/left-rock.png /tmp/left.relight.png
-  node -e 'require("sharp")("/tmp/left.relight.png").webp({nearLossless:true,quality:60,effort:6}).toFile("public/rocks/left-rock.relight.webp")'
+  node -e 'require("sharp")("/tmp/left.relight.png").resize({height:982,kernel:"lanczos3"}).webp({nearLossless:true,quality:60,effort:6}).toFile("public/rocks/left-rock.relight.webp")'
+
+The encode halves it once more (982px tall = a quarter of the 3928px
+painting): the relief is low-frequency, so it holds up at that size against a
+1.5-dpr canvas, at about a third of the bytes (~210 KB per cliff vs ~620 KB).
 
 Writes an RGBA map at half the source resolution:
   R,G = tangent-space normal x,y (OpenGL convention, +y up), n*0.5+0.5;
