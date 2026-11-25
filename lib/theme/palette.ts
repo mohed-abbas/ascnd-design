@@ -190,13 +190,16 @@ export const PALETTES: Record<ThemeMode, ModePalette> = {
     rock: {
       tint: { top: "#6683b8", bottom: "#2a426c" },
       filter: "brightness(0.5) contrast(1.05) sepia(0.45) hue-rotate(180deg) saturate(1.3)",
+      // Roughly half of day's light, kept cool. The first pass (~30% of day,
+      // env 0.2) sank the dark GLB rocks into the navy sky; the brighter
+      // moonlit key + a stronger cool rim keep their form and silhouette.
       lights: {
-        ambient: { color: "#6f88b0", intensity: 0.1 },
-        hemi: { sky: "#4f6fa8", ground: "#101c34", intensity: 0.3 },
-        key: { color: "#9fb4dc", intensity: 0.4 },
-        rim: { color: "#3f5c96", intensity: 0.3 },
-        env: ["#2d5688", "#1c3f6e", "#0e2a52"],
-        envIntensity: 0.2,
+        ambient: { color: "#7f98c4", intensity: 0.22 },
+        hemi: { sky: "#6f8fd0", ground: "#1c2c4c", intensity: 0.75 },
+        key: { color: "#c2d2f0", intensity: 1.0 },
+        rim: { color: "#86a6e8", intensity: 0.85 },
+        env: ["#4f78b0", "#2d5688", "#1c3f6e"],
+        envIntensity: 0.45,
       },
       relight: { ambient: [0.09, 0.1, 0.15], key: [0.26, 0.32, 0.5], keyDir: [0.55, 0.5, 0.67], rim: [0.3, 0.42, 0.75], flatten: 0.6 },
     },
