@@ -1,5 +1,5 @@
-import { Analytics } from "@vercel/analytics/next";
 import type { Metadata, Viewport } from "next";
+import Script from "next/script";
 import { Geist_Mono, Instrument_Serif } from "next/font/google";
 import localFont from "next/font/local";
 import "./globals.css";
@@ -322,22 +322,24 @@ export default function RootLayout({
               breaks their position:fixed. */}
           <ModeSwitcher />
         </LenisProvider>
-        {/* Vercel Web Analytics. Chosen over GA4 deliberately: it is COOKIELESS
-            (no persistent identifier — visitors are hashed per-day), so the
-            site needs no consent banner, and Vercel already processes this
-            traffic as our host, so it adds no new third party to the privacy
-            policy's processor list (lib/legal.ts). It reports aggregate
-            country / referrer / page / device only; it cannot tell you WHICH
-            client visited, by design.
+        {/* Umami analytics, self-hosted on our VPS (analytics.thecodeman.cloud).
+            Replaced Vercel Web Analytics: no monthly event cap, history kept as
+            long as we choose, and custom events (data-umami-event) for CTAs.
+            Still COOKIELESS (visitors are hashed with a rotating salt), so the
+            site needs no consent banner.
 
-            Renders null and injects one small script, so it sits outside
-            LenisProvider — it is not part of the scroll/canvas architecture and
-            has no ticker, loop, or GL cost to account for.
+            Served from our own origin via the /a/* rewrites in next.config.ts,
+            so ad-blockers don't drop it. `data-domains` limits recording to
+            production — local dev and Vercel previews send nothing.
 
-            ⚠️ The code alone collects nothing: Web Analytics must also be
-            enabled for the project in the Vercel dashboard, and it only reports
-            from production deployments. */}
-        <Analytics />
+            One small deferred script outside LenisProvider: no ticker, loop,
+            or GL cost to account for. */}
+        <Script
+          src="/a/insights.js"
+          data-website-id="3c4c3f27-020b-4dac-908d-ebe9da9dc81a"
+          data-domains="ascnd.design"
+          strategy="afterInteractive"
+        />
       </body>
     </html>
   );

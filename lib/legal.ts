@@ -29,7 +29,7 @@ export const LEGAL_DETAILS = {
    *  updated by hand whenever the wording of any of the three documents
    *  changes. Lowercased to match the site's voice.
    *  SET — this is the one value below that is no longer a placeholder. */
-  lastUpdated: "8 september 2026",
+  lastUpdated: "26 november 2026",
 
   /** The country ascnd operates from. Named in both preambles and,
    *  load-bearingly, in the privacy policy's international-transfers section
@@ -88,11 +88,12 @@ export const LEGAL_DETAILS = {
  * much of a compliance problem as omitting one you do. Delete the rows that
  * don't apply and replace each `[bracketed]` name with the real vendor.
  *
- * No stubs remain. Vercel appears TWICE — as host and as analytics — because
- * the list is grouped by purpose and it genuinely does both jobs. That is the
- * point of having picked Vercel Web Analytics (app/layout.tsx): it is
- * cookieless, so the site needs no consent banner, and it introduced no new
- * third party to disclose here.
+ * No stubs remain. Analytics is Umami, SELF-HOSTED on our Hostinger VPS
+ * (app/layout.tsx), so it introduces no new third party: the data sits on a
+ * server we run, and Hostinger — already listed as a host — is the only
+ * processor involved. It is cookieless, so the site needs no consent banner.
+ * The privacy page promises a 24-month retention for it; that needs a cleanup
+ * job on the VPS, because self-hosted Umami never deletes old data itself.
  *
  * SCOPE: these are ascnd's OWN vendors — the ones that touch the data of the
  * person reading the policy (a visitor, an enquirer, a client). Infrastructure
@@ -119,7 +120,7 @@ export const LEGAL_PROCESSORS: readonly LegalProcessor[] = [
   { purpose: "Website hosting", vendors: ["Hostinger", "Vercel"] },
   { purpose: "Call bookings", vendors: ["Cal.com"] },
   { purpose: "Email", vendors: ["Zoho Mail", "Gmail"] },
-  { purpose: "Site analytics", vendors: ["Vercel"] },
+  { purpose: "Site analytics", vendors: ["Umami (self-hosted on Hostinger)"] },
   {
     purpose: "Storing and sharing project files",
     vendors: ["Google Drive", "Figma"],
