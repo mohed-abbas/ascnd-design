@@ -3,11 +3,11 @@
  * Runs right after `next build` (package.json "build"): uploads the browser
  * source maps to GlitchTip, then DELETES every public .map file.
  *
- * Why: next.config.ts turns on `productionBrowserSourceMaps` and
- * `turbopack.debugIds`, so each chunk in .next/static carries a
- * `//# debugId=…` comment matching its .map. GlitchTip uses that ID to turn a
- * minified frame (chunk.js:1:48213) back into the real file and line — but only
- * if it has the map. The maps must never ship: Next would serve them publicly
+ * Why: next.config.ts turns on `productionBrowserSourceMaps`, and this script
+ * stamps each chunk in .next/static and its .map with a matching debug ID
+ * (sentry-cli inject). GlitchTip uses that ID to turn a minified frame
+ * (chunk.js:1:48213) back into the real file and line — but only if it has
+ * the map. The maps must never ship: Next would serve them publicly
  * and hand our original source to anyone who asks. Vercel packages .next only
  * after this script exits, so deleting here keeps them out of the deployment.
  *
@@ -33,29 +33,32 @@ function findMaps(dir) {
   });
 }
 
-if (process.env.SENTRY_AUTH_TOKEN) {
-  console.log(`[sourcemaps] uploading to ${GLITCHTIP_URL} (${GLITCHTIP_ORG}/${GLITCHTIP_PROJECT})`);
-  const result = spawnSync(
-    "sentry-cli",
-    [
-      "sourcemaps",
-      "upload",
-      "--url-prefix",
-      "~/_next/static",
-      STATIC_DIR,
-    ],
-    {
-      stdio: "inherit",
-      shell: process.platform === "win32",
-      env: {
-        ...process.env,
-        SENTRY_URL: GLITCHTIP_URL,
-        SENTRY_ORG: GLITCHTIP_ORG,
-        SENTRY_PROJECT: GLITCHTIP_PROJECT,
-      },
+function sentryCli(args) {
+  return spawnSync("sentry-cli", args, {
+    stdio: "inherit",
+    shell: process.platform === "win32",
+    env: {
+      ...process.env,
+      SENTRY_URL: GLITCHTIP_URL,
+      SENTRY_ORG: GLITCHTIP_ORG,
+      SENTRY_PROJECT: GLITCHTIP_PROJECT,
     },
-  );
-  if (result.status !== 0) {
+  }).status;
+}
+
+if (process.env.SENTRY_AUTH_TOKEN) {
+  // 1. inject: give every chunk + its map a matching debug ID, and prepend a
+  //    tiny snippet that registers it in globalThis._sentryDebugIds at runtime
+  //    — that registration is what lets the SDK tell GlitchTip which map to
+  //    use. (Turbopack's own `debugIds` option writes the comments but not the
+  //    registration; see next.config.ts.) Only done when we can upload: a
+  //    tokenless build ships chunks untouched.
+  // 2. upload: send chunks + maps to GlitchTip as one artifact bundle.
+  console.log(`[sourcemaps] uploading to ${GLITCHTIP_URL} (${GLITCHTIP_ORG}/${GLITCHTIP_PROJECT})`);
+  const status =
+    sentryCli(["sourcemaps", "inject", STATIC_DIR]) ||
+    sentryCli(["sourcemaps", "upload", "--url-prefix", "~/_next/static", STATIC_DIR]);
+  if (status !== 0) {
     console.warn("[sourcemaps] upload FAILED — deploying anyway; stack traces stay minified for this build.");
   }
 } else {
