@@ -7,11 +7,11 @@ const nextConfig: NextConfig = {
   // an absolute path.
   turbopack: {
     root: __dirname,
-    // Stamp each chunk and its .map with a matching debug ID, so GlitchTip can
-    // pair a minified stack frame with the uploaded source map without us
-    // rewriting built files. The browser SDK reads globalThis._debugIds.
-    // See scripts/upload-sourcemaps.mjs.
-    debugIds: true,
+    // NOT `debugIds: true`: in Next 16.2 Turbopack writes the `//# debugId=`
+    // comments but never registers them in globalThis._debugIds at runtime,
+    // so the SDK can't attach them to events and GlitchTip can't match maps
+    // (verified on production, 2026-11-26). sentry-cli `sourcemaps inject` in
+    // scripts/upload-sourcemaps.mjs adds both the IDs and the runtime snippet.
   },
   // Strict Mode double-mounts every component in dev. For the WebGL cloud
   // canvas that means create context → force-loss → recreate within ~100ms,
