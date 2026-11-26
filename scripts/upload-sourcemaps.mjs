@@ -1,15 +1,17 @@
 #!/usr/bin/env node
 /**
- * Runs right after `next build` (package.json "build"): uploads the browser
- * source maps to GlitchTip, then DELETES every public .map file.
+ * Runs inside `next build` (next.config.ts compiler.runAfterProductionCompile),
+ * right after compilation: uploads the browser source maps to GlitchTip, then
+ * DELETES every public .map file.
  *
  * Why: next.config.ts turns on `productionBrowserSourceMaps`, and this script
  * stamps each chunk in .next/static and its .map with a matching debug ID
  * (sentry-cli inject). GlitchTip uses that ID to turn a minified frame
  * (chunk.js:1:48213) back into the real file and line — but only if it has
  * the map. The maps must never ship: Next would serve them publicly
- * and hand our original source to anyone who asks. Vercel packages .next only
- * after this script exits, so deleting here keeps them out of the deployment.
+ * and hand our original source to anyone who asks. This runs before static
+ * generation and before Vercel's adapter collects the output, so both the
+ * injected chunks and the deletions are what actually gets deployed.
  *
  * Upload needs a GlitchTip auth token in SENTRY_AUTH_TOKEN (set in Vercel's
  * environment variables, never committed). Without it — local builds, forks —
