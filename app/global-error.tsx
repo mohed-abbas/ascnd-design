@@ -1,5 +1,8 @@
 "use client";
 
+import { useEffect } from "react";
+import * as Sentry from "@sentry/browser";
+
 /**
  * Last-resort boundary: catches errors thrown by the ROOT LAYOUT itself, which
  * app/error.tsx sits inside and therefore cannot catch (Next error.js docs).
@@ -20,6 +23,12 @@ export default function GlobalError({
   error: Error & { digest?: string };
   unstable_retry: () => void;
 }) {
+  // Errors caught here never reach window.onerror — report them to GlitchTip
+  // explicitly (see instrumentation-client.ts).
+  useEffect(() => {
+    Sentry.captureException(error);
+  }, [error]);
+
   return (
     <html lang="en">
       <body

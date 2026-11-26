@@ -44,11 +44,20 @@ const nextConfig: NextConfig = {
   // The tracker posts to `<its own directory>/api/send`, i.e. /a/api/send.
   // Only these two paths are forwarded — the Umami dashboard is never
   // reachable through this domain. Loaded in app/layout.tsx.
+  //
+  // /a/e is the same idea for GlitchTip error reports (instrumentation-client.ts
+  // sets `tunnel: "/a/e"`): the SDK posts its envelope here and we forward it to
+  // the project's envelope endpoint. The public key rides in the query string
+  // because GlitchTip authenticates ingest by `sentry_key`; it is the same key
+  // that's already public in the DSN, so nothing secret is exposed.
   async rewrites() {
     const umami = "https://analytics.thecodeman.cloud";
+    const glitchtip =
+      "https://errors.thecodeman.cloud/api/2/envelope/?sentry_key=f8235cf93334482f81e7270e33479da4&sentry_version=7";
     return [
       { source: "/a/insights.js", destination: `${umami}/script.js` },
       { source: "/a/api/send", destination: `${umami}/api/send` },
+      { source: "/a/e", destination: glitchtip },
     ];
   },
   // Headers are matched before the /public filesystem (Next headers() docs).

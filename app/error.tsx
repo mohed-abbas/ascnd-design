@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import * as Sentry from "@sentry/browser";
 import Button from "@/components/ui/button";
 import Wordmark from "@/components/ui/wordmark";
 
@@ -24,8 +25,10 @@ export default function Error({
   unstable_retry: () => void;
 }) {
   useEffect(() => {
-    // No error-reporting service is wired up yet — the console is the only sink.
-    // Point a real reporter here (Sentry, Vercel observability) when there is one.
+    // An error caught by this boundary never reaches window.onerror, so the
+    // GlitchTip SDK (instrumentation-client.ts) wouldn't see it on its own —
+    // report it explicitly. The console keeps it visible in dev.
+    Sentry.captureException(error);
     console.error(error);
   }, [error]);
 
