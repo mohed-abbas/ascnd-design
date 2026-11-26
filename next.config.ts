@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
@@ -21,10 +22,24 @@ const nextConfig: NextConfig = {
   // <React.StrictMode> around non-WebGL trees if you want the dev checks back.
   reactStrictMode: false,
   // Emit browser source maps so they can be uploaded to GlitchTip for readable
-  // stack traces. They are NOT left public: scripts/upload-sourcemaps.mjs runs
-  // after `next build`, uploads them, then deletes every .map before Vercel
-  // packages the output — so visitors never get our original source.
+  // stack traces. They are NOT left public: scripts/upload-sourcemaps.mjs
+  // uploads them, then deletes every .map — so visitors never get our source.
   productionBrowserSourceMaps: true,
+  compiler: {
+    // Run the upload as soon as compilation finishes. It can NOT be chained
+    // after `next build` in package.json: on Vercel, Next 16 hands the output
+    // to Vercel's build adapter at the end of `next build` itself, so anything
+    // run afterwards edits files that have already been collected (verified on
+    // production, 2026-11-26 — injected debug IDs never reached the site).
+    runAfterProductionCompile: async ({ projectDir }) => {
+      const { status } = spawnSync(
+        process.execPath,
+        ["scripts/upload-sourcemaps.mjs"],
+        { cwd: projectDir, stdio: "inherit" },
+      );
+      if (status !== 0) throw new Error("scripts/upload-sourcemaps.mjs failed");
+    },
+  },
   // Serve AVIF (then WebP) for images that DO go through Next's optimizer — the
   // default is WebP-only. The hand-tuned rock cut-outs stay `unoptimized`
   // (pre-encoded AVIF), so this only affects other next/image usage (e.g. the

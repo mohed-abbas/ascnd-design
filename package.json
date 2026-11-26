@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build && node scripts/upload-sourcemaps.mjs",
+    "build": "next build",
     "start": "next start",
     "lint": "eslint",
     "optimize:portfolio": "node scripts/optimize-portfolio-images.mjs",
