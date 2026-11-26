@@ -7,6 +7,11 @@ const nextConfig: NextConfig = {
   // an absolute path.
   turbopack: {
     root: __dirname,
+    // Stamp each chunk and its .map with a matching debug ID, so GlitchTip can
+    // pair a minified stack frame with the uploaded source map without us
+    // rewriting built files. The browser SDK reads globalThis._debugIds.
+    // See scripts/upload-sourcemaps.mjs.
+    debugIds: true,
   },
   // Strict Mode double-mounts every component in dev. For the WebGL cloud
   // canvas that means create context → force-loss → recreate within ~100ms,
@@ -15,6 +20,11 @@ const nextConfig: NextConfig = {
   // verified-clean production behavior. Re-add Strict Mode per-subtree with
   // <React.StrictMode> around non-WebGL trees if you want the dev checks back.
   reactStrictMode: false,
+  // Emit browser source maps so they can be uploaded to GlitchTip for readable
+  // stack traces. They are NOT left public: scripts/upload-sourcemaps.mjs runs
+  // after `next build`, uploads them, then deletes every .map before Vercel
+  // packages the output — so visitors never get our original source.
+  productionBrowserSourceMaps: true,
   // Serve AVIF (then WebP) for images that DO go through Next's optimizer — the
   // default is WebP-only. The hand-tuned rock cut-outs stay `unoptimized`
   // (pre-encoded AVIF), so this only affects other next/image usage (e.g. the
