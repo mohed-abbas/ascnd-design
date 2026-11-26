@@ -32,4 +32,10 @@ Sentry.init({
   // ResizeObserver warning Chrome raises when a layout settles over two frames.
   denyUrls: [/^chrome-extension:\/\//, /^moz-extension:\/\//, /^safari-extension:\/\//],
   ignoreErrors: ["ResizeObserver loop limit exceeded", "ResizeObserver loop completed with undelivered notifications"],
+  // Drop session tracking (a default): it posts a "session" envelope on EVERY
+  // page load and navigation, even when nothing breaks — a request per visit
+  // through /a/e for release-health data GlitchTip doesn't use, and a kind of
+  // visit tracking the privacy policy doesn't describe. Errors only.
+  integrations: (defaults) =>
+    defaults.filter((integration) => integration.name !== "BrowserSession"),
 });

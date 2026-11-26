@@ -94,6 +94,10 @@ export const LEGAL_DETAILS = {
  * processor involved. It is cookieless, so the site needs no consent banner.
  * The privacy page promises a 24-month retention for it; that needs a cleanup
  * job on the VPS, because self-hosted Umami never deletes old data itself.
+ * Error monitoring is GlitchTip, self-hosted on the same VPS on the same
+ * terms (instrumentation-client.ts). Its promised 90-day retention is
+ * GlitchTip's own default (GLITCHTIP_MAX_EVENT_LIFE_DAYS) — it deletes old
+ * events itself, so changing that setting means changing the privacy page.
  *
  * SCOPE: these are ascnd's OWN vendors — the ones that touch the data of the
  * person reading the policy (a visitor, an enquirer, a client). Infrastructure
@@ -121,6 +125,7 @@ export const LEGAL_PROCESSORS: readonly LegalProcessor[] = [
   { purpose: "Call bookings", vendors: ["Cal.com"] },
   { purpose: "Email", vendors: ["Zoho Mail", "Gmail"] },
   { purpose: "Site analytics", vendors: ["Umami (self-hosted on Hostinger)"] },
+  { purpose: "Error monitoring", vendors: ["GlitchTip (self-hosted on Hostinger)"] },
   {
     purpose: "Storing and sharing project files",
     vendors: ["Google Drive", "Figma"],

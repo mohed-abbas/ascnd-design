@@ -88,6 +88,14 @@ export default function Privacy() {
           it who you are, or single you out.
         </LegalP>
         <LegalP>
+          <LegalLead>Error reports.</LegalLead> If something breaks on the site
+          while you&rsquo;re using it, your browser sends us a technical report
+          so we can fix it: the error itself, the page it happened on, your
+          browser and operating system, and a shortened form of your IP address.
+          Reports are stored on our own server, set no cookies, and are only
+          sent when something goes wrong — never to identify or follow you.
+        </LegalP>
+        <LegalP>
           <LegalLead>Information inside a client&rsquo;s own systems.</LegalLead>{" "}
           When we work on a client&rsquo;s website, product, or accounts, we may
           come across personal data belonging to their users or customers. That
@@ -186,6 +194,10 @@ export default function Privacy() {
             tied to you as an individual, kept on our own server for up to 24
             months, then deleted.
           </LegalItem>
+          <LegalItem>
+            <LegalLead>Error reports:</LegalLead> 90 days, then deleted
+            automatically.
+          </LegalItem>
         </LegalList>
       </LegalSection>
 
@@ -240,7 +252,8 @@ export default function Privacy() {
           </LegalItem>
         </LegalList>
         <LegalP>
-          Our analytics is cookieless — it stores nothing on your device at all.
+          Our analytics and error reporting are cookieless — they store nothing
+          on your device at all.
           We use no advertising or cross-site tracking cookies.
         </LegalP>
         <LegalP>
