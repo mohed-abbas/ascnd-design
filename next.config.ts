@@ -37,6 +37,20 @@ const nextConfig: NextConfig = {
   // _next/static assets — so the browser reuses the preloaded bytes with zero
   // round-trip. Safe because the filename is version-suffixed (.vN.glb): bump
   // the version on any model change (see testimonial-rocks-canvas.tsx header).
+  // Umami analytics (self-hosted on the VPS) proxied through our own origin.
+  // The browser only ever requests ascnd.design/a/…, so ad-blockers see a
+  // first-party script rather than a known tracker host, and the script is
+  // renamed here (insights.js → Umami's script.js) without touching the VPS.
+  // The tracker posts to `<its own directory>/api/send`, i.e. /a/api/send.
+  // Only these two paths are forwarded — the Umami dashboard is never
+  // reachable through this domain. Loaded in app/layout.tsx.
+  async rewrites() {
+    const umami = "https://analytics.thecodeman.cloud";
+    return [
+      { source: "/a/insights.js", destination: `${umami}/script.js` },
+      { source: "/a/api/send", destination: `${umami}/api/send` },
+    ];
+  },
   // Headers are matched before the /public filesystem (Next headers() docs).
   async headers() {
     // Every other /public asset keeps its default-cached bytes but pays a

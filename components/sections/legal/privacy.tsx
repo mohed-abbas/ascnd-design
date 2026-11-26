@@ -79,12 +79,13 @@ export default function Privacy() {
           served and kept secure.
         </LegalP>
         <LegalP>
-          <LegalLead>Analytics.</LegalLead> We use privacy-friendly analytics to
-          see how the site is performing: which pages are read, which site or
-          link referred you, and the country and device you visited from. It
-          sets no cookies, gives you no persistent identifier, and does not
-          follow you across other websites. What we see is aggregate — we
-          cannot tell from it who you are, or single you out.
+          <LegalLead>Analytics.</LegalLead> We use privacy-friendly analytics,
+          run on our own server rather than a third party&rsquo;s, to see how
+          the site is performing: which pages are read, which site or link
+          referred you, and the country and device you visited from. It sets no
+          cookies, stores nothing on your device, and does not follow you
+          across other websites. What we see is aggregate — we cannot tell from
+          it who you are, or single you out.
         </LegalP>
         <LegalP>
           <LegalLead>Information inside a client&rsquo;s own systems.</LegalLead>{" "}
@@ -182,8 +183,8 @@ export default function Privacy() {
           </LegalItem>
           <LegalItem>
             <LegalLead>Analytics data:</LegalLead> aggregate figures only, never
-            tied to you as an individual, kept by our analytics provider for a
-            rolling period.
+            tied to you as an individual, kept on our own server for up to 24
+            months, then deleted.
           </LegalItem>
         </LegalList>
       </LegalSection>
