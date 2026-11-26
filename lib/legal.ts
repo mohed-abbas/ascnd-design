@@ -92,8 +92,13 @@ export const LEGAL_DETAILS = {
  * (app/layout.tsx), so it introduces no new third party: the data sits on a
  * server we run, and Hostinger — already listed as a host — is the only
  * processor involved. It is cookieless, so the site needs no consent banner.
- * The privacy page promises a 24-month retention for it; that needs a cleanup
- * job on the VPS, because self-hosted Umami never deletes old data itself.
+ * The privacy page promises a 24-month retention for it. Self-hosted Umami
+ * never deletes old data itself, so a cron job on the VPS does it:
+ * ~/shared/umami-retention.sh, run on the 1st of every month (log in
+ * ~/shared/logs/umami-retention.log). It deletes ascnd's rows older than 23
+ * months — 23, not 24, because a monthly run lets data age up to a month past
+ * the cutoff, so 23 + 1 keeps "up to 24 months" true. Changing the promise
+ * means changing that script's KEEP value too.
  * Error monitoring is GlitchTip, self-hosted on the same VPS on the same
  * terms (instrumentation-client.ts). Its promised 90-day retention is
  * GlitchTip's own default (GLITCHTIP_MAX_EVENT_LIFE_DAYS) — it deletes old
